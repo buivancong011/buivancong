@@ -37,6 +37,8 @@ fi
 
 systemctl start iptables || err "❌ iptables không khởi động → DỪNG TOÀN BỘ!"
 usermod -aG docker ec2-user || true
+log "🔄 Restart Docker để đồng bộ lại iptables"
+systemctl restart docker
 
 # ===============================
 # 3. Cleanup containers cũ
