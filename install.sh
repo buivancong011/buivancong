@@ -3,110 +3,94 @@ set -e
 
 echo "[INFO] 🚀 Bắt đầu setup hệ thống"
 
-# ================== Cài đặt cơ bản ==================
+# ========== 1. XÓA SQUID + HTTPD-TOOLS ==========
 echo "[INFO] 🗑️ Xóa squid + httpd-tools nếu có"
 dnf remove -y squid httpd-tools || true
 
+# ========== 2. CÀI ĐẶT DOCKER ==========
 echo "[INFO] 🐳 Kiểm tra Docker"
 if ! command -v docker &>/dev/null; then
-    dnf update -y
+    echo "[INFO] ➕ Cài đặt Docker"
     dnf install -y docker
-    systemctl enable docker
-    systemctl start docker
-    echo "[INFO] ✅ Docker đã được cài đặt và khởi động lại"
+    systemctl enable --now docker
 else
     echo "[INFO] ✅ Docker đã có sẵn"
-    systemctl restart docker
 fi
 
+# ========== 3. CÀI IPTABLES ==========
 echo "[INFO] ⚙️ Cài iptables"
-dnf install -y iptables iptables-services iptables-utils
-systemctl enable iptables
-systemctl start iptables
+dnf install -y iptables-nft iptables-services iptables-utils
+systemctl enable --now iptables
 
-# ================== Mạng và NAT ==================
+# ========== 4. TẠO NETWORKS ==========
 echo "[INFO] 🌐 Tạo networks"
-docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 2>/dev/null || true
-docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 2>/dev/null || true
+docker network create --subnet=192.168.33.0/24 my_network_1 || true
+docker network create --subnet=192.168.34.0/24 my_network_2 || true
 
-IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
-IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
-
+# ========== 5. THÊM RULE IPTABLES ==========
 echo "[INFO] 🔥 Thêm rule iptables"
-iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} 2>/dev/null || \
-iptables -t nat -A POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
-iptables -t nat -C POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB} 2>/dev/null || \
-iptables -t nat -A POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
+iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j MASQUERADE 2>/dev/null || \
+iptables -t nat -A POSTROUTING -s 192.168.33.0/24 -j MASQUERADE
+iptables -t nat -C POSTROUTING -s 192.168.34.0/24 -j MASQUERADE 2>/dev/null || \
+iptables -t nat -A POSTROUTING -s 192.168.34.0/24 -j MASQUERADE
 service iptables save
 
-# ================== Xóa containers cũ ==================
+# ========== 6. XÓA CONTAINERS CŨ ==========
 echo "[INFO] 🗑️ Xóa containers cũ"
-docker rm -f tm1 tm2 repocket1 repocket2 myst1 myst2 earnfm1 earnfm2 packetsdk1 packetsdk2 ur1 ur2 2>/dev/null || true
+docker rm -f tm1 tm2 repocket1 repocket2 myst1 myst2 earnfm1 earnfm2 packetsdk1 packetsdk2 ur1 ur2 || true
 
-# ================== Chạy containers ==================
+# ========== 7. CHẠY CONTAINERS ==========
 echo "[INFO] ✅ Bắt đầu khởi chạy containers"
 
-# TraffMonetizer
+# --- TraffMonetizer ---
+docker pull traffmonetizer/cli_v2:arm64v8
 docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:arm64v8 start accept --token "JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
-sleep 5
 docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:arm64v8 start accept --token "JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
-sleep 10
 
-# Repocket
-docker run -d --network my_network_1 --name repocket1 -e RP_EMAIL="nguyenvinhson000@gmail.com" -e RP_API_KEY="cad6dcce-d038-4727-969b-d996ed80d3ef" --restart=always repocket/repocket:latest
-sleep 10
-docker run -d --network my_network_2 --name repocket2 -e RP_EMAIL="nguyenvinhson000@gmail.com" -e RP_API_KEY="cad6dcce-d038-4727-969b-d996ed80d3ef" --restart=always repocket/repocket:latest
-sleep 10
+# --- Repocket ---
+docker pull repocket/repocket:latest
+docker run -d --network my_network_1 --restart always --name repocket1 -e RP_EMAIL="nguyenvinhson000@gmail.com" -e RP_API_KEY="cad6dcce-d038-4727-969b-d996ed80d3ef" repocket/repocket:latest
+docker run -d --network my_network_2 --restart always --name repocket2 -e RP_EMAIL="nguyenvinhson000@gmail.com" -e RP_API_KEY="cad6dcce-d038-4727-969b-d996ed80d3ef" repocket/repocket:latest
 
-# Mysterium
+# --- Mysterium ---
+docker pull mysteriumnetwork/myst:latest
+IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
+IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
-sleep 10
 docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
-sleep 10
 
-# EarnFM
-docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest
-sleep 10
-docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest
-sleep 10
+# --- EarnFM ---
+docker pull earnfm/earnfm-client:latest
+docker run -d --network my_network_1 --restart always --name earnfm1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" earnfm/earnfm-client:latest
+docker run -d --network my_network_2 --restart always --name earnfm2 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" earnfm/earnfm-client:latest
 
-# PacketSDK
+# --- PacketSDK ---
 docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
-sleep 5
 docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
-sleep 10
 
-# UrNetwork
-docker run -d --network my_network_1 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
-sleep 10
-docker run -d --network my_network_2 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
+# --- URNetwork ---
+docker run -d --network my_network_1 --restart always --platform linux/arm64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
+docker run -d --network my_network_2 --restart always --platform linux/arm64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 
-# ================== Cron jobs ==================
+# ========== 8. CRON JOB ==========
+echo "[INFO] ⏰ Thiết lập cron jobs"
 
-# Restart repocket, earnfm, ur sau 24h
-echo "0 0 * * * root docker restart repocket1 repocket2 earnfm1 earnfm2 ur1 ur2 >/dev/null 2>&1" > /etc/cron.d/restart24h
+# Cài đặt cronie nếu chưa có
+dnf install -y cronie
+systemctl enable --now crond
 
-# Xoá toàn bộ container + images sau 7 ngày
-echo "0 3 */7 * * root docker rm -f \$(docker ps -aq) && docker rmi -f \$(docker images -q) && reboot" > /etc/cron.d/cleanup7d
+# Xóa crontab cũ
+crontab -r || true
 
-# ================== Service tự chạy sau reboot ==================
-cat >/etc/systemd/system/install-onboot.service <<EOF
-[Unit]
-Description=Run install.sh at startup
-After=network.target docker.service iptables.service
-Wants=docker.service iptables.service
+# Thêm cron mới
+cat <<EOF | crontab -
+# Restart containers mỗi 24h (chia lệch giờ tránh quá tải)
+0 2 * * * docker restart repocket1 repocket2
+15 2 * * * docker restart earnfm1 earnfm2
+30 2 * * * docker restart ur1 ur2
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/install.sh
-RemainAfterExit=true
-
-[Install]
-WantedBy=multi-user.target
+# Sau 7 ngày xóa toàn bộ containers + images + reboot
+0 4 */7 * * docker rm -f \$(docker ps -aq) && docker rmi -f \$(docker images -q) && reboot
 EOF
 
-systemctl daemon-reexec
-systemctl daemon-reload
-systemctl enable install-onboot.service
-
-echo "[INFO] 🎉 Hoàn tất setup!"
+echo "[INFO] ✅ Hoàn tất cài đặt!"
