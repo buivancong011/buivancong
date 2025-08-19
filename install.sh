@@ -1,7 +1,7 @@
-bash -c '
+#!/usr/bin/env bash
 set -Eeuo pipefail
 
-# ===== Cấu hình cơ bản =====
+# ===== Config cơ bản =====
 IFACE="${IFACE:-ens5}"                       # đổi IFACE nếu cần (vd: eth0)
 NET1="my_network_1"; SUBNET1="192.168.33.0/24"
 NET2="my_network_2"; SUBNET2="192.168.34.0/24"
@@ -9,22 +9,24 @@ START_SH="/usr/local/bin/docker-apps-start.sh"
 REFRESH_SH="/usr/local/bin/apps-daily-refresh.sh"
 UNIT="/etc/systemd/system/docker-apps.service"
 
-# ===== Đảm bảo phụ thuộc =====
-need(){ command -v "$1" >/dev/null || { echo "Thiếu: $1"; exit 1; }; }
-need docker || true
+# ===== Tiện ích =====
+need(){ command -v "$1" >/dev/null || { echo "Thiếu lệnh: $1"; exit 1; }; }
+
+# ===== Kiểm tra phụ thuộc =====
+need ip
+need iptables
 if ! command -v docker >/dev/null 2>&1; then
   echo "[INFO] Docker chưa có, hãy cài Docker trước rồi chạy lại."
   exit 1
 fi
-need ip; need iptables
-
 # Cron (Amazon Linux 2023)
 if ! command -v crontab >/dev/null 2>&1; then
   if command -v dnf >/dev/null 2>&1; then
-    dnf install -y cronie >/dev/null
+    dnf install -y cronie
     systemctl enable crond --now
   else
-    echo "Không có crontab: tự cài cronie/crontabs cho distro của bạn"; exit 1
+    echo "Không có crontab: vui lòng cài cronie/crontabs cho distro của bạn."
+    exit 1
   fi
 fi
 
@@ -32,21 +34,21 @@ fi
 systemctl enable docker --now >/dev/null 2>&1 || true
 
 # ===== Helper lấy IP ổn định =====
-get_ip_secondary(){ ip -4 addr show dev "'"$IFACE"'" | awk '"'"'/inet .*noprefixroute/ {print $2}'"'"' | sed "s#/.*##" | head -n1; }
-get_ip_primary()  { ip -4 addr show dev "'"$IFACE"'" | awk '"'"'/inet .*dynamic/      {print $2}'"'"' | sed "s#/.*##" | head -n1; }
+get_ip_secondary(){ ip -4 addr show dev "$IFACE" | awk '/inet .*noprefixroute/ {print $2}' | sed "s#/.*##" | head -n1; }
+get_ip_primary()  { ip -4 addr show dev "$IFACE" | awk '/inet .*dynamic/      {print $2}' | sed "s#/.*##" | head -n1; }
 
 IP_ALLA="$(get_ip_secondary || true)"
 IP_ALLB="$(get_ip_primary   || true)"
 if [[ -z "$IP_ALLA" || -z "$IP_ALLB" ]]; then
-  mapfile -t IP_LINES < <(ip -4 -o addr show dev "'"$IFACE"'" | awk '"'"'{print $4}'"'"' | sed "s#/.*##")
+  mapfile -t IP_LINES < <(ip -4 -o addr show dev "$IFACE" | awk '{print $4}' | sed "s#/.*##")
   IP_ALLA="${IP_ALLA:-${IP_LINES[0]:-}}"
   IP_ALLB="${IP_ALLB:-${IP_LINES[1]:-${IP_LINES[0]:-}}}"
 fi
 [[ -n "$IP_ALLA" && -n "$IP_ALLB" ]] || { echo "Không lấy được IP trên $IFACE"; exit 1; }
 echo "[INFO] IP_ALLA=$IP_ALLA (secondary) | IP_ALLB=$IP_ALLB (primary)"
 
-# ===== Tạo script khởi chạy toàn bộ containers =====
-cat > "$START_SH" << "EOSH"
+# ===== Script khởi chạy toàn bộ containers =====
+cat > "$START_SH" << 'EOSH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 log(){ echo "[`date +%F_%T`] $*"; }
@@ -56,7 +58,7 @@ IFACE="${IFACE:-ens5}"
 NET1="my_network_1"; SUBNET1="192.168.33.0/24"
 NET2="my_network_2"; SUBNET2="192.168.34.0/24"
 
-# Secrets của bạn
+# ⚠ Secrets (khuyến nghị tách .env nếu public)
 TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 RP_EMAIL="nguyenvinhson000@gmail.com"
 RP_KEY="cad6dcce-d038-4727-969b-d996ed80d3ef"
@@ -142,8 +144,8 @@ log "✅ All Docker apps started."
 EOSH
 chmod +x "$START_SH"
 
-# ===== Tạo script daily refresh (repocket/earnfm recreate; ur restart) =====
-cat > "$REFRESH_SH" << "EOF"
+# ===== Script daily refresh (repocket/earnfm recreate; ur restart) =====
+cat > "$REFRESH_SH" << 'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 log(){ echo "[$(date +%F_%T)] $*"; }
@@ -159,7 +161,7 @@ log "Daily refresh: recreate Repocket/EarnFM, restart UR"
 
 docker rm -f repocket1 repocket2 earnfm1 earnfm2 >/dev/null 2>&1 || true
 docker pull repocket/repocket:latest >/dev/null || true
-docker pull earnfm/earnfm-client:latest >/devnull 2>&1 || true
+docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 || true
 
 docker run -d --network "$NET1" --name repocket1 \
   -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_KEY" --restart=always repocket/repocket:latest
@@ -179,7 +181,7 @@ log "Daily refresh done."
 EOF
 chmod +x "$REFRESH_SH"
 
-# ===== Tạo systemd service =====
+# ===== Systemd service =====
 cat > "$UNIT" <<EOF
 [Unit]
 Description=Docker Apps Auto Start
@@ -199,6 +201,7 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+# Enable + chạy service
 systemctl daemon-reload
 systemctl enable docker-apps.service
 systemctl restart docker-apps.service
@@ -215,4 +218,3 @@ systemctl restart docker-apps.service
 echo "✅ Xong! Service + cron daily + reboot 7 ngày đã cài."
 echo "👉 Xem service log: journalctl -u docker-apps.service -f"
 echo "👉 Cron list: crontab -l"
-'
