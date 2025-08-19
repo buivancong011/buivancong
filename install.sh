@@ -1,54 +1,37 @@
-#!/usr/bin/env bash
+sudo bash -c '
 set -Eeuo pipefail
 
-# ===== Config cơ bản =====
-IFACE="${IFACE:-ens5}"                       # đổi IFACE nếu cần (vd: eth0)
+# ===== Config =====
+IFACE="${IFACE:-ens5}"
 NET1="my_network_1"; SUBNET1="192.168.33.0/24"
 NET2="my_network_2"; SUBNET2="192.168.34.0/24"
 START_SH="/usr/local/bin/docker-apps-start.sh"
 REFRESH_SH="/usr/local/bin/apps-daily-refresh.sh"
 UNIT="/etc/systemd/system/docker-apps.service"
 
-# ===== Tiện ích =====
+# ===== Check deps =====
 need(){ command -v "$1" >/dev/null || { echo "Thiếu lệnh: $1"; exit 1; }; }
+need ip; need iptables
+command -v docker >/dev/null || { echo "Docker chưa có, hãy cài trước."; exit 1; }
 
-# ===== Kiểm tra phụ thuộc =====
-need ip
-need iptables
-if ! command -v docker >/dev/null 2>&1; then
-  echo "[INFO] Docker chưa có, hãy cài Docker trước rồi chạy lại."
-  exit 1
-fi
-# Cron (Amazon Linux 2023)
-if ! command -v crontab >/dev/null 2>&1; then
-  if command -v dnf >/dev/null 2>&1; then
-    dnf install -y cronie
-    systemctl enable crond --now
-  else
-    echo "Không có crontab: vui lòng cài cronie/crontabs cho distro của bạn."
-    exit 1
-  fi
-fi
-
-# Bật docker tại boot + bảo đảm đang chạy
+# Bật docker khi khởi động & đảm bảo đang chạy
 systemctl enable docker --now >/dev/null 2>&1 || true
 
 # ===== Helper lấy IP ổn định =====
-get_ip_secondary(){ ip -4 addr show dev "$IFACE" | awk '/inet .*noprefixroute/ {print $2}' | sed "s#/.*##" | head -n1; }
-get_ip_primary()  { ip -4 addr show dev "$IFACE" | awk '/inet .*dynamic/      {print $2}' | sed "s#/.*##" | head -n1; }
-
+get_ip_secondary(){ ip -4 addr show dev "$IFACE" | awk "/inet .*noprefixroute/ {print \$2}" | sed "s#/.*##" | head -n1; }
+get_ip_primary()  { ip -4 addr show dev "$IFACE" | awk "/inet .*dynamic/      {print \$2}" | sed "s#/.*##" | head -n1; }
 IP_ALLA="$(get_ip_secondary || true)"
 IP_ALLB="$(get_ip_primary   || true)"
 if [[ -z "$IP_ALLA" || -z "$IP_ALLB" ]]; then
-  mapfile -t IP_LINES < <(ip -4 -o addr show dev "$IFACE" | awk '{print $4}' | sed "s#/.*##")
+  mapfile -t IP_LINES < <(ip -4 -o addr show dev "$IFACE" | awk "{print \$4}" | sed "s#/.*##")
   IP_ALLA="${IP_ALLA:-${IP_LINES[0]:-}}"
   IP_ALLB="${IP_ALLB:-${IP_LINES[1]:-${IP_LINES[0]:-}}}"
 fi
 [[ -n "$IP_ALLA" && -n "$IP_ALLB" ]] || { echo "Không lấy được IP trên $IFACE"; exit 1; }
-echo "[INFO] IP_ALLA=$IP_ALLA (secondary) | IP_ALLB=$IP_ALLB (primary)"
+echo "[INFO] Sẽ dùng IP_ALLA=$IP_ALLA (secondary) | IP_ALLB=$IP_ALLB (primary)"
 
-# ===== Script khởi chạy toàn bộ containers =====
-cat > "$START_SH" << 'EOSH'
+# ===== /usr/local/bin/docker-apps-start.sh =====
+cat > "$START_SH" << "EOSH"
 #!/usr/bin/env bash
 set -Eeuo pipefail
 log(){ echo "[`date +%F_%T`] $*"; }
@@ -144,8 +127,8 @@ log "✅ All Docker apps started."
 EOSH
 chmod +x "$START_SH"
 
-# ===== Script daily refresh (repocket/earnfm recreate; ur restart) =====
-cat > "$REFRESH_SH" << 'EOF'
+# ===== /usr/local/bin/apps-daily-refresh.sh =====
+cat > "$REFRESH_SH" << "EOF"
 #!/usr/bin/env bash
 set -Eeuo pipefail
 log(){ echo "[$(date +%F_%T)] $*"; }
@@ -181,7 +164,7 @@ log "Daily refresh done."
 EOF
 chmod +x "$REFRESH_SH"
 
-# ===== Systemd service =====
+# ===== docker-apps.service =====
 cat > "$UNIT" <<EOF
 [Unit]
 Description=Docker Apps Auto Start
@@ -191,7 +174,6 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStartPre=/bin/sleep 8
 ExecStart=$START_SH
 RemainAfterExit=yes
 StandardOutput=journal
@@ -201,20 +183,80 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# Enable + chạy service
+# ===== Timer: delay 30s sau khi boot mới chạy docker-apps.service =====
+cat > /etc/systemd/system/docker-apps-boot.timer <<EOF
+[Unit]
+Description=Delay 30s after boot then start docker-apps.service
+
+[Timer]
+OnBootSec=30s
+Unit=docker-apps.service
+Persistent=false
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# ===== apps-daily-refresh.service + timer (03:20 UTC hàng ngày) =====
+cat > /etc/systemd/system/apps-daily-refresh.service <<EOF
+[Unit]
+Description=Apps Daily Refresh (repocket/earnfm recreate, UR restart)
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=$REFRESH_SH
+StandardOutput=journal
+StandardError=journal
+EOF
+
+cat > /etc/systemd/system/apps-daily-refresh.timer <<EOF
+[Unit]
+Description=Timer for Apps Daily Refresh (03:20 UTC daily)
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# ===== weekly-reboot.service + timer (03:10 UTC mỗi Thứ Hai) =====
+cat > /etc/systemd/system/weekly-reboot.service <<EOF
+[Unit]
+Description=Weekly Reboot (03:10 UTC every Monday)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/reboot
+EOF
+
+cat > /etc/systemd/system/weekly-reboot.timer <<EOF
+[Unit]
+Description=Timer for Weekly Reboot (03:10 UTC every Monday)
+
+[Timer]
+OnCalendar=Mon *-*-* 03:10:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# ===== Enable timers =====
 systemctl daemon-reload
-systemctl enable docker-apps.service
-systemctl restart docker-apps.service
+# Không enable docker-apps.service trực tiếp; để timer gọi sau boot 30s
+systemctl enable --now docker-apps-boot.timer apps-daily-refresh.timer weekly-reboot.timer
 
-# ===== Cron: daily refresh + reboot 7 ngày =====
-# Daily 03:20 UTC: refresh repocket/earnfm & restart ur
-( crontab -l 2>/dev/null | grep -v "$REFRESH_SH" ; \
-  echo "20 3 * * * $REFRESH_SH >> /var/log/apps-daily-refresh.log 2>&1" ) | crontab -
-
-# Reboot mỗi 7 ngày lúc 03:10 UTC
-( crontab -l 2>/dev/null | grep -v "/sbin/reboot" ; \
-  echo "10 3 */7 * * /sbin/reboot" ) | crontab -
-
-echo "✅ Xong! Service + cron daily + reboot 7 ngày đã cài."
-echo "👉 Xem service log: journalctl -u docker-apps.service -f"
-echo "👉 Cron list: crontab -l"
+echo "✅ Hoàn tất: tạo scripts, service, boot-delay 30s, daily refresh timer & weekly reboot timer."
+echo "👉 Kiểm tra timers: systemctl list-timers --all | grep -E \"docker-apps-boot|apps-daily-refresh|weekly-reboot\""
+echo "👉 Xem log khởi tạo apps: journalctl -u docker-apps.service -e --no-pager"
+'
