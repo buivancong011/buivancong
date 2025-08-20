@@ -1,0 +1,11 @@
+[Unit]
+Description=Fix iptables rules after reboot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fix_iptables.sh
+
+[Install]
+WantedBy=multi-user.target
