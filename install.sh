@@ -9,7 +9,7 @@ fi
 trap "rm -f $LOCK_FILE" EXIT
 touch $LOCK_FILE
 
-# ==== Gỡ squid + httpd-tools bắt buộc ====
+# ==== Bắt buộc gỡ squid & httpd-tools ====
 sudo yum remove -y squid httpd-tools || true
 
 # ==== Cài Docker nếu chưa có ====
@@ -21,6 +21,13 @@ if ! command -v docker &> /dev/null; then
   sudo systemctl start docker
   echo "[INFO] Docker cài xong, reboot lần đầu..."
   sudo reboot
+fi
+
+# ==== Cài Cronie nếu chưa có ====
+if ! command -v crond &> /dev/null; then
+  echo "[INFO] Cronie chưa có -> Cài đặt..."
+  sudo dnf install -y cronie
+  sudo systemctl enable --now crond
 fi
 
 # ==== Nếu có container đang chạy -> xóa hết container + network ====
@@ -49,6 +56,7 @@ fix_iptables() {
   sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
   sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
 }
+
 fix_iptables
 
 if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} >/dev/null 2>&1; then
@@ -57,11 +65,23 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Reset hàng tuần (chỉ khi chạy bằng cron job) ====
+# ==== Cron restart hàng ngày (3h sáng) ====
+CRON_FILE1="/etc/cron.d/docker_daily_restart"
+echo "0 3 * * * root docker restart repocket1 repocket2 earnfm1 earnfm2 ur1 ur2" | sudo tee $CRON_FILE1
+sudo chmod 644 $CRON_FILE1
+
+# ==== Cron reset hàng tuần (Chủ nhật 3h sáng) ====
+CRON_FILE2="/etc/cron.d/docker_weekly_reset"
+echo "0 3 * * 0 root /root/setup.sh weekly-reset" | sudo tee $CRON_FILE2
+sudo chmod 644 $CRON_FILE2
+
+sudo systemctl restart crond
+
+# ==== Reset tuần nếu gọi thủ công ====
 if [ "${1:-}" == "weekly-reset" ]; then
   echo "[INFO] Reset tuần -> Xóa containers + images (giữ volume)"
-  sudo docker rm -f $(docker ps -aq) || true
-  sudo docker rmi -f $(docker images -q) || true
+  docker rm -f $(docker ps -aq) || true
+  docker rmi -f $(docker images -q) || true
   echo "[INFO] Reboot để làm mới..."
   sudo reboot
 fi
@@ -89,35 +109,3 @@ docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 
 
 docker run -d --network my_network_1 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 docker run -d --network my_network_2 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
-
-# ==== Cron restart hàng ngày (3h sáng) ====
-CRON_FILE="/etc/cron.d/docker_daily_restart"
-echo "0 3 * * * root docker restart repocket1 repocket2 earnfm1 earnfm2 ur1 ur2" | sudo tee $CRON_FILE
-sudo chmod 644 $CRON_FILE
-sudo systemctl restart crond
-
-# ==== Cron reset hàng tuần (4h sáng Chủ Nhật) ====
-CRON_FILE2="/etc/cron.d/docker_weekly_reset"
-echo "0 4 * * 0 root /root/setup.sh weekly-reset" | sudo tee $CRON_FILE2
-sudo chmod 644 $CRON_FILE2
-sudo systemctl restart crond
-
-# ==== Tạo systemd service để chạy lại sau reboot ====
-SERVICE_FILE="/etc/systemd/system/setup-docker.service"
-sudo tee $SERVICE_FILE > /dev/null <<'EOF'
-[Unit]
-Description=Auto setup Docker networks, iptables, and containers
-After=network.target docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=/root/setup.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable setup-docker.service
