@@ -45,7 +45,7 @@ done
 docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24
 docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24
 
-# ==== Thiết lập iptables với auto-fix ====
+# ==== Thiết lập iptables ban đầu ====
 IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 
@@ -86,7 +86,58 @@ if [ "${1:-}" == "weekly-reset" ]; then
   sudo reboot
 fi
 
-# ==== Chạy các container ====
+# ==== THÊM FIX IPTABLES SAU REBOOT ====
+cat <<'EOF' | sudo tee /usr/local/bin/fix_iptables.sh
+#!/bin/bash
+set -euo pipefail
+
+IP_ALLA=$(/sbin/ip -4 -o addr show scope global ens5 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n1)
+IP_ALLB=$IP_ALLA
+
+echo "[INFO] Đang fix iptables..."
+
+fix_rule() {
+  NET=$1
+  IP=$2
+  if ! iptables -t nat -C POSTROUTING -s ${NET} -j SNAT --to-source ${IP} 2>/dev/null; then
+    echo "[WARN] Thiếu rule cho ${NET}, thêm lại..."
+    iptables -t nat -A POSTROUTING -s ${NET} -j SNAT --to-source ${IP}
+    NEED_RESTART=1
+  fi
+}
+
+NEED_RESTART=0
+fix_rule "192.168.33.0/24" "$IP_ALLA"
+fix_rule "192.168.34.0/24" "$IP_ALLB"
+
+if [ $NEED_RESTART -eq 1 ]; then
+  echo "[INFO] Restart toàn bộ container để làm mới kết nối..."
+  docker restart $(docker ps -q) || true
+fi
+
+echo "[INFO] Hoàn tất fix iptables."
+EOF
+
+sudo chmod +x /usr/local/bin/fix_iptables.sh
+
+cat <<'EOF' | sudo tee /etc/systemd/system/iptables-fix.service
+[Unit]
+Description=Fix iptables rules after reboot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/fix_iptables.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable iptables-fix.service
+
+# ==== Chạy các container (giữ nguyên thông tin gốc) ====
 echo "[INFO] Pull & Run containers..."
 docker pull traffmonetizer/cli_v2:arm64v8
 docker run -d --network my_network_1  --restart always --name tm1 traffmonetizer/cli_v2:arm64v8 start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
