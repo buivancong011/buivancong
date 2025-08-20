@@ -9,10 +9,12 @@ fi
 trap "rm -f $LOCK_FILE" EXIT
 touch $LOCK_FILE
 
+# ==== Gỡ squid + httpd-tools bắt buộc ====
+sudo yum remove -y squid httpd-tools || true
+
 # ==== Cài Docker nếu chưa có ====
 if ! command -v docker &> /dev/null; then
   echo "[INFO] Docker chưa có -> Cài đặt..."
-  sudo yum remove -y squid httpd-tools || true
   sudo yum update -y
   sudo yum install -y docker
   sudo systemctl enable docker
@@ -47,7 +49,6 @@ fix_iptables() {
   sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
   sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
 }
-
 fix_iptables
 
 if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} >/dev/null 2>&1; then
@@ -56,20 +57,11 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Reset hàng tuần (không xóa volume) ====
-WEEKLY_RESET_FLAG="/var/lib/docker_weekly_reset"
-NOW=$(date +%s)
-if [ -f "$WEEKLY_RESET_FLAG" ]; then
-  LAST_RESET=$(cat "$WEEKLY_RESET_FLAG")
-else
-  LAST_RESET=0
-fi
-
-if [ $((NOW - LAST_RESET)) -ge 604800 ] || [ "${1:-}" == "force-reset" ]; then
+# ==== Reset hàng tuần (chỉ khi chạy bằng cron job) ====
+if [ "${1:-}" == "weekly-reset" ]; then
   echo "[INFO] Reset tuần -> Xóa containers + images (giữ volume)"
   sudo docker rm -f $(docker ps -aq) || true
   sudo docker rmi -f $(docker images -q) || true
-  date +%s | sudo tee "$WEEKLY_RESET_FLAG"
   echo "[INFO] Reboot để làm mới..."
   sudo reboot
 fi
@@ -103,3 +95,29 @@ CRON_FILE="/etc/cron.d/docker_daily_restart"
 echo "0 3 * * * root docker restart repocket1 repocket2 earnfm1 earnfm2 ur1 ur2" | sudo tee $CRON_FILE
 sudo chmod 644 $CRON_FILE
 sudo systemctl restart crond
+
+# ==== Cron reset hàng tuần (4h sáng Chủ Nhật) ====
+CRON_FILE2="/etc/cron.d/docker_weekly_reset"
+echo "0 4 * * 0 root /root/setup.sh weekly-reset" | sudo tee $CRON_FILE2
+sudo chmod 644 $CRON_FILE2
+sudo systemctl restart crond
+
+# ==== Tạo systemd service để chạy lại sau reboot ====
+SERVICE_FILE="/etc/systemd/system/setup-docker.service"
+sudo tee $SERVICE_FILE > /dev/null <<'EOF'
+[Unit]
+Description=Auto setup Docker networks, iptables, and containers
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/root/setup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable setup-docker.service
