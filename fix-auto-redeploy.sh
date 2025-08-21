@@ -1,7 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Bắt đầu cài auto-redeploy cho installamdo.sh..."
+echo "[INFO] Bắt đầu fix auto-redeploy..."
+
+# ==== Đảm bảo script chính tồn tại ====
+if [ ! -f "/root/installamdo.sh" ]; then
+  echo "[WARN] /root/installamdo.sh chưa có -> copy từ repo"
+  curl -fsSL https://raw.githubusercontent.com/buivancong011/buivancong/refs/heads/main/installamdo.sh -o /root/installamdo.sh
+  chmod +x /root/installamdo.sh
+fi
 
 # ==== Tạo auto-redeploy.sh (gọi lại installamdo.sh) ====
 cat <<'EOF' > /root/auto-redeploy.sh
@@ -22,9 +29,7 @@ fi
 echo "[$(date)] Auto redeploy hoàn tất." | tee -a $LOG_FILE
 EOF
 
-# Quyền thực thi + quyền root
 chmod 755 /root/auto-redeploy.sh
-chown root:root /root/auto-redeploy.sh
 
 # ==== Tạo systemd service ====
 cat <<'EOF' > /etc/systemd/system/auto-redeploy.service
@@ -46,4 +51,4 @@ EOF
 systemctl daemon-reload
 systemctl enable auto-redeploy.service
 
-echo "[INFO] Hoàn tất. Sau mỗi reboot, /root/installamdo.sh sẽ tự động chạy lại."
+echo "[INFO] Hoàn tất. Sau reboot, /root/installamdo.sh sẽ tự động chạy lại."
