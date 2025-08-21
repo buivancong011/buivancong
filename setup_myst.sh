@@ -1,17 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# ==== CONFIG ====
-CONTAINERS=("myst1" "myst2")
-VALUE="0.1"
-
 echo "[INFO] Bắt đầu cấu hình myst..."
-for c in "${CONTAINERS[@]}"; do
-  echo "[INFO] Cấu hình $c ..."
-  sudo docker exec -it "$c" myst config set payments.zero-stake-unsettled-amount "$VALUE"
-done
 
-echo "[INFO] Restart containers..."
-sudo docker restart "${CONTAINERS[@]}"
+echo "[INFO] Cấu hình myst1 ..."
+docker exec myst1 myst config set payments.zero-stake-unsettled-amount 0.1
 
-echo "[DONE] ✅ Myst config đã được cập nhật và containers đã restart"
+echo "[INFO] Cấu hình myst2 ..."
+docker exec myst2 myst config set payments.zero-stake-unsettled-amount 0.1
+
+echo "[INFO] Restart myst1 và myst2 ..."
+docker restart myst1 myst2
+
+echo "[DONE] Setup Myst hoàn tất ✅"
