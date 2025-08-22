@@ -81,26 +81,6 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
 
 
 
-# ==== Auto run lại setup.sh sau reboot ====
-echo "[INFO] Thiết lập auto run setup.sh sau reboot..."
-
-cat <<EOF | sudo tee /etc/systemd/system/setup-autorun.service
-[Unit]
-Description=Run setup.sh after reboot
-After=network.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /root/setup.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable setup-autorun.service
 
 # ==== Chạy các container ====
 echo "[INFO] Pull & Run containers..."
