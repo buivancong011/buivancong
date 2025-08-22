@@ -84,33 +84,7 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Auto reboot mỗi 3 ngày bằng systemd timer ====
-echo "[INFO] Thiết lập auto reboot mỗi 3 ngày..."
 
-cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.service
-[Unit]
-Description=Auto reboot every 3 days
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/reboot
-EOF
-
-cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.timer
-[Unit]
-Description=Run auto reboot every 3 days
-
-[Timer]
-OnBootSec=1h
-OnUnitActiveSec=3d
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now auto-reboot.timer
 
 # ==== Auto run lại setup.sh sau reboot ====
 echo "[INFO] Thiết lập auto run setup.sh sau reboot..."
