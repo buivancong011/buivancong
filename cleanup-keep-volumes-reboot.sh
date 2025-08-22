@@ -44,4 +44,4 @@ sudo rm -f /tmp/setup.lock
 echo "[INFO] Dọn dẹp hoàn tất (volumes vẫn còn nguyên)!"
 echo "[INFO] Reboot hệ thống ngay để áp dụng thay đổi..."
 sleep 3
-sudo reboot
+
