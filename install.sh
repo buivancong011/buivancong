@@ -142,6 +142,30 @@ sudo systemctl daemon-reload
 sudo systemctl enable iptables-fix.service
 
 # ==== Chạy các container gốc ====
+# ==== Proxybase containers (DEVICE_NAME random 10 ký tự, giữ nguyên) ====
+echo "[INFO] Run Proxybase containers..."
+
+PROXYBASE_ENV="/root/proxybase_device.env"
+
+if [ ! -f "$PROXYBASE_ENV" ]; then
+  DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+  DEVICE2=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+  echo "DEVICE1=$DEVICE1" | sudo tee "$PROXYBASE_ENV"
+  echo "DEVICE2=$DEVICE2" | sudo tee -a "$PROXYBASE_ENV"
+else
+  source "$PROXYBASE_ENV"
+fi
+
+docker run -d --network my_network_1 --name proxybase1 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE1" \
+  --restart=always proxybase/proxybase:latest || true
+
+docker run -d --network my_network_2 --name proxybase2 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE2" \
+  --restart=always proxybase/proxybase:latest || true
+
 echo "[INFO] Pull & Run containers..."
 timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
 sleep 2
@@ -169,26 +193,3 @@ docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 
 docker run -d --network my_network_1 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
 docker run -d --network my_network_2 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
 
-# ==== Proxybase containers (DEVICE_NAME random 10 ký tự, giữ nguyên) ====
-echo "[INFO] Run Proxybase containers..."
-
-PROXYBASE_ENV="/root/proxybase_device.env"
-
-if [ ! -f "$PROXYBASE_ENV" ]; then
-  DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
-  DEVICE2=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
-  echo "DEVICE1=$DEVICE1" | sudo tee "$PROXYBASE_ENV"
-  echo "DEVICE2=$DEVICE2" | sudo tee -a "$PROXYBASE_ENV"
-else
-  source "$PROXYBASE_ENV"
-fi
-
-docker run -d --network my_network_1 --name proxybase1 \
-  -e USER_ID="L_0vehFMTO" \
-  -e DEVICE_NAME="$DEVICE1" \
-  --restart=always proxybase/proxybase:latest || true
-
-docker run -d --network my_network_2 --name proxybase2 \
-  -e USER_ID="L_0vehFMTO" \
-  -e DEVICE_NAME="$DEVICE2" \
-  --restart=always proxybase/proxybase:latest || true
