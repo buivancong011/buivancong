@@ -142,32 +142,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable iptables-fix.service
 
 # ==== Chạy các container gốc ====
-# ==== Proxybase containers (DEVICE_NAME random 10 ký tự, giữ nguyên) ====
-echo "[INFO] Run Proxybase containers..."
-
-PROXYBASE_ENV="/root/proxybase_device.env"
-
-if [ ! -f "$PROXYBASE_ENV" ]; then
-  DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
-  DEVICE2=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
-  echo "DEVICE1=$DEVICE1" | sudo tee "$PROXYBASE_ENV"
-  echo "DEVICE2=$DEVICE2" | sudo tee -a "$PROXYBASE_ENV"
-else
-  source "$PROXYBASE_ENV"
-fi
-
-echo "[DEBUG] DEVICE1=$DEVICE1, DEVICE2=$DEVICE2"
-
-timeout 120 docker run -d --network my_network_1 --name proxybase1 \
-  -e USER_ID="L_0vehFMTO" \
-  -e DEVICE_NAME="$DEVICE1" \
-  --restart=always proxybase/proxybase:latest || echo "[ERROR] proxybase1 failed"
-
-timeout 120 docker run -d --network my_network_2 --name proxybase2 \
-  -e USER_ID="L_0vehFMTO" \
-  -e DEVICE_NAME="$DEVICE2" \
-  --restart=always proxybase/proxybase:latest || echo "[ERROR] proxybase2 failed"
-
 
 echo "[INFO] Pull & Run containers..."
 timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
@@ -195,4 +169,42 @@ docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 
 
 docker run -d --network my_network_1 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
 docker run -d --network my_network_2 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
+
+# ==== Proxybase containers (DEVICE_NAME random 10 ký tự, giữ nguyên) ====
+echo "[INFO] Run Proxybase containers..."
+
+PROXYBASE_ENV="/root/proxybase_device.env"
+
+# Nếu file chưa tồn tại -> random mới
+if [ ! -f "$PROXYBASE_ENV" ]; then
+  DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+  DEVICE2=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+  echo "DEVICE1=$DEVICE1" | sudo tee "$PROXYBASE_ENV"
+  echo "DEVICE2=$DEVICE2" | sudo tee -a "$PROXYBASE_ENV"
+  echo "[INFO] Random DEVICE_NAME lần đầu -> $DEVICE1 / $DEVICE2"
+else
+  # Load lại từ file để giữ nguyên
+  source "$PROXYBASE_ENV"
+  echo "[INFO] Load DEVICE_NAME từ file -> $DEVICE1 / $DEVICE2"
+fi
+
+# Chạy container Proxybase1
+timeout 120 docker run -d --network my_network_1 --name proxybase1 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE1" \
+  --restart=always proxybase/proxybase:latest \
+  && echo "[OK] proxybase1 started with DEVICE_NAME=$DEVICE1" \
+  || echo "[ERROR] proxybase1 failed"
+
+# Chạy container Proxybase2
+timeout 120 docker run -d --network my_network_2 --name proxybase2 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE2" \
+  --restart=always proxybase/proxybase:latest \
+  && echo "[OK] proxybase2 started with DEVICE_NAME=$DEVICE2" \
+  || echo "[ERROR] proxybase2 failed"
+
+# In ra trạng thái containers
+docker ps --filter "name=proxybase"
+
 
