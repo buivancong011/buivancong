@@ -9,7 +9,7 @@ fi
 trap "rm -f $LOCK_FILE" EXIT
 touch $LOCK_FILE
 
-# ==== Bắt buộc gỡ squid & httpd-tools ====
+# ==== Gỡ squid & httpd-tools nếu có ====
 timeout 60 sudo yum remove -y squid httpd-tools || true
 sleep 2
 
@@ -25,14 +25,30 @@ if ! command -v docker &> /dev/null; then
   sudo reboot
 fi
 
-# ==== Nếu có container đang chạy -> xóa hết container + network ====
+# ==== Cài Cronie nếu chưa có ====
+if ! command -v crond &> /dev/null; then
+  echo "[INFO] Cronie chưa có -> Cài đặt..."
+  timeout 120 sudo yum install -y cronie
+  sudo systemctl enable --now crond
+  sleep 2
+fi
+
+# ==== Xóa toàn bộ containers ====
 if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Phát hiện container đang chạy -> Xóa toàn bộ..."
+  echo "[WARN] Xóa containers..."
   timeout 60 docker rm -f $(docker ps -aq) || true
 fi
 sleep 2
 
-echo "[INFO] Xóa toàn bộ network cũ..."
+# ==== Xóa toàn bộ images ====
+if [ "$(docker images -q | wc -l)" -gt 0 ]; then
+  echo "[WARN] Xóa images..."
+  docker rmi -f $(docker images -q) || true
+fi
+sleep 2
+
+# ==== Xóa toàn bộ docker networks cũ (trừ mặc định) ====
+echo "[INFO] Xóa networks cũ..."
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
   timeout 30 docker network rm "$net" || true
 done
