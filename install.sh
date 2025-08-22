@@ -94,8 +94,8 @@ echo "[INFO] Pull & Run containers..."
 
 timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
 sleep 2
-docker run -d --network my_network_1  --restart always --name tm1 traffmonetizer/cli_v2:arm64v8 start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM= || true
-docker run -d --network my_network_2  --restart always --name tm2 traffmonetizer/cli_v2:arm64v8 start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM= || true
+docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:arm64v8 start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM= || true
+docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:arm64v8 start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM= || true
 
 timeout 300 docker pull repocket/repocket:latest
 sleep 2
@@ -153,8 +153,15 @@ set -euo pipefail
 
 SCRIPT_PATH="/root/setup.sh"
 LOG_FILE="/var/log/auto-redeploy.log"
+LOCK_FILE="/tmp/setup.lock"
 
 echo "[$(date)] Auto redeploy starting..." | tee -a $LOG_FILE
+
+# Nếu còn file lock cũ -> xóa đi để tránh kẹt
+if [ -f "$LOCK_FILE" ]; then
+  echo "[$(date)] Xóa LOCK_FILE cũ để tránh kẹt." | tee -a $LOG_FILE
+  rm -f "$LOCK_FILE"
+fi
 
 if [ ! -f "$SCRIPT_PATH" ]; then
   echo "[$(date)] ERROR: $SCRIPT_PATH không tồn tại!" | tee -a $LOG_FILE
@@ -170,7 +177,7 @@ chmod 755 /root/auto-redeploy.sh
 cat <<'EOF' > /etc/systemd/system/auto-redeploy.service
 [Unit]
 Description=Auto run setup.sh after reboot
-After=network.target docker.service
+After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
