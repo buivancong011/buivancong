@@ -26,12 +26,10 @@ else
 fi
 
 # 4. Xóa toàn bộ volumes trừ myst-data1 và myst-data2
-echo "[INFO] Xóa toàn bộ volumes (trừ myst-data1, myst-data2)..."
-for v in $(docker volume ls -q); do
-  if [[ "$v" != "myst-data1" && "$v" != "myst-data2" ]]; then
-    docker volume rm "$v" || true
-  else
-    echo "[KEEP] Giữ lại volume: $v"
+echo "[INFO] Đang xoá toàn bộ volumes (trừ myst-data1, myst-data2)..."
+for vol in $(docker volume ls -q); do
+  if [[ "$vol" != "myst-data1" && "$vol" != "myst-data2" ]]; then
+    docker volume rm -f "$vol" || true
   fi
 done
 
