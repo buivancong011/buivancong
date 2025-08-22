@@ -72,7 +72,7 @@ fix_iptables() {
 }
 
 fix_iptables
-sleep 2
+sleep 10   # ⬅️ Tăng delay để đảm bảo iptables áp dụng
 
 if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} >/dev/null 2>&1; then
   echo "[ERROR] iptables SNAT lỗi. Stop Docker tránh rò mạng."
@@ -173,6 +173,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecStartPre=/bin/sleep 30
 ExecStart=/bin/bash /root/auto-redeploy.sh
 RemainAfterExit=yes
 
