@@ -25,7 +25,15 @@ else
   echo "[INFO] Không có images nào."
 fi
 
-# 4. Giữ nguyên volumes (không xoá dữ liệu)
+# 4. Xóa toàn bộ volumes trừ myst-data1 và myst-data2
+echo "[INFO] Xóa toàn bộ volumes (trừ myst-data1, myst-data2)..."
+for v in $(docker volume ls -q); do
+  if [[ "$v" != "myst-data1" && "$v" != "myst-data2" ]]; then
+    docker volume rm "$v" || true
+  else
+    echo "[KEEP] Giữ lại volume: $v"
+  fi
+done
 
 # 5. Disable & remove systemd services/timers đáng ngờ
 echo "[INFO] Tắt và xóa systemd service/timer liên quan..."
