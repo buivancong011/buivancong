@@ -81,10 +81,12 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
 fi
 
 # ==== Cron reboot định kỳ (mỗi 3 ngày, 3h sáng) ====
+set +u
 CRON_FILE="/etc/cron.d/docker_reboot_every3days"
 echo "0 3 */3 * * root /sbin/reboot" | sudo tee $CRON_FILE
 sudo chmod 644 $CRON_FILE
 sudo systemctl restart crond
+set -u
 
 # ==== Chạy các container gốc ====
 set +e
