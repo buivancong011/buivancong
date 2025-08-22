@@ -9,7 +9,7 @@ fi
 trap "rm -f $LOCK_FILE" EXIT
 touch $LOCK_FILE
 
-# ==== Bắt buộc gỡ squid & httpd-tools ====
+# ==== Gỡ squid & httpd-tools nếu có ====
 timeout 60 sudo yum remove -y squid httpd-tools || true
 sleep 2
 
@@ -25,76 +25,35 @@ if ! command -v docker &> /dev/null; then
   sudo reboot
 fi
 
-# ==== Auto reboot mỗi 3 ngày bằng systemd timer ====
-echo "[INFO] Thiết lập auto reboot mỗi 3 ngày..."
+# ==== Cài Cronie nếu chưa có ====
+if ! command -v crond &> /dev/null; then
+  echo "[INFO] Cronie chưa có -> Cài đặt..."
+  timeout 120 sudo yum install -y cronie
+  sudo systemctl enable --now crond
+  sleep 2
+fi
 
-cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.service
-[Unit]
-Description=Auto reboot every 3 days
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/reboot
-EOF
-
-cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.timer
-[Unit]
-Description=Run auto reboot every 3 days
-
-[Timer]
-OnBootSec=1h
-OnUnitActiveSec=3d
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now auto-reboot.timer
-
-# ==== Auto run lại setup.sh sau reboot ====
-echo "[INFO] Thiết lập auto run setup.sh sau reboot..."
-
-cat <<EOF | sudo tee /etc/systemd/system/setup-autorun.service
-[Unit]
-Description=Run setup.sh after reboot
-After=network.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /root/setup.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable setup-autorun.service
-
-# ==== Xóa toàn bộ containers cũ ====
-set +e
+# ==== Xóa toàn bộ containers ====
 if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Phát hiện container đang chạy -> Xóa toàn bộ..."
+  echo "[WARN] Xóa containers..."
   timeout 60 docker rm -f $(docker ps -aq) || true
 fi
 sleep 2
 
-# ==== Xóa toàn bộ images cũ ====
+# ==== Xóa toàn bộ images ====
 if [ "$(docker images -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Xóa toàn bộ images cũ..."
+  echo "[WARN] Xóa images..."
   docker rmi -f $(docker images -q) || true
 fi
 sleep 2
 
-echo "[INFO] Xóa toàn bộ network cũ..."
+# ==== Xóa toàn bộ docker networks cũ (trừ mặc định) ====
+echo "[INFO] Xóa networks cũ..."
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
   timeout 30 docker network rm "$net" || true
 done
-set -e
 sleep 2
+
 
 # ==== Tạo lại Docker networks ====
 docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 || true
