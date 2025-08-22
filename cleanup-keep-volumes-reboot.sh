@@ -1,28 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "=== [CLEANUP] Bắt đầu dọn dẹp triệt để Docker & auto-spawn ==="
+echo "=== [CLEANUP] Bắt đầu dọn dẹp Docker + systemd + scripts ==="
 
-# 0. Start Docker trước, chờ ổn định rồi mới enable
-echo "[INFO] Start Docker ngay..."
-systemctl start docker
+# 0. Start Docker trước để có thể xóa container/images
+echo "[INFO] Start Docker..."
+systemctl start docker || true
 echo "[INFO] Chờ 10 giây cho Docker khởi động..."
 sleep 10
 
-# Kiểm tra Docker đã active chưa
 if systemctl is-active --quiet docker; then
-  echo "[OK] Docker đang chạy."
+  echo "[OK] Docker đã chạy."
 else
-  echo "[ERROR] Docker chưa chạy sau 10 giây. Dừng script!"
-  exit 1
+  echo "[WARN] Docker chưa chạy -> bỏ qua phần Docker."
 fi
 
-echo "[INFO] Enable Docker để auto-start sau reboot..."
-systemctl enable docker
+echo "[INFO] Enable Docker để auto-start khi reboot..."
+systemctl enable docker || true
 
-# 1. Tắt restart policy tất cả container
+# 1. Tắt restart policy container
 echo "[INFO] Tắt restart policy container..."
-for c in $(docker ps -aq); do
+for c in $(docker ps -aq 2>/dev/null || true); do
   docker update --restart=no "$c" || true
 done
 sleep 2
@@ -45,46 +43,47 @@ else
 fi
 sleep 2
 
-# 4. Xóa toàn bộ volumes trừ myst-data1 và myst-data2
-echo "[INFO] Đang xoá toàn bộ volumes (trừ myst-data1, myst-data2)..."
-for vol in $(docker volume ls -q); do
+# 4. Xóa toàn bộ volumes TRỪ myst-data1 và myst-data2
+echo "[INFO] Đang xoá volumes (trừ myst-data1, myst-data2)..."
+for vol in $(docker volume ls -q 2>/dev/null || true); do
   if [[ "$vol" != "myst-data1" && "$vol" != "myst-data2" ]]; then
     echo "  -> Xóa volume $vol"
     docker volume rm -f "$vol" || true
-    sleep 1
   fi
 done
 sleep 2
 
-# 5. Disable & remove systemd services/timers đáng ngờ
-echo "[INFO] Tắt và xóa systemd service/timer liên quan..."
-for svc in \
-  docker-apps.service \
-  al2023-docker-setup.service \
-  docker-boot-reset.service \
-  docker-weekly-reset.service; do
-  systemctl disable --now "$svc" 2>/dev/null || true
-  rm -f /etc/systemd/system/$svc || true
-  sleep 1
-done
-
-for tmr in \
-  docker-apps-boot.timer \
-  al2023-docker-setup.timer \
-  docker-boot-reset.timer \
-  docker-weekly-reset.timer; do
-  systemctl disable --now "$tmr" 2>/dev/null || true
-  rm -f /etc/systemd/system/$tmr || true
-  sleep 1
+# 5. Xóa toàn bộ networks trừ mặc định
+echo "[INFO] Xóa toàn bộ networks..."
+for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
+  docker network rm "$net" || true
 done
 sleep 2
 
-# 6. Reload systemd
+# 6. Xóa cronjobs liên quan
+echo "[INFO] Xóa toàn bộ cronjobs..."
+rm -f /etc/cron.d/* || true
+
+# 7. Xóa tất cả systemd services/timers do user thêm
+echo "[INFO] Xóa tất cả systemd services/timers custom..."
+for f in /etc/systemd/system/*.service /etc/systemd/system/*.timer; do
+  if [ -f "$f" ]; then
+    svc=$(basename "$f")
+    systemctl disable --now "$svc" 2>/dev/null || true
+    rm -f "$f"
+    echo "  -> Xóa $svc"
+  fi
+done
+sleep 2
+
 systemctl daemon-reload
 systemctl reset-failed
-sleep 2
 
-# 7. Hoàn tất cleanup mới reboot
-echo "=== [CLEANUP] Hoàn tất. Sẽ reboot sau 5 giây... ==="
+# 8. Xóa tất cả file .sh trong /root
+echo "[INFO] Xóa toàn bộ file .sh trong /root..."
+rm -f /root/*.sh || true
+
+# 9. Hoàn tất
+echo "=== [CLEANUP] Hoàn tất. Reboot sau 5 giây... ==="
 sleep 5
 reboot
