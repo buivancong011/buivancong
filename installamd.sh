@@ -81,12 +81,54 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Cron reboot định kỳ (mỗi 3 ngày, 3h sáng) ====
-CRON_FILE="/etc/cron.d/docker_reboot_every3days"
-echo "0 3 */3 * * root /sbin/reboot" | sudo tee $CRON_FILE
-sudo chmod 644 $CRON_FILE
-sudo systemctl restart crond
+# ==== Auto reboot mỗi 3 ngày bằng systemd timer ====
+echo "[INFO] Thiết lập auto reboot mỗi 3 ngày..."
 
+cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.service
+[Unit]
+Description=Auto reboot every 3 days
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/reboot
+EOF
+
+cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.timer
+[Unit]
+Description=Run auto reboot every 3 days
+
+[Timer]
+OnBootSec=1h
+OnUnitActiveSec=3d
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now auto-reboot.timer
+
+# ==== Auto run lại setup.sh sau reboot ====
+echo "[INFO] Thiết lập auto run setup.sh sau reboot..."
+
+cat <<EOF | sudo tee /etc/systemd/system/setup-autorun.service
+[Unit]
+Description=Run setup.sh after reboot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/setup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable setup-autorun.service
 # ==== Chạy các container ====
 echo "[INFO] Pull & Run containers..."
 set +e
