@@ -1,22 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Bắt đầu dọn dẹp toàn bộ (xoá tất cả container, network, images, scripts; giữ volumes)..."
+echo "[INFO] Bắt đầu xoá SẠCH Docker (containers, networks, images, services, scripts). Giữ volumes."
 
-# ==========================
-# 1. Stop & remove ALL containers
-# ==========================
+# 1. Xoá toàn bộ containers
 if [ "$(docker ps -aq | wc -l)" -gt 0 ]; then
   echo "[INFO] Xoá toàn bộ containers..."
   docker rm -f $(docker ps -aq) >/dev/null 2>&1 || true
 else
   echo "[INFO] Không có container nào."
 fi
-sleep 3
+sleep 2
 
-# ==========================
-# 2. Remove ALL docker networks (trừ mặc định)
-# ==========================
+# 2. Xoá toàn bộ networks (trừ mặc định)
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
   echo "[INFO] Xoá network: $net"
   docker network rm "$net" >/dev/null 2>&1 || true
@@ -24,94 +20,35 @@ for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none
 done
 sleep 2
 
-# ==========================
-# 3. Giữ lại tất cả volumes
-# ==========================
+# 3. Giữ lại toàn bộ volumes
 echo "[INFO] Giữ lại toàn bộ Docker volumes (không xoá)."
 sleep 2
 
-# ==========================
-# 4. Remove ALL Docker images
-# ==========================
+# 4. Xoá toàn bộ images
 if [ "$(docker images -q | wc -l)" -gt 0 ]; then
   echo "[INFO] Xoá toàn bộ Docker images..."
   docker rmi -f $(docker images -q) >/dev/null 2>&1 || true
 else
   echo "[INFO] Không có image nào."
 fi
-sleep 3
+sleep 2
 
-# ==========================
-# 5. Remove cron jobs
-# ==========================
+# 5. Xoá cron jobs
 for cronfile in /etc/cron.d/docker_reset_every3days /etc/cron.d/docker_daily_restart /etc/cron.d/docker_weekly_reset; do
-  if [ -f "$cronfile" ]; then
-    echo "[INFO] Xoá cron: $cronfile"
-    sudo rm -f "$cronfile"
-    sleep 1
-  fi
+  [ -f "$cronfile" ] && sudo rm -f "$cronfile"
 done
-sleep 2
 
-# ==========================
-# 6. Remove iptables-fix service
-# ==========================
-if systemctl list-unit-files | grep -q "^iptables-fix.service"; then
-  echo "[INFO] Vô hiệu hoá & xoá service iptables-fix"
-  sudo systemctl disable iptables-fix.service --now >/dev/null 2>&1 || true
-  sudo rm -f /etc/systemd/system/iptables-fix.service
-  sudo systemctl daemon-reload
-  sleep 2
-fi
-
+# 6. Xoá services
+sudo systemctl disable iptables-fix.service --now >/dev/null 2>&1 || true
+sudo rm -f /etc/systemd/system/iptables-fix.service
 sudo rm -f /usr/local/bin/fix_iptables.sh
-sleep 1
+sudo systemctl disable auto-redeploy.service --now >/dev/null 2>&1 || true
+sudo rm -f /etc/systemd/system/auto-redeploy.service
+sudo systemctl daemon-reload
 
-# ==========================
-# 7. Remove auto-redeploy service & script
-# ==========================
-if systemctl list-unit-files | grep -q "^auto-redeploy.service"; then
-  echo "[INFO] Vô hiệu hoá & xoá service auto-redeploy"
-  sudo systemctl disable auto-redeploy.service --now >/dev/null 2>&1 || true
-  sudo rm -f /etc/systemd/system/auto-redeploy.service
-  sudo systemctl daemon-reload
-  sleep 2
-fi
+# 7. Xoá scripts trong /root
+rm -f /root/{install.sh,fix-auto-redeployins.sh,auto-redeploy.sh,proxybase_device.env,amazon-linux-2023.sh,check_status.sh,docker-boot-reset.sh,docker-weekly-reset.sh,restart-earnfm.sh,restart-repocket.sh,restart-ur.sh,squid-conf-ip.sh,WAN_IFACE=ens5} || true
 
-sudo rm -f /root/auto-redeploy.sh
-sleep 1
-
-# ==========================
-# 8. Remove all install/fix scripts & rác trong /root
-# ==========================
-files_to_remove=(
-  "/root/install.sh"
-  "/root/fix-auto-redeployins.sh"
-  "/root/proxybase_device.env"
-  "/root/amazon-linux-2023.sh"
-  "/root/check_status.sh"
-  "/root/docker-boot-reset.sh"
-  "/root/docker-weekly-reset.sh"
-  "/root/restart-earnfm.sh"
-  "/root/restart-repocket.sh"
-  "/root/restart-ur.sh"
-  "/root/squid-conf-ip.sh"
-  "/root/WAN_IFACE=ens5"
-)
-
-for f in "${files_to_remove[@]}"; do
-  if [ -f "$f" ]; then
-    echo "[INFO] Xoá file: $f"
-    sudo rm -f "$f"
-    sleep 1
-  fi
-done
-sleep 2
-
-# ==========================
-# 9. Done + reboot
-# ==========================
-echo "[INFO] Dọn dẹp hoàn tất. Toàn bộ containers, networks, images, cron, service, scripts đã xoá; volumes vẫn giữ nguyên."
-echo "[INFO] Reboot hệ thống ngay..."
+echo "[INFO] Dọn dẹp hoàn tất (volumes vẫn giữ nguyên)."
 sleep 5
 sudo reboot
