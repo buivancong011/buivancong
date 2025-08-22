@@ -80,11 +80,54 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Cron reboot định kỳ (3 ngày 1 lần) ====
-CRON_FILE="/etc/cron.d/docker_reboot_every3days"
-echo "0 3 */3 * * root /sbin/reboot" | sudo tee $CRON_FILE
-sudo chmod 644 $CRON_FILE
-sudo systemctl restart crond
+# ==== Auto reboot mỗi 3 ngày bằng systemd timer ====
+echo "[INFO] Thiết lập auto reboot mỗi 3 ngày..."
+
+cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.service
+[Unit]
+Description=Auto reboot every 3 days
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/reboot
+EOF
+
+cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.timer
+[Unit]
+Description=Run auto reboot every 3 days
+
+[Timer]
+OnBootSec=1h
+OnUnitActiveSec=3d
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now auto-reboot.timer
+
+# ==== Auto run lại setup.sh sau reboot ====
+echo "[INFO] Thiết lập auto run setup.sh sau reboot..."
+
+cat <<EOF | sudo tee /etc/systemd/system/setup-autorun.service
+[Unit]
+Description=Run setup.sh after reboot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/setup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable setup-autorun.service
 
 # ==== Chạy các container ====
 echo "[INFO] Pull & Run containers..."
@@ -137,39 +180,4 @@ docker run -d --network my_network_2 --name proxybase2 \
   --restart=always proxybase/proxybase:latest
 set -e
 
-# ==== AUTO-REDEPLOY SERVICE ====
-echo "[INFO] Cài auto-redeploy sau reboot..."
-cat <<'EOF' > /root/auto-redeploy.sh
-#!/bin/bash
-set -euo pipefail
-SCRIPT_PATH="/root/setup.sh"
-LOG_FILE="/var/log/auto-redeploy.log"
-echo "[$(date)] Auto redeploy starting..." | tee -a $LOG_FILE
-if [ ! -f "$SCRIPT_PATH" ]; then
-  echo "[$(date)] ERROR: $SCRIPT_PATH không tồn tại!" | tee -a $LOG_FILE
-  exit 1
-fi
-/bin/bash "$SCRIPT_PATH" >> $LOG_FILE 2>&1
-echo "[$(date)] Auto redeploy hoàn tất." | tee -a $LOG_FILE
-EOF
 
-chmod 755 /root/auto-redeploy.sh
-
-cat <<'EOF' > /etc/systemd/system/auto-redeploy.service
-[Unit]
-Description=Auto run setup.sh after reboot
-After=network.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStartPre=/bin/sleep 30
-ExecStart=/bin/bash /root/auto-redeploy.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable auto-redeploy.service
