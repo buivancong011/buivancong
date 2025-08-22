@@ -51,7 +51,7 @@ docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 || t
 docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 || true
 sleep 2
 
-# ==== Thiết lập iptables ban đầu (đổi sang enX0) ====
+# ==== Thiết lập iptables ban đầu (interface enX0) ====
 IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute enX0 | awk '{gsub(/\/.*/,"",$4); print $4}')
 IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic enX0 | awk '{gsub(/\/.*/,"",$4); print $4}')
 
@@ -72,20 +72,15 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Cron restart hàng ngày (3h sáng) ====
-CRON_FILE1="/etc/cron.d/docker_daily_restart"
-echo "0 3 * * * root docker restart repocket1 repocket2 earnfm1 earnfm2 ur1 ur2" | sudo tee $CRON_FILE1
-sudo chmod 644 $CRON_FILE1
-
-# ==== Cron reset hàng tuần (CN 3h sáng) ====
-CRON_FILE2="/etc/cron.d/docker_weekly_reset"
-echo "0 3 * * 0 root /root/setup.sh weekly-reset" | sudo tee $CRON_FILE2
-sudo chmod 644 $CRON_FILE2
+# ==== Cron reset định kỳ (mỗi 3 ngày, 3h sáng) ====
+CRON_FILE="/etc/cron.d/docker_reset_every3days"
+echo "0 3 */3 * * root /root/setup.sh weekly-reset" | sudo tee $CRON_FILE
+sudo chmod 644 $CRON_FILE
 sudo systemctl restart crond
 
-# ==== Reset tuần nếu gọi thủ công ====
+# ==== Reset thủ công nếu gọi weekly-reset ====
 if [ "${1:-}" == "weekly-reset" ]; then
-  echo "[INFO] Reset tuần -> Xóa containers + images (giữ volume)"
+  echo "[INFO] Reset -> Xóa containers + images (giữ volume)"
   docker rm -f $(docker ps -aq) || true
   docker rmi -f $(docker images -q) || true
   echo "[INFO] Reboot để làm mới..."
@@ -145,7 +140,7 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable iptables-fix.service
 
-# ==== Chạy các container (URNetwork đổi sang amd64) ====
+# ==== Chạy các container ====
 echo "[INFO] Pull & Run containers..."
 timeout 300 docker pull traffmonetizer/cli_v2:latest
 sleep 2
@@ -170,6 +165,30 @@ docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-
 docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj || true
 docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj || true
 
-# ⚠️ Khác biệt quan trọng: URNetwork → amd64
+# ⚠️ URNetwork → amd64
 docker run -d --network my_network_1 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
 docker run -d --network my_network_2 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
+
+# ==== Proxybase containers (DEVICE_NAME random 10 ký tự, giữ nguyên) ====
+echo "[INFO] Run Proxybase containers..."
+
+PROXYBASE_ENV="/root/proxybase_device.env"
+
+if [ ! -f "$PROXYBASE_ENV" ]; then
+  DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+  DEVICE2=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
+  echo "DEVICE1=$DEVICE1" | sudo tee "$PROXYBASE_ENV"
+  echo "DEVICE2=$DEVICE2" | sudo tee -a "$PROXYBASE_ENV"
+else
+  source "$PROXYBASE_ENV"
+fi
+
+docker run -d --network my_network_1 --name proxybase1 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE1" \
+  --restart=always proxybase/proxybase:latest || true
+
+docker run -d --network my_network_2 --name proxybase2 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE2" \
+  --restart=always proxybase/proxybase:latest || true
