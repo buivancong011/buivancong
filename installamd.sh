@@ -180,39 +180,4 @@ docker run -d --network my_network_2 --name proxybase2 \
   --restart=always proxybase/proxybase:latest
 set -e
 
-# ==== AUTO-REDEPLOY SERVICE ====
-echo "[INFO] Cài auto-redeploy sau reboot..."
-cat <<'EOF' > /root/auto-redeploy.sh
-#!/bin/bash
-set -euo pipefail
-SCRIPT_PATH="/root/setup.sh"
-LOG_FILE="/var/log/auto-redeploy.log"
-echo "[$(date)] Auto redeploy starting..." | tee -a $LOG_FILE
-if [ ! -f "$SCRIPT_PATH" ]; then
-  echo "[$(date)] ERROR: $SCRIPT_PATH không tồn tại!" | tee -a $LOG_FILE
-  exit 1
-fi
-/bin/bash "$SCRIPT_PATH" >> $LOG_FILE 2>&1
-echo "[$(date)] Auto redeploy hoàn tất." | tee -a $LOG_FILE
-EOF
 
-chmod 755 /root/auto-redeploy.sh
-
-cat <<'EOF' > /etc/systemd/system/auto-redeploy.service
-[Unit]
-Description=Auto run setup.sh after reboot
-After=network.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStartPre=/bin/sleep 30
-ExecStart=/bin/bash /root/auto-redeploy.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable auto-redeploy.service
