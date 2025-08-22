@@ -1,30 +1,40 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Bắt đầu xoá SẠCH Docker (containers, networks, images, services, scripts). Giữ volumes."
+echo "[INFO] === BẮT ĐẦU CLEANUP TOÀN BỘ (giữ volumes) ==="
 
-# 1. Xoá toàn bộ containers
+# ==========================
+# 1. Stop & remove ALL containers (bỏ restart policy trước)
+# ==========================
 if [ "$(docker ps -aq | wc -l)" -gt 0 ]; then
-  echo "[INFO] Xoá toàn bộ containers..."
-  docker rm -f $(docker ps -aq) >/dev/null 2>&1 || true
+  echo "[INFO] Xoá containers..."
+  for cid in $(docker ps -aq); do
+    docker update --restart=no "$cid" >/dev/null 2>&1 || true
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+  done
 else
   echo "[INFO] Không có container nào."
 fi
 sleep 2
 
-# 2. Xoá toàn bộ networks (trừ mặc định)
+# ==========================
+# 2. Remove ALL docker networks (trừ mặc định)
+# ==========================
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
   echo "[INFO] Xoá network: $net"
   docker network rm "$net" >/dev/null 2>&1 || true
-  sleep 1
 done
 sleep 2
 
-# 3. Giữ lại toàn bộ volumes
+# ==========================
+# 3. Giữ lại volumes
+# ==========================
 echo "[INFO] Giữ lại toàn bộ Docker volumes (không xoá)."
 sleep 2
 
-# 4. Xoá toàn bộ images
+# ==========================
+# 4. Remove ALL Docker images
+# ==========================
 if [ "$(docker images -q | wc -l)" -gt 0 ]; then
   echo "[INFO] Xoá toàn bộ Docker images..."
   docker rmi -f $(docker images -q) >/dev/null 2>&1 || true
@@ -33,22 +43,54 @@ else
 fi
 sleep 2
 
-# 5. Xoá cron jobs
+# ==========================
+# 5. Remove cron jobs
+# ==========================
 for cronfile in /etc/cron.d/docker_reset_every3days /etc/cron.d/docker_daily_restart /etc/cron.d/docker_weekly_reset; do
   [ -f "$cronfile" ] && sudo rm -f "$cronfile"
 done
+sleep 1
 
-# 6. Xoá services
-sudo systemctl disable iptables-fix.service --now >/dev/null 2>&1 || true
-sudo rm -f /etc/systemd/system/iptables-fix.service
-sudo rm -f /usr/local/bin/fix_iptables.sh
-sudo systemctl disable auto-redeploy.service --now >/dev/null 2>&1 || true
-sudo rm -f /etc/systemd/system/auto-redeploy.service
-sudo systemctl daemon-reload
+# ==========================
+# 6. Remove systemd services
+# ==========================
+echo "[INFO] Xoá service auto-redeploy & iptables-fix..."
+systemctl disable auto-redeploy.service --now >/dev/null 2>&1 || true
+systemctl disable iptables-fix.service --now >/dev/null 2>&1 || true
+rm -f /etc/systemd/system/auto-redeploy.service
+rm -f /etc/systemd/system/iptables-fix.service
+rm -f /usr/local/bin/fix_iptables.sh
+systemctl daemon-reload
+sleep 2
 
-# 7. Xoá scripts trong /root
-rm -f /root/{install.sh,fix-auto-redeployins.sh,auto-redeploy.sh,proxybase_device.env,amazon-linux-2023.sh,check_status.sh,docker-boot-reset.sh,docker-weekly-reset.sh,restart-earnfm.sh,restart-repocket.sh,restart-ur.sh,squid-conf-ip.sh,WAN_IFACE=ens5} || true
+# ==========================
+# 7. Remove scripts in /root
+# ==========================
+files_to_remove=(
+  "/root/install.sh"
+  "/root/fix-auto-redeployins.sh"
+  "/root/auto-redeploy.sh"
+  "/root/proxybase_device.env"
+  "/root/amazon-linux-2023.sh"
+  "/root/check_status.sh"
+  "/root/docker-boot-reset.sh"
+  "/root/docker-weekly-reset.sh"
+  "/root/restart-earnfm.sh"
+  "/root/restart-repocket.sh"
+  "/root/restart-ur.sh"
+  "/root/squid-conf-ip.sh"
+  "/root/WAN_IFACE=ens5"
+)
 
-echo "[INFO] Dọn dẹp hoàn tất (volumes vẫn giữ nguyên)."
+for f in "${files_to_remove[@]}"; do
+  [ -f "$f" ] && rm -f "$f"
+done
+sleep 2
+
+# ==========================
+# 8. Done + reboot
+# ==========================
+echo "[INFO] === CLEANUP HOÀN TẤT (volumes giữ nguyên) ==="
+echo "[INFO] Reboot hệ thống ngay..."
 sleep 5
 sudo reboot
