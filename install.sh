@@ -33,13 +33,21 @@ if ! command -v crond &> /dev/null; then
   sleep 2
 fi
 
-# ==== Nếu có container đang chạy -> xóa hết container + network ====
-if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Phát hiện container đang chạy -> Xóa toàn bộ..."
+# ==== Nếu có container đang chạy -> xóa hết container ====
+if [ "$(docker ps -aq | wc -l)" -gt 0 ]; then
+  echo "[WARN] Phát hiện container -> Xóa toàn bộ..."
   timeout 60 docker rm -f $(docker ps -aq) || true
 fi
 sleep 2
 
+# ==== Xóa toàn bộ images cũ ====
+if [ "$(docker images -q | wc -l)" -gt 0 ]; then
+  echo "[WARN] Xóa toàn bộ images cũ..."
+  docker rmi -f $(docker images -q) || true
+fi
+sleep 2
+
+# ==== Xóa network cũ ====
 echo "[INFO] Xóa toàn bộ network cũ..."
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
   timeout 30 docker network rm "$net" || true
@@ -72,79 +80,16 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Cron reset định kỳ (mỗi 3 ngày, 3h sáng) ====
-CRON_FILE="/etc/cron.d/docker_reset_every3days"
-echo "0 3 */3 * * root /root/setup.sh weekly-reset" | sudo tee $CRON_FILE
+# ==== Cron reboot định kỳ (mỗi 3 ngày, 3h sáng) ====
+CRON_FILE="/etc/cron.d/docker_reboot_every3days"
+echo "0 3 */3 * * root /sbin/reboot" | sudo tee $CRON_FILE
 sudo chmod 644 $CRON_FILE
-
 sudo systemctl restart crond
 
-# ==== Reset thủ công nếu gọi weekly-reset ====
-if [ "${1:-}" == "weekly-reset" ]; then
-  echo "[INFO] Reset -> Xóa containers + images (giữ volume)"
-  docker rm -f $(docker ps -aq) || true
-  docker rmi -f $(docker images -q) || true
-  echo "[INFO] Reboot để làm mới..."
-  sleep 5
-  sudo reboot
-fi
-
-# ==== THÊM FIX IPTABLES SAU REBOOT ====
-cat <<'EOF' | sudo tee /usr/local/bin/fix_iptables.sh
-#!/bin/bash
-set -euo pipefail
-
-IP_ALLA=$(/sbin/ip -4 -o addr show scope global ens5 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n1)
-IP_ALLB=$IP_ALLA
-
-echo "[INFO] Đang fix iptables..."
-
-fix_rule() {
-  NET=$1
-  IP=$2
-  if ! iptables -t nat -C POSTROUTING -s ${NET} -j SNAT --to-source ${IP} 2>/dev/null; then
-    echo "[WARN] Thiếu rule cho ${NET}, thêm lại..."
-    iptables -t nat -A POSTROUTING -s ${NET} -j SNAT --to-source ${IP}
-    NEED_RESTART=1
-  fi
-}
-
-NEED_RESTART=0
-fix_rule "192.168.33.0/24" "$IP_ALLA"
-fix_rule "192.168.34.0/24" "$IP_ALLB"
-
-if [ $NEED_RESTART -eq 1 ]; then
-  echo "[INFO] Restart toàn bộ container để làm mới kết nối..."
-  docker restart $(docker ps -q) || true
-  sleep 5
-fi
-
-echo "[INFO] Hoàn tất fix iptables."
-EOF
-
-sudo chmod +x /usr/local/bin/fix_iptables.sh
-
-cat <<'EOF' | sudo tee /etc/systemd/system/iptables-fix.service
-[Unit]
-Description=Fix iptables rules after reboot
-After=network.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/fix_iptables.sh
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable iptables-fix.service
-
 # ==== Chạy các container gốc ====
-set +e 
-
+set +e
 echo "[INFO] Pull & Run containers..."
+
 timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
 sleep 2
 docker run -d --network my_network_1  --restart always --name tm1 traffmonetizer/cli_v2:arm64v8 start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM= || true
@@ -171,9 +116,8 @@ docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 
 docker run -d --network my_network_1 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
 docker run -d --network my_network_2 --restart=always --platform linux/arm64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest || true
 
-# ==== Proxybase containers (random DEVICE_NAME chỉ 1 lần) ====
+# ==== Proxybase containers ====
 echo "[INFO] Run Proxybase containers..."
-
 PROXYBASE_ENV="/root/proxybase_device.env"
 if [ ! -s "$PROXYBASE_ENV" ]; then
   DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
@@ -186,8 +130,6 @@ else
   source "$PROXYBASE_ENV"
 fi
 
-echo "[DEBUG] DEVICE1=$DEVICE1 , DEVICE2=$DEVICE2"
-
 docker run -d --network my_network_1 --name proxybase1 \
   -e USER_ID="L_0vehFMTO" \
   -e DEVICE_NAME="$DEVICE1" \
@@ -199,3 +141,45 @@ docker run -d --network my_network_2 --name proxybase2 \
   --restart=always proxybase/proxybase:latest
 
 set -e   # Bật lại strict mode
+
+# ==== TÍCH HỢP AUTO-REDEPLOY SAU REBOOT ====
+echo "[INFO] Cài auto-redeploy sau reboot..."
+
+cat <<'EOF' > /root/auto-redeploy.sh
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_PATH="/root/setup.sh"
+LOG_FILE="/var/log/auto-redeploy.log"
+
+echo "[$(date)] Auto redeploy starting..." | tee -a $LOG_FILE
+
+if [ ! -f "$SCRIPT_PATH" ]; then
+  echo "[$(date)] ERROR: $SCRIPT_PATH không tồn tại!" | tee -a $LOG_FILE
+  exit 1
+fi
+
+/bin/bash "$SCRIPT_PATH" >> $LOG_FILE 2>&1
+echo "[$(date)] Auto redeploy hoàn tất." | tee -a $LOG_FILE
+EOF
+
+chmod 755 /root/auto-redeploy.sh
+
+cat <<'EOF' > /etc/systemd/system/auto-redeploy.service
+[Unit]
+Description=Auto run setup.sh after reboot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/auto-redeploy.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable auto-redeploy.service
+echo "[INFO] Auto-redeploy đã được cấu hình thành công."
