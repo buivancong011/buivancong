@@ -86,39 +86,35 @@ echo "0 3 */3 * * root /sbin/reboot" | sudo tee $CRON_FILE
 sudo chmod 644 $CRON_FILE
 sudo systemctl restart crond
 
-# ==== Pull & Run containers ====
-set +e
+# ==== Chạy các container ====
 echo "[INFO] Pull & Run containers..."
-
-# Traffmonetizer
+set +e
 timeout 300 docker pull traffmonetizer/cli_v2:latest
-docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:latest start accept --token YOUR_TOKEN || true
-docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:latest start accept --token YOUR_TOKEN || true
+sleep 2
+docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
+docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
 
-# Repocket
 timeout 300 docker pull repocket/repocket:latest
-docker run --network my_network_1 --name repocket1 -e RP_EMAIL=YOUR_EMAIL -e RP_API_KEY=YOUR_API -d --restart=always repocket/repocket:latest || true
-docker run --network my_network_2 --name repocket2 -e RP_EMAIL=YOUR_EMAIL -e RP_API_KEY=YOUR_API -d --restart=always repocket/repocket:latest || true
+sleep 2
+docker run --network my_network_1 --name repocket1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
+docker run --network my_network_2 --name repocket2 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
 
-# Myst
 timeout 300 docker pull mysteriumnetwork/myst:latest
-docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions || true
-docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions || true
+sleep 2
+docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
+docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
-# EarnFM
 timeout 300 docker pull earnfm/earnfm-client:latest
-docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="YOUR_TOKEN" --name earnfm1 earnfm/earnfm-client:latest || true
-docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="YOUR_TOKEN" --name earnfm2 earnfm/earnfm-client:latest || true
+sleep 2
+docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest
+docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest
 
-# PacketSDK
-docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=YOUR_APPKEY || true
-docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=YOUR_APPKEY || true
+docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
+docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 
-# URNetwork
-docker run -d --network my_network_1 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="YOUR_USER" -e PASSWORD="YOUR_PASS" ghcr.io/techroy23/docker-urnetwork:latest || true
-docker run -d --network my_network_2 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="YOUR_USER" -e PASSWORD="YOUR_PASS" ghcr.io/techroy23/docker-urnetwork:latest || true
+docker run -d --network my_network_1 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
+docker run -d --network my_network_2 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 
-# Proxybase
 echo "[INFO] Run Proxybase containers..."
 PROXYBASE_ENV="/root/proxybase_device.env"
 if [ ! -f "$PROXYBASE_ENV" ]; then
@@ -131,34 +127,28 @@ else
 fi
 
 docker run -d --network my_network_1 --name proxybase1 \
-  -e USER_ID="YOUR_USER" \
+  -e USER_ID="L_0vehFMTO" \
   -e DEVICE_NAME="$DEVICE1" \
-  --restart=always proxybase/proxybase:latest || true
+  --restart=always proxybase/proxybase:latest
 
 docker run -d --network my_network_2 --name proxybase2 \
-  -e USER_ID="YOUR_USER" \
+  -e USER_ID="L_0vehFMTO" \
   -e DEVICE_NAME="$DEVICE2" \
-  --restart=always proxybase/proxybase:latest || true
-
+  --restart=always proxybase/proxybase:latest
 set -e
 
-# ==== Auto-redeploy sau reboot ====
-echo "[INFO] Cấu hình auto-redeploy..."
-
+# ==== AUTO-REDEPLOY SERVICE ====
+echo "[INFO] Cài auto-redeploy sau reboot..."
 cat <<'EOF' > /root/auto-redeploy.sh
 #!/bin/bash
 set -euo pipefail
-
 SCRIPT_PATH="/root/setup.sh"
 LOG_FILE="/var/log/auto-redeploy.log"
-
 echo "[$(date)] Auto redeploy starting..." | tee -a $LOG_FILE
-
 if [ ! -f "$SCRIPT_PATH" ]; then
   echo "[$(date)] ERROR: $SCRIPT_PATH không tồn tại!" | tee -a $LOG_FILE
   exit 1
 fi
-
 /bin/bash "$SCRIPT_PATH" >> $LOG_FILE 2>&1
 echo "[$(date)] Auto redeploy hoàn tất." | tee -a $LOG_FILE
 EOF
@@ -183,4 +173,3 @@ EOF
 
 systemctl daemon-reload
 systemctl enable auto-redeploy.service
-echo "[INFO] Auto-redeploy đã được bật thành công."
