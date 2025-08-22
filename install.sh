@@ -82,11 +82,7 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   echo "[ERROR] iptables SNAT lỗi. Stop Docker tránh rò mạng."
   sudo systemctl stop docker
   exit 1
-
-
-
-
-
+fi
 
 # ==== Chạy các container gốc + Proxybase ====
 set +e
