@@ -25,29 +25,13 @@ if ! command -v docker &> /dev/null; then
   sudo reboot
 fi
 
-# ==== Cài Cronie nếu chưa có ====
-if ! command -v crond &> /dev/null; then
-  echo "[INFO] Cronie chưa có -> Cài đặt..."
-  timeout 120 sudo dnf install -y cronie
-  sudo systemctl enable --now crond
-  sleep 2
-fi
-
-# ==== Nếu có container đang chạy -> xóa hết container ====
-if [ "$(docker ps -aq | wc -l)" -gt 0 ]; then
-  echo "[WARN] Phát hiện container -> Xóa toàn bộ..."
+# ==== Nếu có container đang chạy -> xóa hết container + network ====
+if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
+  echo "[WARN] Phát hiện container đang chạy -> Xóa toàn bộ..."
   timeout 60 docker rm -f $(docker ps -aq) || true
 fi
 sleep 2
 
-# ==== Xóa toàn bộ images cũ ====
-if [ "$(docker images -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Xóa toàn bộ images cũ..."
-  docker rmi -f $(docker images -q) || true
-fi
-sleep 2
-
-# ==== Xóa network cũ ====
 echo "[INFO] Xóa toàn bộ network cũ..."
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
   timeout 30 docker network rm "$net" || true
@@ -70,9 +54,8 @@ fix_iptables() {
   sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
   sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
 }
-
 fix_iptables
-sleep 10   # ⬅️ Tăng delay để đảm bảo iptables áp dụng
+sleep 2
 
 if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} >/dev/null 2>&1; then
   echo "[ERROR] iptables SNAT lỗi. Stop Docker tránh rò mạng."
@@ -80,15 +63,56 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   exit 1
 fi
 
-# ==== Cron reboot định kỳ (mỗi 3 ngày, 3h sáng) ====
-set +u
-CRON_FILE="/etc/cron.d/docker_reboot_every3days"
-echo "0 3 */3 * * root /sbin/reboot" | sudo tee $CRON_FILE
-sudo chmod 644 $CRON_FILE
-sudo systemctl restart crond
-set -u
+# ==== Auto reboot mỗi 3 ngày bằng systemd timer ====
+echo "[INFO] Thiết lập auto reboot mỗi 3 ngày..."
 
-# ==== Chạy các container gốc ====
+cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.service
+[Unit]
+Description=Auto reboot every 3 days
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/reboot
+EOF
+
+cat <<'EOF' | sudo tee /etc/systemd/system/auto-reboot.timer
+[Unit]
+Description=Run auto reboot every 3 days
+
+[Timer]
+OnBootSec=1h
+OnUnitActiveSec=3d
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now auto-reboot.timer
+
+# ==== Auto run lại setup.sh sau reboot ====
+echo "[INFO] Thiết lập auto run setup.sh sau reboot..."
+
+cat <<EOF | sudo tee /etc/systemd/system/setup-autorun.service
+[Unit]
+Description=Run setup.sh after reboot
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/setup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable setup-autorun.service
+
+# ==== Chạy các container gốc + Proxybase ====
 set +e
 echo "[INFO] Pull & Run containers..."
 
@@ -104,8 +128,8 @@ docker run --network my_network_2 --name repocket2 -e RP_EMAIL=nguyenvinhson000@
 
 timeout 300 docker pull mysteriumnetwork/myst:latest
 sleep 2
-docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions || true
-docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions || true
+docker run -d --network my_network_1 --cap-add NET_ADMIN --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions || true
+docker run -d --network my_network_2 --cap-add NET_ADMIN --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions || true
 
 timeout 300 docker pull earnfm/earnfm-client:latest
 sleep 2
@@ -142,54 +166,4 @@ docker run -d --network my_network_2 --name proxybase2 \
   -e DEVICE_NAME="$DEVICE2" \
   --restart=always proxybase/proxybase:latest
 
-set -e   # Bật lại strict mode
-
-# ==== TÍCH HỢP AUTO-REDEPLOY SAU REBOOT ====
-echo "[INFO] Cài auto-redeploy sau reboot..."
-
-cat <<'EOF' > /root/auto-redeploy.sh
-#!/bin/bash
-set -euo pipefail
-
-SCRIPT_PATH="/root/setup.sh"
-LOG_FILE="/var/log/auto-redeploy.log"
-LOCK_FILE="/tmp/setup.lock"
-
-echo "[$(date)] Auto redeploy starting..." | tee -a $LOG_FILE
-
-# Nếu còn file lock cũ -> xóa đi để tránh kẹt
-if [ -f "$LOCK_FILE" ]; then
-  echo "[$(date)] Xóa LOCK_FILE cũ để tránh kẹt." | tee -a $LOG_FILE
-  rm -f "$LOCK_FILE"
-fi
-
-if [ ! -f "$SCRIPT_PATH" ]; then
-  echo "[$(date)] ERROR: $SCRIPT_PATH không tồn tại!" | tee -a $LOG_FILE
-  exit 1
-fi
-
-/bin/bash "$SCRIPT_PATH" >> $LOG_FILE 2>&1
-echo "[$(date)] Auto redeploy hoàn tất." | tee -a $LOG_FILE
-EOF
-
-chmod 755 /root/auto-redeploy.sh
-
-cat <<'EOF' > /etc/systemd/system/auto-redeploy.service
-[Unit]
-Description=Auto run setup.sh after reboot
-After=network-online.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStartPre=/bin/sleep 30
-ExecStart=/bin/bash /root/auto-redeploy.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable auto-redeploy.service
-echo "[INFO] Auto-redeploy đã được cấu hình thành công."
+set -e
