@@ -54,7 +54,6 @@ for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none
 done
 sleep 2
 
-
 # ==== Tạo lại Docker networks ====
 docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 || true
 docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 || true
@@ -64,6 +63,11 @@ sleep 2
 IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute enX0 | awk '{gsub(/\/.*/,"",$4); print $4}')
 IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic enX0 | awk '{gsub(/\/.*/,"",$4); print $4}')
 
+if [ -z "$IP_ALLA" ] || [ -z "$IP_ALLB" ]; then
+  echo "[ERROR] Không lấy được IP enX0"
+  exit 1
+fi
+
 fix_iptables() {
   echo "[INFO] Cấu hình lại iptables SNAT..."
   sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} 2>/dev/null || true
@@ -71,7 +75,6 @@ fix_iptables() {
   sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
   sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
 }
-
 fix_iptables
 sleep 10
 
@@ -79,40 +82,45 @@ if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source 
   echo "[ERROR] iptables SNAT lỗi. Stop Docker tránh rò mạng."
   sudo systemctl stop docker
   exit 1
-
-
-
-
+fi
 
 # ==== Chạy các container ====
 echo "[INFO] Pull & Run containers..."
 set +e
+
+# traffmonetizer
 timeout 300 docker pull traffmonetizer/cli_v2:latest
 sleep 2
 docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
 docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
 
+# repocket
 timeout 300 docker pull repocket/repocket:latest
 sleep 2
 docker run --network my_network_1 --name repocket1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
 docker run --network my_network_2 --name repocket2 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
 
+# myst
 timeout 300 docker pull mysteriumnetwork/myst:latest
 sleep 2
 docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
+# earnfm
 timeout 300 docker pull earnfm/earnfm-client:latest
 sleep 2
 docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest
 docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest
 
+# packetsdk
 docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 
+# urnetwork amd64
 docker run -d --network my_network_1 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 docker run -d --network my_network_2 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 
+# proxybase
 echo "[INFO] Run Proxybase containers..."
 PROXYBASE_ENV="/root/proxybase_device.env"
 if [ ! -f "$PROXYBASE_ENV" ]; then
@@ -133,6 +141,5 @@ docker run -d --network my_network_2 --name proxybase2 \
   -e USER_ID="L_0vehFMTO" \
   -e DEVICE_NAME="$DEVICE2" \
   --restart=always proxybase/proxybase:latest
+
 set -e
-
-
