@@ -142,6 +142,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable iptables-fix.service
 
 # ==== Chạy các container gốc ====
+set +e 
 
 echo "[INFO] Pull & Run containers..."
 timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
@@ -174,42 +175,27 @@ docker run -d --network my_network_2 --restart=always --platform linux/arm64 --c
 echo "[INFO] Run Proxybase containers..."
 
 PROXYBASE_ENV="/root/proxybase_device.env"
-
-# Nếu chưa có file env -> random và lưu
-if [ ! -f "$PROXYBASE_ENV" ]; then
+if [ ! -s "$PROXYBASE_ENV" ]; then
   DEVICE1=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
   DEVICE2=$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 10)
   {
     echo "DEVICE1=$DEVICE1"
     echo "DEVICE2=$DEVICE2"
-  } | sudo tee "$PROXYBASE_ENV" >/dev/null
+  } > "$PROXYBASE_ENV"
 else
-  # load lại từ file
-  set +u
   source "$PROXYBASE_ENV"
-  set -u
 fi
 
 echo "[DEBUG] DEVICE1=$DEVICE1 , DEVICE2=$DEVICE2"
 
-# Proxybase1
-if ! docker ps -a --format '{{.Names}}' | grep -q '^proxybase1$'; then
-  docker run -d --network my_network_1 --name proxybase1 \
-    -e USER_ID="L_0vehFMTO" \
-    -e DEVICE_NAME="$DEVICE1" \
-    --restart=always proxybase/proxybase:latest || true
-else
-  echo "[INFO] proxybase1 đã tồn tại, bỏ qua."
-fi
+docker run -d --network my_network_1 --name proxybase1 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE1" \
+  --restart=always proxybase/proxybase:latest
 
-# Proxybase2
-if ! docker ps -a --format '{{.Names}}' | grep -q '^proxybase2$'; then
-  docker run -d --network my_network_2 --name proxybase2 \
-    -e USER_ID="L_0vehFMTO" \
-    -e DEVICE_NAME="$DEVICE2" \
-    --restart=always proxybase/proxybase:latest || true
-else
-  echo "[INFO] proxybase2 đã tồn tại, bỏ qua."
-fi
+docker run -d --network my_network_2 --name proxybase2 \
+  -e USER_ID="L_0vehFMTO" \
+  -e DEVICE_NAME="$DEVICE2" \
+  --restart=always proxybase/proxybase:latest
 
-docker ps --filter "name=proxybase"
+set -e   # Bật lại strict mode
