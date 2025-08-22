@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Bắt đầu dọn dẹp toàn bộ (containers, services, cron, scripts), giữ volume Myst..."
+echo "[INFO] Bắt đầu dọn dẹp toàn bộ (containers, images, services, cron, scripts), giữ volume Myst..."
 
 # ==========================
 # 1. Stop & remove containers
@@ -30,7 +30,17 @@ done
 echo "[INFO] Giữ lại volumes myst-data1 & myst-data2 (không xoá)."
 
 # ==========================
-# 4. Remove cron jobs
+# 4. Remove all Docker images
+# ==========================
+if [ "$(docker images -q | wc -l)" -gt 0 ]; then
+  echo "[INFO] Xóa toàn bộ Docker images..."
+  docker rmi -f $(docker images -q) >/dev/null 2>&1 || true
+else
+  echo "[INFO] Không có Docker image nào để xóa."
+fi
+
+# ==========================
+# 5. Remove cron jobs
 # ==========================
 for cronfile in /etc/cron.d/docker_reset_every3days /etc/cron.d/docker_daily_restart /etc/cron.d/docker_weekly_reset; do
   if [ -f "$cronfile" ]; then
@@ -40,7 +50,7 @@ for cronfile in /etc/cron.d/docker_reset_every3days /etc/cron.d/docker_daily_res
 done
 
 # ==========================
-# 5. Remove iptables-fix service
+# 6. Remove iptables-fix service
 # ==========================
 if systemctl list-unit-files | grep -q "^iptables-fix.service"; then
   echo "[INFO] Vô hiệu hóa & xóa service iptables-fix"
@@ -52,7 +62,7 @@ fi
 sudo rm -f /usr/local/bin/fix_iptables.sh
 
 # ==========================
-# 6. Remove auto-redeploy service & script
+# 7. Remove auto-redeploy service & script
 # ==========================
 if systemctl list-unit-files | grep -q "^auto-redeploy.service"; then
   echo "[INFO] Vô hiệu hóa & xóa service auto-redeploy"
@@ -64,7 +74,7 @@ fi
 sudo rm -f /root/auto-redeploy.sh
 
 # ==========================
-# 7. Remove install/fix scripts & env files trong /root
+# 8. Remove install/fix scripts & env files trong /root
 # ==========================
 files_to_remove=(
   "/root/install.sh"
@@ -89,7 +99,7 @@ for f in "${files_to_remove[@]}"; do
 done
 
 # ==========================
-# 8. Done + reboot
+# 9. Done + reboot
 # ==========================
 echo "[INFO] Dọn dẹp hoàn tất. Volume Myst vẫn còn nguyên."
 echo "[INFO] Reboot hệ thống ngay..."
