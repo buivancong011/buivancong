@@ -156,15 +156,18 @@ else
   source "$PROXYBASE_ENV"
 fi
 
-docker run -d --network my_network_1 --name proxybase1 \
+echo "[DEBUG] DEVICE1=$DEVICE1, DEVICE2=$DEVICE2"
+
+timeout 120 docker run -d --network my_network_1 --name proxybase1 \
   -e USER_ID="L_0vehFMTO" \
   -e DEVICE_NAME="$DEVICE1" \
-  --restart=always proxybase/proxybase:latest || true
+  --restart=always proxybase/proxybase:latest || echo "[ERROR] proxybase1 failed"
 
-docker run -d --network my_network_2 --name proxybase2 \
+timeout 120 docker run -d --network my_network_2 --name proxybase2 \
   -e USER_ID="L_0vehFMTO" \
   -e DEVICE_NAME="$DEVICE2" \
-  --restart=always proxybase/proxybase:latest || true
+  --restart=always proxybase/proxybase:latest || echo "[ERROR] proxybase2 failed"
+
 
 echo "[INFO] Pull & Run containers..."
 timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
