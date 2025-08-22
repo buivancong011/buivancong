@@ -185,7 +185,9 @@ if [ ! -f "$PROXYBASE_ENV" ]; then
   } | sudo tee "$PROXYBASE_ENV" >/dev/null
 else
   # load lại từ file
+  set +u
   source "$PROXYBASE_ENV"
+  set -u
 fi
 
 echo "[DEBUG] DEVICE1=$DEVICE1 , DEVICE2=$DEVICE2"
@@ -209,3 +211,5 @@ if ! docker ps -a --format '{{.Names}}' | grep -q '^proxybase2$'; then
 else
   echo "[INFO] proxybase2 đã tồn tại, bỏ qua."
 fi
+
+docker ps --filter "name=proxybase"
