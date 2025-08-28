@@ -31,7 +31,7 @@ docker run -d --restart=always --name earnfm -e EARNFM_TOKEN="50f04bbe-94d9-4f6a
 docker run -d --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 
 # ==== URNetwork ====
-docker run -d --restart=always --cap-add NET_ADMIN --name ur -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:2025.8.11-701332070@sha256:61caa277f928d3bd12649d55eb30cc7aa6f430c233819277dae9dbd3d5ed0bcc
+docker run -d --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 
 echo "=== [DONE] Containers đã chạy xong ==="
 docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
