@@ -1,0 +1,66 @@
+#!/bin/bash
+set -euo pipefail
+
+# ==============================
+# Bước 1: Tạo script policy routing
+# ==============================
+sudo tee /usr/local/bin/enable-ip2-ssh.sh > /dev/null <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+IF="eth1"
+
+# Đợi eth1 có IP (tối đa 30s)
+for i in {1..15}; do
+  if ip -4 addr show dev $IF | grep -q 'inet '; then break; fi
+  sleep 2
+done
+
+IP1=$(ip -4 addr show dev $IF | awk '/inet / {print $2}' | cut -d/ -f1)
+if [ -z "$IP1" ]; then
+  echo "[ERROR] Không tìm thấy IP cho $IF"
+  exit 1
+fi
+
+# Lấy subnet và gateway (dạng x.x.x.1)
+SUBNET=$(ip -4 addr show dev $IF | awk '/inet / {print $2}')
+GW=$(echo $SUBNET | cut -d. -f1-3).1
+
+# Tạo bảng định tuyến riêng nếu chưa có
+grep -q eth1-table /etc/iproute2/rt_tables || echo "200 eth1-table" | sudo tee -a /etc/iproute2/rt_tables
+
+# Thêm rule và route (nếu chưa có)
+ip rule show | grep -q "$IP1" || ip rule add from $IP1 table eth1-table
+ip route show table eth1-table | grep -q "default" || ip route add default via $GW dev $IF table eth1-table
+
+echo "[OK] Policy routing cho $IF ($IP1 -> $GW) đã được cấu hình"
+EOF
+
+sudo chmod +x /usr/local/bin/enable-ip2-ssh.sh
+
+# ==============================
+# Bước 2: Tạo systemd service
+# ==============================
+sudo tee /etc/systemd/system/enable-ip2-ssh.service > /dev/null <<'EOF'
+[Unit]
+Description=Enable SSH via second NIC (eth1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/enable-ip2-ssh.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ==============================
+# Bước 3: Kích hoạt service
+# ==============================
+sudo systemctl daemon-reload
+sudo systemctl enable enable-ip2-ssh.service
+sudo systemctl start enable-ip2-ssh.service
+
+echo "[DONE] Đã cấu hình xong. Giờ bạn có thể SSH bằng cả IP1 và IP2."
