@@ -1,0 +1,102 @@
+#!/bin/bash
+set -euo pipefail
+
+# ==============================
+# Config chung
+# ==============================
+MACHINE_TYPE="e2-small"
+IMAGE_PROJECT="centos-cloud"
+IMAGE_FAMILY="centos-stream-9"
+
+SSH_USER="ec2-user"
+SSH_KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDUn0r7IeMQstMi6dVJABiByEB97LffDi6aP/pRiMoPkUmXDf91F6dk3XkXGV1zdKs5aB4T3MqTYSP7VHa+sk5Au7gq7fbkmho+LU1qR8m4Wa5jiStgnGV3yJx4Uu4PMQ0+iq3Pqs/BxxWnArRMbC4zbZjASGSZ5AKzNfGD8H8NlsHczF50Zcdy+kcLMYRXC1C+6qEmZekacTMaNvlKDjpBky8sdEJFIct/gbOlFFvwhgHd2ffzmyDgdlpYa37bMZugtLb4/FVnqoyFwkeKUV1IRHb2LINl3Ue2x/jp3Eupbdv7BrhoT2t6vtdpEJr0dUgLwiq7Erqz+Ee4AVAlusM9"
+
+# 3 region + subnet khác nhau để tránh trùng IP range
+REGIONS=("us-central1" "us-east1" "us-west1")
+ZONES=("us-central1-a" "us-east1-b" "us-west1-b")
+SECOND_RANGES=("10.20.0.0/24" "10.21.0.0/24" "10.22.0.0/24")
+
+# ==============================
+# Hàm tạo mạng phụ cho region
+# ==============================
+create_network () {
+  local REGION=$1
+  local NET=$2
+  local SUBNET=$3
+  local RANGE=$4
+
+  if ! gcloud compute networks describe "$NET" >/dev/null 2>&1; then
+    echo "[INFO] Tạo VPC $NET..."
+    gcloud compute networks create "$NET" --subnet-mode=custom
+  fi
+
+  if ! gcloud compute networks subnets describe "$SUBNET" --region="$REGION" >/dev/null 2>&1; then
+    echo "[INFO] Tạo subnet $SUBNET ở $REGION..."
+    gcloud compute networks subnets create "$SUBNET" \
+      --network="$NET" \
+      --region="$REGION" \
+      --range="$RANGE"
+  fi
+}
+
+# ==============================
+# Bước 1: Tạo VM theo từng region
+# ==============================
+for idx in ${!REGIONS[@]}; do
+  REGION=${REGIONS[$idx]}
+  ZONE=${ZONES[$idx]}
+  SECOND_NETWORK="second-network-$REGION"
+  SECOND_SUBNET="second-subnet-$REGION"
+  SUBNET_IP_RANGE=${SECOND_RANGES[$idx]}
+
+  # tạo mạng phụ riêng cho region
+  create_network "$REGION" "$SECOND_NETWORK" "$SECOND_SUBNET" "$SUBNET_IP_RANGE"
+
+  for i in $(seq 1 2); do
+    VM_NAME="my-dual-nic-vm-${REGION}-${i}"
+    echo "[INFO] Tạo VM $VM_NAME ở $REGION ($ZONE)..."
+
+    gcloud compute instances create "$VM_NAME" \
+      --zone="$ZONE" \
+      --machine-type="$MACHINE_TYPE" \
+      --image-project="$IMAGE_PROJECT" \
+      --image-family="$IMAGE_FAMILY" \
+      --network-interface="network=default,subnet=default,address=" \
+      --network-interface="network=${SECOND_NETWORK},subnet=${SECOND_SUBNET},address=" \
+      --tags="ssh-access" \
+      --metadata="block-project-ssh-keys=TRUE" \
+      --metadata-from-file=startup-script=<(cat <<EOF
+#!/bin/bash
+id -u ec2-user >/dev/null 2>&1 || useradd -m -s /bin/bash ec2-user
+mkdir -p /home/ec2-user/.ssh
+echo '${SSH_KEY}' > /home/ec2-user/.ssh/authorized_keys
+chown -R ec2-user:ec2-user /home/ec2-user/.ssh
+chmod 700 /home/ec2-user/.ssh
+chmod 600 /home/ec2-user/.ssh/authorized_keys
+echo "ec2-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ec2-user
+chmod 440 /etc/sudoers.d/ec2-user
+EOF
+)
+
+    # Firewall rules (mỗi network tạo 1 lần)
+    gcloud compute firewall-rules create "ssh-access-fw-default" \
+      --network="default" \
+      --direction=INGRESS --action=ALLOW \
+      --rules=tcp:22,tcp:4449 \
+      --source-ranges=0.0.0.0/0 \
+      --target-tags="ssh-access" || true
+
+    gcloud compute firewall-rules create "ssh-access-fw-$SECOND_NETWORK" \
+      --network="$SECOND_NETWORK" \
+      --direction=INGRESS --action=ALLOW \
+      --rules=tcp:22,tcp:4449 \
+      --source-ranges=0.0.0.0/0 \
+      --target-tags="ssh-access" || true
+
+    # In IP public
+    echo "[INFO] IP Public của $VM_NAME:"
+    gcloud compute instances describe "$VM_NAME" \
+      --zone="$ZONE" \
+      --format="get(networkInterfaces[].accessConfigs[].natIP)"
+  done
+done
