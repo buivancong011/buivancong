@@ -15,24 +15,43 @@ sudo yum -y install iproute iptables iptables-services curl cronie >/dev/null 2>
 # ====== Gỡ các gói không mong muốn ======
 timeout 60 sudo yum remove -y squid httpd-tools || true
 
-# ====== Docker ======
+# ====== Docker: cài, mở ngay & tự mở khi khởi động ======
 if ! command -v docker &>/dev/null; then
   echo "[INFO] Cài Docker..."
   timeout 300 sudo yum update -y || true
   timeout 300 sudo yum install -y docker
-  sudo systemctl enable docker
-  sudo systemctl start docker
-  echo "[INFO] Docker cài xong, reboot lần đầu..."
-  sleep 5
-  sudo reboot
 fi
+
+# Bật & khởi động ngay Docker
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo bash -c 'cat > /etc/systemd/system/docker.service.d/override.conf' <<'EOF'
+[Unit]
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Bảo đảm docker daemon luôn bật lại nếu lỗi
+Restart=always
+RestartSec=2s
+StartLimitIntervalSec=0
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now docker
+# containerd thường do docker kéo lên, nhưng enable luôn cho chắc
+sudo systemctl enable --now containerd 2>/dev/null || true
+
+if ! systemctl is-active --quiet docker; then
+  echo "[ERROR] Docker không khởi động được"; journalctl -u docker --no-pager -n 100; exit 1
+fi
+echo "[OK] Docker đang chạy & auto-start đã bật."
 
 # ====== Cronie ======
 if ! command -v crond &>/dev/null; then
   echo "[INFO] Cài Cronie..."
   timeout 120 sudo yum install -y cronie
-  sudo systemctl enable --now crond
 fi
+sudo systemctl enable --now crond
 
 # ====== Xác định NICs + IP nội bộ / IP công khai ======
 ETH_A="eth0"
@@ -58,16 +77,14 @@ IP_B_EXT=$(get_ext_ip 1)
 }
 echo "[INFO] Công khai: eth0=$IP_A_EXT ; eth1=$IP_B_EXT"
 
-# ====== Bật IP forwarding và cho phép FORWARD ======
+# ====== Bật IP forwarding & FORWARD ======
 echo "[INFO] Bật IP forwarding & FORWARD chain..."
 sudo bash -c 'echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ipforward.conf'
 sudo sysctl -p /etc/sysctl.d/99-ipforward.conf >/dev/null
 
-# (nới lỏng FORWARD tối thiểu để Docker LAN đi ra ngoài qua eth0/eth1)
 sudo iptables -P FORWARD ACCEPT 2>/dev/null || true
 sudo iptables -C FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
   sudo iptables -I FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-# Cho phép từ các mạng docker tự tạo đi ra hai NIC
 for SUB in 192.168.33.0/24 192.168.34.0/24; do
   sudo iptables -C FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT 2>/dev/null || \
     sudo iptables -I FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT
@@ -97,10 +114,8 @@ docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 || t
 # ====== NAT theo interface (đảm bảo 2 mạng Docker đều ra Internet) ======
 fix_iptables() {
   echo "[INFO] Thiết lập MASQUERADE theo interface..."
-  # Xóa rule cũ
   sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE 2>/dev/null || true
   sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE 2>/dev/null || true
-  # Thêm rule mới
   sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE
   sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE
 
@@ -113,7 +128,6 @@ fix_iptables() {
 }
 fix_iptables
 
-# Kiểm tra rule đã áp dụng
 sudo iptables -t nat -S POSTROUTING | grep -qE '--source 192\.168\.33\.0/24 .* -o '"$ETH_A"'.* MASQUERADE' || {
   echo "[ERROR] MASQUERADE 192.168.33.0/24 -> $ETH_A chưa áp dụng. Stop Docker."
   sudo systemctl stop docker; exit 1; }
@@ -126,13 +140,9 @@ NAT_SCRIPT="/usr/local/sbin/restore_dualnic_nat.sh"
 sudo bash -c "cat > $NAT_SCRIPT" <<'EOF'
 #!/bin/bash
 set -e
-# Bật ip_forward
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
+ETH_A="eth0"; ETH_B="eth1"
 
-ETH_A="eth0"
-ETH_B="eth1"
-
-# Cho phép FORWARD cơ bản
 iptables -P FORWARD ACCEPT 2>/dev/null || true
 iptables -C FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
   iptables -I FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
@@ -141,7 +151,6 @@ for SUB in 192.168.33.0/24 192.168.34.0/24; do
   iptables -C FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT 2>/dev/null || iptables -I FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT
 done
 
-# MASQUERADE theo interface
 iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE 2>/dev/null || \
   iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE
 iptables -t nat -C POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE 2>/dev/null || \
@@ -168,7 +177,7 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now dualnic-nat.service
 
-# ====== Pull & Run containers ======
+# ====== Pull & Run containers (đều có restart policy) ======
 echo "[INFO] Pull & Run containers..."
 set +e
 
@@ -182,7 +191,7 @@ timeout 300 docker pull repocket/repocket:latest
 docker run --network my_network_1 --name repocket1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
 docker run --network my_network_2 --name repocket2 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
 
-# myst: bind cổng vào IP nội bộ đúng NIC (GCP sẽ DNAT từ EIP -> IP nội bộ)
+# myst (bind IP nội bộ đúng NIC – GCP DNAT từ EIP)
 timeout 300 docker pull mysteriumnetwork/myst:latest
 docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_A_INT}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_B_INT}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
@@ -200,11 +209,16 @@ docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 
 docker run -d --network my_network_1 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 docker run -d --network my_network_2 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 
+# watchtower (tự cập nhật image mỗi 1 giờ, xóa image cũ)
+timeout 300 docker pull containrrr/watchtower:latest || true
+docker rm -f watchtower 2>/dev/null || true
 docker run -d --name watchtower --restart=always -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --interval 3600
 
 set -e
 
 echo "[OK] Hoàn tất. Kiểm tra nhanh:"
+systemctl is-enabled docker && echo "  - Docker: enabled (OK)"
+systemctl is-active docker && echo   "  - Docker: active (OK)"
 ip -4 addr show "$ETH_A" | sed 's/^/  /'
 ip -4 addr show "$ETH_B" | sed 's/^/  /'
 sudo iptables -t nat -S POSTROUTING | sed 's/^/  /'
