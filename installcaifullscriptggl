@@ -21,41 +21,28 @@ if ! command -v docker &>/dev/null; then
   timeout 300 sudo yum update -y || true
   timeout 300 sudo yum install -y docker
 fi
-
-# Bật & khởi động ngay Docker
 sudo mkdir -p /etc/systemd/system/docker.service.d
 sudo bash -c 'cat > /etc/systemd/system/docker.service.d/override.conf' <<'EOF'
 [Unit]
 Wants=network-online.target
 After=network-online.target
-
 [Service]
-# Bảo đảm docker daemon luôn bật lại nếu lỗi
 Restart=always
 RestartSec=2s
 StartLimitIntervalSec=0
 EOF
-
 sudo systemctl daemon-reload
 sudo systemctl enable --now docker
-# containerd thường do docker kéo lên, nhưng enable luôn cho chắc
 sudo systemctl enable --now containerd 2>/dev/null || true
-
-if ! systemctl is-active --quiet docker; then
-  echo "[ERROR] Docker không khởi động được"; journalctl -u docker --no-pager -n 100; exit 1
-fi
+systemctl is-active --quiet docker || { echo "[ERROR] Docker không khởi động được"; journalctl -u docker --no-pager -n 100; exit 1; }
 echo "[OK] Docker đang chạy & auto-start đã bật."
 
 # ====== Cronie ======
-if ! command -v crond &>/dev/null; then
-  echo "[INFO] Cài Cronie..."
-  timeout 120 sudo yum install -y cronie
-fi
+command -v crond &>/dev/null || timeout 120 sudo yum install -y cronie
 sudo systemctl enable --now crond
 
-# ====== Xác định NICs + IP nội bộ / IP công khai ======
-ETH_A="eth0"
-ETH_B="eth1"
+# ====== NICs + IP nội bộ / IP công khai ======
+ETH_A="eth0"; ETH_B="eth1"
 ip link show "$ETH_A" >/dev/null 2>&1 || { echo "[ERROR] Không thấy $ETH_A"; exit 1; }
 ip link show "$ETH_B" >/dev/null 2>&1 || { echo "[ERROR] Không thấy $ETH_B"; exit 1; }
 
@@ -69,12 +56,8 @@ get_ext_ip() {
   curl -s -H "Metadata-Flavor: Google" \
     "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/${idx}/access-configs/0/external-ip" || true
 }
-IP_A_EXT=$(get_ext_ip 0)
-IP_B_EXT=$(get_ext_ip 1)
-[ -n "$IP_A_EXT" ] && [ -n "$IP_B_EXT" ] || {
-  echo "[ERROR] Thiếu EIP: eth0='${IP_A_EXT:-none}', eth1='${IP_B_EXT:-none}'. Hãy gắn EIP cho cả 2 NIC rồi chạy lại."
-  exit 1
-}
+IP_A_EXT=$(get_ext_ip 0); IP_B_EXT=$(get_ext_ip 1)
+[ -n "$IP_A_EXT" ] && [ -n "$IP_B_EXT" ] || { echo "[ERROR] Thiếu EIP: eth0='${IP_A_EXT:-none}', eth1='${IP_B_EXT:-none}'"; exit 1; }
 echo "[INFO] Công khai: eth0=$IP_A_EXT ; eth1=$IP_B_EXT"
 
 # ====== Bật IP forwarding & FORWARD ======
@@ -86,52 +69,39 @@ sudo iptables -P FORWARD ACCEPT 2>/dev/null || true
 sudo iptables -C FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
   sudo iptables -I FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
 for SUB in 192.168.33.0/24 192.168.34.0/24; do
-  sudo iptables -C FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT 2>/dev/null || \
-    sudo iptables -I FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT
-  sudo iptables -C FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT 2>/dev/null || \
-    sudo iptables -I FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT
+  sudo iptables -C FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT 2>/dev/null || sudo iptables -I FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT
+  sudo iptables -C FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT 2>/dev/null || sudo iptables -I FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT
 done
 
-# ====== Xóa containers/images/networks cũ ======
-if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Xóa containers cũ..."
-  timeout 60 docker rm -f $(docker ps -aq) || true
-fi
-if [ "$(docker images -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Xóa images cũ..."
-  docker rmi -f $(docker images -q) || true
-fi
-
-echo "[INFO] Xóa docker networks cũ..."
+# ====== Cleanup Docker ======
+[ "$(docker ps -aq | wc -l)" -gt 0 ] && timeout 60 docker rm -f $(docker ps -aq) || true
+[ "$(docker images -q | wc -l)" -gt 0 ] && docker rmi -f $(docker images -q) || true
 for net in $(docker network ls --format '{{.Name}}' | grep -vE '^(bridge|host|none)$'); do
   timeout 30 docker network rm "$net" || true
 done
 
-# ====== Tạo lại docker networks ======
+# ====== Networks Docker ======
 docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 || true
 docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 || true
 
-# ====== NAT theo interface (đảm bảo 2 mạng Docker đều ra Internet) ======
+# ====== NAT theo interface (MASQUERADE) ======
 fix_iptables() {
   echo "[INFO] Thiết lập MASQUERADE theo interface..."
   sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE 2>/dev/null || true
   sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE 2>/dev/null || true
   sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE
   sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE
-
-  # Lưu & bật iptables service để giữ qua reboot
-  if command -v service >/dev/null 2>&1; then
-    sudo service iptables save >/dev/null 2>&1 || true
-    sudo systemctl enable iptables >/dev/null 2>&1 || true
-    sudo systemctl start iptables >/dev/null 2>&1 || true
-  fi
+  # Lưu qua reboot
+  command -v service >/dev/null 2>&1 && { sudo service iptables save >/dev/null 2>&1 || true; sudo systemctl enable iptables >/dev/null 2>&1 || true; sudo systemctl start iptables >/dev/null 2>&1 || true; }
 }
 fix_iptables
 
-sudo iptables -t nat -S POSTROUTING | grep -qE '--source 192\.168\.33\.0/24 .* -o '"$ETH_A"'.* MASQUERADE' || {
+# >>> FIX: kiểm tra rule bằng iptables -C (không dùng grep)
+sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE || {
   echo "[ERROR] MASQUERADE 192.168.33.0/24 -> $ETH_A chưa áp dụng. Stop Docker."
   sudo systemctl stop docker; exit 1; }
-sudo iptables -t nat -S POSTROUTING | grep -qE '--source 192\.168\.34\.0/24 .* -o '"$ETH_B"'.* MASQUERADE' || {
+
+sudo iptables -t nat -C POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE || {
   echo "[ERROR] MASQUERADE 192.168.34.0/24 -> $ETH_B chưa áp dụng. Stop Docker."
   sudo systemctl stop docker; exit 1; }
 
@@ -142,19 +112,14 @@ sudo bash -c "cat > $NAT_SCRIPT" <<'EOF'
 set -e
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
 ETH_A="eth0"; ETH_B="eth1"
-
 iptables -P FORWARD ACCEPT 2>/dev/null || true
-iptables -C FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
-  iptables -I FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -C FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || iptables -I FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
 for SUB in 192.168.33.0/24 192.168.34.0/24; do
   iptables -C FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT 2>/dev/null || iptables -I FORWARD -s "$SUB" -o "$ETH_A" -j ACCEPT
   iptables -C FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT 2>/dev/null || iptables -I FORWARD -s "$SUB" -o "$ETH_B" -j ACCEPT
 done
-
-iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE 2>/dev/null || \
-  iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE
-iptables -t nat -C POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE 2>/dev/null || \
-  iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE
+iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE 2>/dev/null || iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -o "$ETH_A" -j MASQUERADE
+iptables -t nat -C POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE 2>/dev/null || iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -o "$ETH_B" -j MASQUERADE
 exit 0
 EOF
 sudo chmod +x "$NAT_SCRIPT"
@@ -164,12 +129,10 @@ sudo bash -c 'cat > /etc/systemd/system/dualnic-nat.service' <<'EOF'
 Description=Restore dual-NIC NAT & forwarding for Docker
 After=network-online.target docker.service
 Wants=network-online.target
-
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/restore_dualnic_nat.sh
 RemainAfterExit=yes
-
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -177,7 +140,7 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now dualnic-nat.service
 
-# ====== Pull & Run containers (đều có restart policy) ======
+# ====== Pull & Run containers ======
 echo "[INFO] Pull & Run containers..."
 set +e
 
