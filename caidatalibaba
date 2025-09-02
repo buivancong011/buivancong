@@ -32,6 +32,14 @@ docker run -d --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -ap
 
 # ==== URNetwork ====
 docker run -d --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
+# Tạo container watchtower
+docker run -d \
+  --name watchtower \
+  --restart=always \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --cleanup \
+  --interval 3600
 
 echo "=== [DONE] Containers đã chạy xong ==="
 docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
