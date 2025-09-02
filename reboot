@@ -1,5 +1,11 @@
 #!/bin/bash
 set -euo pipefail
-
+# 0. Khởi động Docker
+echo "[INFO] Khởi động Docker..."
+systemctl start docker || true
+sleep 10
+systemctl enable docker || true
+echo "[OK] Docker đã sẵn sàng."
+sleep 2
 echo "[INFO] Thực hiện reboot ngay..."
 /sbin/reboot
