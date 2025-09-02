@@ -1,5 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Thực hiện reboot ngay..."
-/sbin/reboot
+echo "[INFO] Thực hiện reboot ngay trên Amazon Linux 2023..."
+
+# Nếu không phải root thì dùng sudo
+if [ "$(id -u)" -ne 0 ]; then
+  echo "[WARN] Đang không chạy với root -> dùng sudo"
+  sudo /sbin/reboot
+else
+  /sbin/reboot
+fi
