@@ -1,5 +1,5 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[INFO] Thực hiện reboot ngay..."
-/sbin/reboot
+echo "[INFO] Đang reboot ngay với sudo -i..."
+sudo -i /sbin/reboot
