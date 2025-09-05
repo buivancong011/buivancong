@@ -3,11 +3,9 @@ set -euo pipefail
 
 echo "=== [INSTALL] Bắt đầu cài đặt Docker trên Amazon Linux 2023 ==="
 
-# Gỡ bỏ phiên bản Docker cũ (nếu có)
-sudo yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine || true
 
-# Bật repo Docker và cài đặt
-sudo amazon-linux-extras enable docker
+
+
 sudo yum install -y docker
 
 # Bật Docker tự động mở khi reboot
