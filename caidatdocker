@@ -1,0 +1,30 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== [INSTALL] Bắt đầu cài đặt Docker trên Amazon Linux 2023 ==="
+
+# Gỡ bỏ phiên bản Docker cũ (nếu có)
+sudo yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine || true
+
+# Bật repo Docker và cài đặt
+sudo amazon-linux-extras enable docker
+sudo yum install -y docker
+
+# Bật Docker tự động mở khi reboot
+sudo systemctl enable docker
+
+# Khởi động Docker ngay lập tức
+sudo systemctl start docker
+
+# Kiểm tra trạng thái
+if systemctl is-active --quiet docker; then
+  echo "[OK] Docker đã chạy thành công."
+else
+  echo "[ERROR] Docker chưa chạy, kiểm tra lại với: sudo systemctl status docker"
+  exit 1
+fi
+
+echo "=== [DONE] Docker đã được cài đặt & bật tự động ==="
+echo "=== [REBOOT] Reboot ngay để hoàn tất ==="
+sleep 5
+sudo reboot
