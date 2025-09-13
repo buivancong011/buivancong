@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+
+# ===== CONFIG =====
+IMAGE="bringyour/community-provider:g4-latest"
+NODE_DIR="$HOME/.urnetwork-node"
+NODE_NAME="ur-provider"
+
+# ===== CLEANUP =====
+echo "=== [CLEANUP] Xoá container/image cũ nếu có ==="
+docker rm -f ur1 ur2 "$NODE_NAME" >/dev/null 2>&1 || true
+docker rmi -f ghcr.io/techroy23/docker-urnetwork:latest >/dev/null 2>&1 || true
+
+# ===== PREPARE =====
+echo "[INFO] Chuẩn bị thư mục dữ liệu..."
+mkdir -p "$NODE_DIR"
+
+# ===== AUTH =====
+echo "[INFO] Auth cho Node (paste Auth Code rồi Enter):"
+docker run --rm -it \
+  -v "$NODE_DIR:/root/.urnetwork" \
+  "$IMAGE" auth
+
+if [ ! -s "$NODE_DIR/jwt" ]; then
+  echo "[ERROR] Chưa có JWT trong $NODE_DIR/jwt -> dừng setup"
+  exit 1
+fi
+
+# ===== RUN NODE =====
+echo "[INFO] Chạy Node..."
+docker rm -f "$NODE_NAME" >/dev/null 2>&1 || true
+docker run -d --restart=always \
+  -v "$NODE_DIR:/root/.urnetwork" \
+  --name "$NODE_NAME" \
+  "$IMAGE" provide
+
+echo "[OK] Hoàn tất! Kiểm tra:"
+echo "  docker ps --filter name=$NODE_NAME"
+echo "  docker logs -f $NODE_NAME"
