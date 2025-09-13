@@ -8,7 +8,7 @@ NODE_NAME="ur-provider"
 
 # ===== CLEANUP =====
 echo "=== [CLEANUP] Xoá container/image cũ nếu có ==="
-docker rm -f ur1 ur2 "$NODE_NAME" >/dev/null 2>&1 || true
+docker rm -f ur "$NODE_NAME" >/dev/null 2>&1 || true
 docker rmi -f ghcr.io/techroy23/docker-urnetwork:latest >/dev/null 2>&1 || true
 
 # ===== PREPARE =====
