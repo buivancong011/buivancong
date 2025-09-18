@@ -1,0 +1,26 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== [CHECK] Kiểm tra Docker ==="
+
+# Kiểm tra Docker daemon
+if systemctl is-active --quiet docker; then
+  echo "[OK] Docker service đang chạy."
+else
+  echo "[ERROR] Docker service KHÔNG chạy."
+  exit 1
+fi
+
+# Kiểm tra Docker CLI
+if ! command -v docker &> /dev/null; then
+  echo "[ERROR] Lệnh docker chưa được cài đặt."
+  exit 1
+fi
+
+# Container đang chạy
+echo "=== Container đang chạy ==="
+docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}"
+
+# Tất cả container (kể cả stopped)
+echo "=== Tất cả container (bao gồm stopped) ==="
+docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Image}}"
