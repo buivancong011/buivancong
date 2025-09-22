@@ -1,13 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-LOCK_FILE="/tmp/setup.lock"
-if [ -f "$LOCK_FILE" ]; then
-  echo "[WARN] Script đã chạy hoặc reboot chưa xong, dừng lại."
-  exit 0
-fi
-trap "rm -f $LOCK_FILE" EXIT
-touch $LOCK_FILE
+
 
 # ==== Gỡ squid & httpd-tools nếu có ====
 timeout 60 sudo yum remove -y squid httpd-tools || true
@@ -25,13 +19,6 @@ if ! command -v docker &> /dev/null; then
   sudo reboot
 fi
 
-# ==== Cài Cronie nếu chưa có ====
-if ! command -v crond &> /dev/null; then
-  echo "[INFO] Cronie chưa có -> Cài đặt..."
-  timeout 120 sudo yum install -y cronie
-  sudo systemctl enable --now crond
-  sleep 2
-fi
 
 # ==== Xóa toàn bộ containers ====
 if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
@@ -117,9 +104,6 @@ docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-
 docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 
-# urnetwork amd64
-docker run -d --network my_network_1 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur1 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
-docker run -d --network my_network_2 --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur2 -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
 
 # Tạo container watchtower
 docker run -d \
