@@ -1,13 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-LOCK_FILE="/tmp/setup.lock"
-if [ -f "$LOCK_FILE" ]; then
-  echo "[WARN] Script đã chạy hoặc reboot chưa xong, dừng lại."
-  exit 0
-fi
-trap "rm -f $LOCK_FILE" EXIT
-touch $LOCK_FILE
 
 # ==== Gỡ squid & httpd-tools nếu có ====
 timeout 60 sudo yum remove -y squid httpd-tools || true
@@ -25,13 +18,6 @@ if ! command -v docker &> /dev/null; then
   sudo reboot
 fi
 
-# ==== Cài Cronie nếu chưa có ====
-if ! command -v crond &> /dev/null; then
-  echo "[INFO] Cronie chưa có -> Cài đặt..."
-  timeout 120 sudo yum install -y cronie
-  sudo systemctl enable --now crond
-  sleep 2
-fi
 
 # ==== Xóa toàn bộ containers ====
 if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
