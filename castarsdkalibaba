@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+
+CONTAINER_NAME="castarsdk1"
+IMAGE="packetsdk/packetsdk"
+APPKEY="cskLg88SnYiXCV"
+
+
+# ==== Chạy container mới ====
+echo "[INFO] Chạy container $CONTAINER_NAME ..."
+docker run -d --restart unless-stopped \
+  --name "$CONTAINER_NAME" \
+  "$IMAGE" -appkey="$APPKEY"
+
+echo "[INFO] Hoàn tất. Kiểm tra bằng: docker ps | grep $CONTAINER_NAME"
