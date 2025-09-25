@@ -1,58 +1,44 @@
 #!/bin/bash
 set -Eeuo pipefail
-
 IMAGE="bringyour/community-provider:g4-latest"
 
-# Thư mục dữ liệu (giữ JWT / cấu hình)
-NODE1_DIR="$HOME/.urnetwork-node1"
-NODE2_DIR="$HOME/.urnetwork-node2"
+# Khai báo tuyến bạn đã dựng sẵn từ script proxy
+TUNS=(tun1 tun2 tun3 tun4)   # muốn bao nhiêu tuyến thì thêm bấy nhiêu
 
-# Tên container
-NODE1_NAME="ur-provider1"
-NODE2_NAME="ur-provider2"
+# Khai báo node muốn chạy (tên & thư mục dữ liệu)
+NODES=(
+  "ur1:$HOME/.urnetwork-node1"
+  "ur2:$HOME/.urnetwork-node2"
+  "ur3:$HOME/.urnetwork-node3"
+  "ur4:$HOME/.urnetwork-node4"
+)
 
-# Tên namespace mạng đã có sẵn từ script proxy
-TUN1="tun1"
-TUN2="tun2"
+auth_if_needed () {
+  local datadir="$1"
+  [ -s "$datadir/jwt" ] && return 0
+  echo "[AUTH] Paste Auth Code cho $datadir:"
+  docker run --rm -it -v "$datadir:/root/.urnetwork" "$IMAGE" auth
+  [ -s "$datadir/jwt" ] || { echo "[ERROR] Thiếu JWT ở $datadir"; exit 1; }
+}
 
-echo "=== [CLEANUP] Xoá container cũ nếu có ==="
-docker rm -f "$NODE1_NAME" "$NODE2_NAME" >/dev/null 2>&1 || true
+i=0
+for pair in "${NODES[@]}"; do
+  name="${pair%%:*}"; datadir="${pair#*:}"
+  tun="${TUNS[$i]}"
+  mkdir -p "$datadir"
 
-echo "[INFO] Tạo thư mục dữ liệu..."
-mkdir -p "$NODE1_DIR" "$NODE2_DIR"
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  auth_if_needed "$datadir"
 
-# ===== Node 1 =====
-if [ ! -s "$NODE1_DIR/jwt" ]; then
-  echo "[AUTH] Nhập/paste Auth Code cho Node1 rồi Enter:"
-  docker run --rm -it -v "$NODE1_DIR:/root/.urnetwork" "$IMAGE" auth
-  [ -s "$NODE1_DIR/jwt" ] || { echo "[ERROR] Node1 chưa có JWT"; exit 1; }
-fi
+  echo "[RUN] $name → $tun"
+  docker run -d --restart=always \
+    --network=container:"$tun" \
+    -v "$datadir:/root/.urnetwork" \
+    --name "$name" "$IMAGE" provide
 
-echo "[RUN] Chạy Node1 qua tuyến $TUN1 ..."
-docker run -d --restart=always \
-  --network=container:"$TUN1" \
-  -v "$NODE1_DIR:/root/.urnetwork" \
-  --name "$NODE1_NAME" "$IMAGE" provide
+  ((i++))
+  # nếu node nhiều hơn tuyến, quay vòng lại từ đầu
+  if [ "$i" -ge "${#TUNS[@]}" ]; then i=0; fi
+done
 
-# ===== Node 2 =====
-if [ ! -s "$NODE2_DIR/jwt" ]; then
-  echo "[AUTH] Nhập/paste Auth Code cho Node2 rồi Enter:"
-  docker run --rm -it -v "$NODE2_DIR:/root/.urnetwork" "$IMAGE" auth
-  [ -s "$NODE2_DIR/jwt" ] || { echo "[ERROR] Node2 chưa có JWT"; exit 1; }
-fi
-
-echo "[RUN] Chạy Node2 qua tuyến $TUN2 ..."
-docker run -d --restart=always \
-  --network=container:"$TUN2" \
-  -v "$NODE2_DIR:/root/.urnetwork" \
-  --name "$NODE2_NAME" "$IMAGE" provide
-
-echo ""
-echo "✅ Hoàn tất! Mỗi node đi 1 IP egress riêng."
-echo "• $NODE1_NAME → $TUN1"
-echo "• $NODE2_NAME → $TUN2"
-
-echo "[TEST] Kiểm tra IP egress từng tuyến:"
-docker run --rm --network=container:"$TUN1" curlimages/curl:latest -s ifconfig.me || true
-docker run --rm --network=container:"$TUN2" curlimages/curl:latest -s ifconfig.me || true
-echo
+echo "✅ Đã khởi chạy ${#NODES[@]} node với ${#TUNS[@]} tuyến."
