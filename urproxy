@@ -3,14 +3,13 @@ set -Eeuo pipefail
 IMAGE="bringyour/community-provider:g4-latest"
 
 # Khai báo tuyến bạn đã dựng sẵn từ script proxy
-TUNS=(tun1 tun2 tun3 tun4)   # muốn bao nhiêu tuyến thì thêm bấy nhiêu
+TUNS=(tun1 tun2 )   # muốn bao nhiêu tuyến thì thêm bấy nhiêu
 
 # Khai báo node muốn chạy (tên & thư mục dữ liệu)
 NODES=(
   "ur1:$HOME/.urnetwork-node1"
   "ur2:$HOME/.urnetwork-node2"
-  "ur3:$HOME/.urnetwork-node3"
-  "ur4:$HOME/.urnetwork-node4"
+  
 )
 
 auth_if_needed () {
