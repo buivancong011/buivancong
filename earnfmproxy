@@ -1,0 +1,38 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+IMAGE_EARNFM="earnfm/earnfm-client:latest"
+TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
+
+# Tên container + tuyến mạng (tun1, tun2, ...)
+CONTAINERS=(
+  "earnfm1:tun1"
+  "earnfm2:tun2"
+)
+
+# Triển khai từng container
+for pair in "${CONTAINERS[@]}"; do
+  name="${pair%%:*}"
+  tun="${pair#*:}"
+
+  echo "🧪 [SETUP] Xóa container cũ $name nếu có..."
+  docker rm -f "$name" >/dev/null 2>&1 || true
+
+  echo "🚀 [RUN] Khởi chạy $name qua tuyến mạng $tun ..."
+  docker run -d --restart=always \
+    --network=container:"$tun" \
+    -e EARNFM_TOKEN="$TOKEN_EARNFM" \
+    --name "$name" \
+    "$IMAGE_EARNFM"
+done
+
+echo ""
+echo "✅ Hoàn tất! Các container EarnFM đã được khởi chạy:"
+docker ps --filter "ancestor=$IMAGE_EARNFM" --format "table {{.Names}}\t{{.Status}}\t{{.Networks}}"
+
+echo ""
+echo "📡 Gợi ý kiểm tra IP từng tuyến:"
+for pair in "${CONTAINERS[@]}"; do
+  tun="${pair#*:}"
+  echo "  docker run --rm --network=container:$tun curlimages/curl:latest -s ifconfig.me"
+done
