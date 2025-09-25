@@ -1,0 +1,46 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+echo -e "\n=== [1] Danh sách container proxy đang chạy ==="
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E '(^glider|^tun)' || echo "❌ Không thấy container proxy nào"
+
+ROUTES=$(docker ps --format '{{.Names}}' | grep -E '^glider[0-9]+$' | wc -l)
+echo -e "\n=== [2] Số tuyến phát hiện: $ROUTES ===\n"
+
+if [[ "$ROUTES" -eq 0 ]]; then
+  echo "❌ Không có tuyến proxy nào đang chạy. Hãy chạy: ./proxy.sh up"
+  exit 1
+fi
+
+for i in $(seq 1 "$ROUTES"); do
+  echo "---------------- ROUTE $i ----------------"
+
+  echo -n "[🌐 Egress IP] "
+  docker run --rm --network=container:"tun$i" curlimages/curl:latest -4 -s --max-time 6 https://api.ipify.org || echo "n/a"
+  echo
+
+  echo "[📡 DNS cấu hình]"
+  docker exec "tun$i" sh -c 'cat /etc/resolv.conf 2>/dev/null || echo "Không đọc được resolv.conf"'
+
+  echo "[📶 MTU tun0]"
+  docker exec "tun$i" sh -c 'ip link show tun0 2>/dev/null | sed -n "1p" || echo "Không có tun0"'
+
+  echo "[🛠️ ip rule liên quan DNS bypass]"
+  docker exec "tun$i" sh -c "ip rule | grep -E 'dport 53|lookup main' || echo '❌ Không thấy rule bypass DNS'"
+
+  echo -n "[🌍 HTTP test] (example/neverssl/httpbingo) → "
+  c1=$(docker run --rm --network=container:"tun$i" curlimages/curl:latest -4 -s -o /dev/null -w '%{http_code}' --max-time 6 http://example.com || echo 000)
+  c2=$(docker run --rm --network=container:"tun$i" curlimages/curl:latest -4 -s -o /dev/null -w '%{http_code}' --max-time 6 http://neverssl.com || echo 000)
+  c3=$(docker run --rm --network=container:"tun$i" curlimages/curl:latest -4 -s -o /dev/null -w '%{http_code}' --max-time 6 http://httpbingo.org/get || echo 000)
+  echo "example:$c1 neverssl:$c2 httpbingo:$c3"
+
+  echo -n "[🔐 HTTPS test] https://api.ipify.org → code: "
+  docker run --rm --network=container:"tun$i" curlimages/curl:latest -4 -s -o /dev/null -w '%{http_code}' --max-time 6 https://api.ipify.org || echo "n/a"
+  echo
+
+  echo "[📜 Log glider$i (10 dòng cuối)]"
+  docker logs --tail 10 "glider$i" 2>&1 || echo "Không lấy được log glider$i"
+  echo
+done
+
+echo -e "\n✅ Kiểm tra hoàn tất. Nếu có IP, code 200 (ít nhất 1 HTTP test) và rule DNS → proxy ổn định.\n"
