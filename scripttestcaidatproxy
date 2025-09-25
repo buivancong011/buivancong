@@ -112,11 +112,12 @@ start_route() {
     -check "http://connectivitycheck.gstatic.com/generate_204#expect=204" \
     -checkinterval 10 || { echo "[ERR] glider $g fail"; return 1; }
 
-  # 4) tun2socks (không sysctl trong container)
+  # 4) tun2socks (mount gai.conf để ưu tiên IPv4)
   docker run -d --name "$t" --restart=always \
     --cap-add=NET_ADMIN \
     -v /dev/net/tun:/dev/net/tun \
     -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
+    -v "$PWD/gai.conf":/etc/gai.conf:ro \
     --ulimit nofile="$NOFILE":"$NOFILE" \
     -e PROXY="socks5://${bridge_ip}:${socks_port}" \
     -e LOGLEVEL="$TUN_LOGLEVEL" \
@@ -131,9 +132,9 @@ start_route() {
   done
   docker exec "$t" sh -c "ip link show tun0 | sed -n '1p'" >/dev/null || true
 
-  # 6) In egress IP (có thể 1 số endpoint chặn; chỉ best-effort)
+  # 6) In egress IP (best-effort)
   echo -n "[ROUTE $idx] Egress IP: "
-  docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 6 https://api.ipify.org || true
+  docker run --rm --network=container:"$t" curlimages/curl:latest -4 -s --max-time 6 https://api.ipify.org || true
   echo
   echo "[ROUTE $idx] READY → gắn app:  docker run ... --network=container:${t} <image> ..."
 }
@@ -151,7 +152,7 @@ status_all() {
     local t="${TUN_NAME_BASE}${i}"
     if docker ps --format '{{.Names}}' | grep -qx "$t"; then
       printf "[STATUS] %-10s " "$t"
-      docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 6 https://ipv4.icanhazip.com || echo -n "n/a"
+      docker run --rm --network=container:"$t" curlimages/curl:latest -4 -s --max-time 6 https://ipv4.icanhazip.com || echo -n "n/a"
     else
       echo "[STATUS] $t: not running"
     fi
@@ -168,7 +169,7 @@ watch_loop() {
     for _ in "${UPSTREAMS[@]}"; do
       local t="${TUN_NAME_BASE}${i}"
       if docker ps --format '{{.Names}}' | grep -qx "$t"; then
-        ipcur="$(docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 6 https://ipv4.icanhazip.com || echo "n/a")"
+        ipcur="$(docker run --rm --network=container:"$t" curlimages/curl:latest -4 -s --max-time 6 https://ipv4.icanhazip.com || echo "n/a")"
         if [[ "${last[$t]:-}" != "$ipcur" ]]; then
           echo "[CHANGE] ${t}: ${last[$t]:-<none>} -> ${ipcur}"
           last[$t]="$ipcur"
@@ -185,7 +186,7 @@ watch_loop() {
 }
 
 # ===================== CLI =====================
-# ./proxy.sh           -> khởi chạy tất cả tuyến
+# ./proxy.sh           -> khởi tạo tất cả tuyến
 # ./proxy.sh status    -> in IP từng tuyến
 # ./proxy.sh watch     -> theo dõi IP thay đổi
 # ./proxy.sh down      -> xoá toàn bộ tuyến
