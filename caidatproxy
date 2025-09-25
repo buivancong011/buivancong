@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+
+# ==== CONFIG ====
+PROXY_USER="user37243"
+PROXY_PASS="1757566426"
+PROXY_HOST="103.82.26.44"
+PROXY_PORT="37243"
+
+# ==== 1. Cleanup containers nếu có ====
+docker rm -f glider tun1 doh >/dev/null 2>&1 || true
+
+# ==== 2. Tạo glider SOCKS5 từ HTTP proxy ====
+echo "[INFO] Khởi tạo glider SOCKS5 proxy..."
+docker run -d --name glider --restart=always --network host nadoo/glider \
+  -verbose \
+  -listen "socks5://0.0.0.0:1080" \
+  -forward "http://$PROXY_USER:$PROXY_PASS@$PROXY_HOST:$PROXY_PORT"
+
+# ==== 3. Tạo resolv.conf dùng DNS nội bộ ====
+echo "[INFO] Tạo resolv.conf cục bộ..."
+cat > resolv.conf <<EOF
+options ndots:0
+nameserver 127.0.0.1
+EOF
+
+# ==== 4. Khởi chạy tun2socks container ====
+echo "[INFO] Khởi chạy tun2socks..."
+docker run -d --name tun1 --restart=always \
+  --cap-add=NET_ADMIN \
+  -v /dev/net/tun:/dev/net/tun \
+  -v $PWD/resolv.conf:/etc/resolv.conf:ro \
+  -e PROXY="socks5://172.17.0.1:1080" \
+  -e EXTRA_COMMANDS="ip rule add iif lo ipproto udp dport 53 lookup main;" \
+  -e LOGLEVEL=debug \
+  xjasonlyu/tun2socks:v2.6.0
+
+# ==== 5. Khởi chạy DNS-over-HTTPS với Cloudflare ====
+echo "[INFO] Khởi chạy cloudflared DoH..."
+docker run -d --name doh --restart=always \
+  --network=container:tun1 \
+  --user root \
+  cloudflare/cloudflared:latest \
+  proxy-dns --address 127.0.0.1 --port 53
+
+# ==== 6. Kiểm tra IP qua tun1 ====
+echo "[INFO] Kiểm tra IP qua tun1..."
+docker run --rm --network=container:tun1 curlimages/curl:latest ifconfig.me
+
+echo ""
+echo "✅ Proxy container đã sẵn sàng!"
+echo "👉 Mọi container muốn dùng proxy chỉ cần thêm:"
+echo "   --network=container:tun1"
