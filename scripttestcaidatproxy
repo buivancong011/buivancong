@@ -2,34 +2,22 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Khai báo upstream proxy dạng URI (có thể trộn nhiều loại):
-#  - HTTP(S):   http://user:pass@host:port
-#  - SOCKS5:    socks5://user:pass@host:port
-#  - Shadowsocks/VMess/Trojan/VLESS: theo cú pháp glider -forward
 UPSTREAMS=(
   "http://user34602:1756884666@103.82.25.9:34602"
   "http://user34522:1757060107@103.82.25.9:34522"
 )
 
-# Cổng SOCKS5 lắng nghe trên host cho từng tuyến (tuyến i dùng START_SOCKS+i-1)
 START_SOCKS=1080
-
-# Tên base cho container theo tuyến
 GLIDER_NAME_BASE="glider"
 TUN_NAME_BASE="tun"
 
-# Image
 IMG_GLIDER="nadoo/glider:latest"
 IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
 
-# Log level cho tun2socks: debug|info|warn|error
 TUN_LOGLEVEL="error"
-
-# DNS candidates sẽ được đo RTT và chọn nhanh nhất per-route
 DNS_CANDIDATES=("1.1.1.1" "8.8.8.8" "9.9.9.9" "1.0.0.1" "8.8.4.4")
-
-# Giới hạn file handles cho glider/tun
 NOFILE=131072
+WATCH_INTERVAL=15
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -47,10 +35,8 @@ get_bridge_ip() {
   [[ -n "${gw:-}" ]] && echo "$gw" || echo "172.17.0.1"
 }
 
-# Ping một IP N lần, trả về RTT trung bình (ms) hoặc 9999 nếu fail
 avg_rtt_ms() {
-  local ip="$1" count="${2:-3}"
-  local out
+  local ip="$1" count="${2:-3}" out
   if out=$(ping -q -n -c "$count" -W 1 -i 0.2 "$ip" 2>/dev/null | awk -F'/' '/^rtt|round-trip/ {print $5}'); then
     [[ -n "$out" ]] && echo "$out" || echo "9999"
   else
@@ -58,17 +44,15 @@ avg_rtt_ms() {
   fi
 }
 
-# Chọn DNS nhanh nhất theo RTT
 pick_fastest_dns() {
   local best_ip="" best_rtt=9999 r
   for ip in "${DNS_CANDIDATES[@]}"; do
     r="$(avg_rtt_ms "$ip" 3)"
-    awk 'BEGIN {exit !(ARGC==3 && ARGV[1]+0 < ARGV[2]+0)}' "$r" "$best_rtt" && { best_rtt="$r"; best_ip="$ip"; }
+    awk 'BEGIN{exit !(ARGC==3 && ARGV[1]+0<ARGV[2]+0)}' "$r" "$best_rtt" && { best_rtt="$r"; best_ip="$ip"; }
   done
   [[ -n "$best_ip" ]] && echo "$best_ip" || echo "1.1.1.1"
 }
 
-# Tìm MTU tối ưu (PMTU probe), trả về MTU cho tun0 (nếu fail -> 1400)
 detect_mtu() {
   local host="8.8.8.8" lo=1200 hi=1472 mid ok=1200
   while (( lo <= hi )); do
@@ -87,9 +71,7 @@ detect_mtu() {
 # ===================== FUNCTIONS =====================
 cleanup_route() {
   local idx="$1"
-  local g="${GLIDER_NAME_BASE}${idx}"
-  local t="${TUN_NAME_BASE}${idx}"
-  docker rm -f "$t" "$g" >/dev/null 2>&1 || true
+  docker rm -f "${GLIDER_NAME_BASE}${idx}" "${TUN_NAME_BASE}${idx}" >/dev/null 2>&1 || true
   rm -f "resolv_${idx}.conf" >/dev/null 2>&1 || true
 }
 
@@ -107,16 +89,21 @@ start_route() {
 
   cleanup_route "$idx"
 
-  # 1) DNS nhanh nhất cho tuyến này
+  # 1) DNS per-route (fastest + backup) với timeout/rotate
   local fast_dns; fast_dns="$(pick_fastest_dns)"
-  { echo "options ndots:0"; echo "nameserver $fast_dns"; } > "$resolv_file"
-  echo "[ROUTE $idx] DNS nhanh nhất: $fast_dns"
+  {
+    echo "options ndots:0"
+    echo "options timeout:1 attempts:2 rotate"
+    echo "nameserver ${fast_dns}"
+    echo "nameserver 8.8.4.4"
+  } > "$resolv_file"
+  echo "[ROUTE $idx] DNS: ${fast_dns}, 8.8.4.4"
 
-  # 2) PMTU detect và set MTU
+  # 2) MTU detect
   local mtu; mtu="$(detect_mtu)"
-  echo "[ROUTE $idx] MTU tối ưu dự kiến: $mtu"
+  echo "[ROUTE $idx] MTU: ${mtu}"
 
-  # 3) Glider -> SOCKS5 (dùng -check hợp lệ, KHÔNG dùng -checkurl)
+  # 3) Glider
   docker run -d --name "$g" --restart=always --network host \
     --ulimit nofile="$NOFILE":"$NOFILE" \
     "$IMG_GLIDER" \
@@ -125,7 +112,7 @@ start_route() {
     -check "http://connectivitycheck.gstatic.com/generate_204#expect=204" \
     -checkinterval 10 || { echo "[ERR] glider $g fail"; return 1; }
 
-  # 4) tun2socks (BỎ mọi --sysctl để tránh lỗi /proc/sys/... không tồn tại)
+  # 4) tun2socks (không sysctl trong container)
   docker run -d --name "$t" --restart=always \
     --cap-add=NET_ADMIN \
     -v /dev/net/tun:/dev/net/tun \
@@ -138,11 +125,17 @@ start_route() {
                        ip link set dev tun0 mtu ${mtu} 2>/dev/null || true" \
     "$IMG_TUN" || { echo "[ERR] tun2socks $t fail"; docker logs "$g" || true; return 1; }
 
-  # 5) Kiểm tra egress IP
+  # 5) Hậu xử lý đảm bảo MTU đã áp (retry ngắn)
+  for _ in $(seq 1 10); do
+    docker exec "$t" sh -c "ip link set dev tun0 mtu ${mtu}" && break || sleep 0.5
+  done
+  docker exec "$t" sh -c "ip link show tun0 | sed -n '1p'" >/dev/null || true
+
+  # 6) In egress IP (có thể 1 số endpoint chặn; chỉ best-effort)
   echo -n "[ROUTE $idx] Egress IP: "
-  docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 3 https://ifconfig.me || true
+  docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 6 https://api.ipify.org || true
   echo
-  echo "[ROUTE $idx] READY. Gắn app bằng:  docker run ... --network=container:${t} <image> ..."
+  echo "[ROUTE $idx] READY → gắn app:  docker run ... --network=container:${t} <image> ..."
 }
 
 down_all() {
@@ -157,26 +150,53 @@ status_all() {
   for _ in "${UPSTREAMS[@]}"; do
     local t="${TUN_NAME_BASE}${i}"
     if docker ps --format '{{.Names}}' | grep -qx "$t"; then
-      printf "[STATUS] %-12s " "$t"
-      docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 3 https://ifconfig.me || echo "n/a"
+      printf "[STATUS] %-10s " "$t"
+      docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 6 https://ipv4.icanhazip.com || echo -n "n/a"
     else
       echo "[STATUS] $t: not running"
     fi
+    echo
     ((i++))
   done
 }
 
+watch_loop() {
+  echo "[WATCH] Mỗi ${WATCH_INTERVAL}s in egress IP từng tuyến (Ctrl+C để dừng)"
+  declare -A last
+  while true; do
+    local i=1
+    for _ in "${UPSTREAMS[@]}"; do
+      local t="${TUN_NAME_BASE}${i}"
+      if docker ps --format '{{.Names}}' | grep -qx "$t"; then
+        ipcur="$(docker run --rm --network=container:"$t" curlimages/curl:latest -s --max-time 6 https://ipv4.icanhazip.com || echo "n/a")"
+        if [[ "${last[$t]:-}" != "$ipcur" ]]; then
+          echo "[CHANGE] ${t}: ${last[$t]:-<none>} -> ${ipcur}"
+          last[$t]="$ipcur"
+        else
+          echo "[KEEP]   ${t}: ${ipcur}"
+        fi
+      else
+        echo "[MISS]   ${t}: not running"
+      fi
+      ((i++))
+    done
+    sleep "$WATCH_INTERVAL"
+  done
+}
+
 # ===================== CLI =====================
-# ./script.sh           -> khởi chạy tất cả tuyến
-# ./script.sh status    -> in IP từng tuyến
-# ./script.sh down      -> xoá toàn bộ tuyến
+# ./proxy.sh           -> khởi chạy tất cả tuyến
+# ./proxy.sh status    -> in IP từng tuyến
+# ./proxy.sh watch     -> theo dõi IP thay đổi
+# ./proxy.sh down      -> xoá toàn bộ tuyến
 case "${1:-up}" in
   up)
     i=1
     for up in "${UPSTREAMS[@]}"; do start_route "$i" "$up"; ((i++)); done
-    echo; echo "✅ ĐÃ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN. Dùng: --network=container:tunN"
+    echo; echo "✅ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN. Dùng: --network=container:tunN"
     ;;
   status) status_all ;;
+  watch)  watch_loop ;;
   down)   down_all ;;
-  *) echo "Usage: $0 [up|status|down]"; exit 1 ;;
+  *) echo "Usage: $0 [up|status|watch|down]"; exit 1 ;;
 esac
