@@ -1,0 +1,58 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+IMAGE="bringyour/community-provider:g4-latest"
+
+# Thư mục dữ liệu (giữ JWT / cấu hình)
+NODE1_DIR="$HOME/.urnetwork-node1"
+NODE2_DIR="$HOME/.urnetwork-node2"
+
+# Tên container
+NODE1_NAME="ur-provider1"
+NODE2_NAME="ur-provider2"
+
+# Tên namespace mạng đã có sẵn từ script proxy
+TUN1="tun1"
+TUN2="tun2"
+
+echo "=== [CLEANUP] Xoá container cũ nếu có ==="
+docker rm -f "$NODE1_NAME" "$NODE2_NAME" >/dev/null 2>&1 || true
+
+echo "[INFO] Tạo thư mục dữ liệu..."
+mkdir -p "$NODE1_DIR" "$NODE2_DIR"
+
+# ===== Node 1 =====
+if [ ! -s "$NODE1_DIR/jwt" ]; then
+  echo "[AUTH] Nhập/paste Auth Code cho Node1 rồi Enter:"
+  docker run --rm -it -v "$NODE1_DIR:/root/.urnetwork" "$IMAGE" auth
+  [ -s "$NODE1_DIR/jwt" ] || { echo "[ERROR] Node1 chưa có JWT"; exit 1; }
+fi
+
+echo "[RUN] Chạy Node1 qua tuyến $TUN1 ..."
+docker run -d --restart=always \
+  --network=container:"$TUN1" \
+  -v "$NODE1_DIR:/root/.urnetwork" \
+  --name "$NODE1_NAME" "$IMAGE" provide
+
+# ===== Node 2 =====
+if [ ! -s "$NODE2_DIR/jwt" ]; then
+  echo "[AUTH] Nhập/paste Auth Code cho Node2 rồi Enter:"
+  docker run --rm -it -v "$NODE2_DIR:/root/.urnetwork" "$IMAGE" auth
+  [ -s "$NODE2_DIR/jwt" ] || { echo "[ERROR] Node2 chưa có JWT"; exit 1; }
+fi
+
+echo "[RUN] Chạy Node2 qua tuyến $TUN2 ..."
+docker run -d --restart=always \
+  --network=container:"$TUN2" \
+  -v "$NODE2_DIR:/root/.urnetwork" \
+  --name "$NODE2_NAME" "$IMAGE" provide
+
+echo ""
+echo "✅ Hoàn tất! Mỗi node đi 1 IP egress riêng."
+echo "• $NODE1_NAME → $TUN1"
+echo "• $NODE2_NAME → $TUN2"
+
+echo "[TEST] Kiểm tra IP egress từng tuyến:"
+docker run --rm --network=container:"$TUN1" curlimages/curl:latest -s ifconfig.me || true
+docker run --rm --network=container:"$TUN2" curlimages/curl:latest -s ifconfig.me || true
+echo
