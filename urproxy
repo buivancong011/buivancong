@@ -5,27 +5,7 @@ IMAGE="bringyour/community-provider:g4-latest"
 
 # Khai báo danh sách node: tên_container:thư_mục_dữ_liệu:container_VPN
 NODES=(
-  "ur1:$HOME/.urnetwork-node1:tun1"
-  "ur2:$HOME/.urnetwork-node2:tun2"
-  "ur3:$HOME/.urnetwork-node3:tun3"
-  "ur4:$HOME/.urnetwork-node4:tun4"
-  "ur5:$HOME/.urnetwork-node5:tun5"
-  "ur6:$HOME/.urnetwork-node6:tun6"
-  "ur7:$HOME/.urnetwork-node7:tun7"
-  "ur8:$HOME/.urnetwork-node8:tun8"
-  "ur9:$HOME/.urnetwork-node9:tun9"
-  "ur10:$HOME/.urnetwork-node10:tun10"
-  "ur11:$HOME/.urnetwork-node11:tun11"
-  "ur12:$HOME/.urnetwork-node12:tun12"
-  "ur13:$HOME/.urnetwork-node13:tun13"
-  "ur14:$HOME/.urnetwork-node14:tun14"
-  "ur15:$HOME/.urnetwork-node15:tun15"
-  "ur16:$HOME/.urnetwork-node16:tun16"
-  "ur17:$HOME/.urnetwork-node17:tun17"
-  "ur18:$HOME/.urnetwork-node18:tun18"
-  "ur19:$HOME/.urnetwork-node19:tun19"
-  "ur20:$HOME/.urnetwork-node20:tun20"
-  "ur21:$HOME/.urnetwork-node21:tun21"
+
   "ur22:$HOME/.urnetwork-node22:tun22"
 )
 
