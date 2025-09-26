@@ -5,47 +5,49 @@ set -Eeuo pipefail
 IMAGE_TM="traffmonetizer/cli_v2:latest"
 TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
-# Tên container bạn muốn chạy
+# Danh sách container: tên container:tên network:tên thiết bị hiển thị
 CONTAINERS=(
-  "tm1:tun1"
-  "tm2:tun2"
-  "tm3:tun3"
-  "tm4:tun4"
-  "tm5:tun5"
-  "tm6:tun6"
-  "tm7:tun7"
-  "tm8:tun8"
-  "tm9:tun9"
-  "tm10:tun10"
-  "tm11:tun11"
-  "tm12:tun12"
-  "tm13:tun13"
-  "tm14:tun14"
-  "tm15:tun15"
-  "tm16:tun16"
-  "tm17:tun17"
-  "tm18:tun18"
-  "tm19:tun19"
-  "tm20:tun20"
-  "tm21:tun21"
-  "tm22:tun22"
+  "tm1:tun1:device_tm1"
+  "tm2:tun2:device_tm2"
+  "tm3:tun3:device_tm3"
+  "tm4:tun4:device_tm4"
+  "tm5:tun5:device_tm5"
+  "tm6:tun6:device_tm6"
+  "tm7:tun7:device_tm7"
+  "tm8:tun8:device_tm8"
+  "tm9:tun9:device_tm9"
+  "tm10:tun10:device_tm10"
+  "tm11:tun11:device_tm11"
+  "tm12:tun12:device_tm12"
+  "tm13:tun13:device_tm13"
+  "tm14:tun14:device_tm14"
+  "tm15:tun15:device_tm15"
+  "tm16:tun16:device_tm16"
+  "tm17:tun17:device_tm17"
+  "tm18:tun18:device_tm18"
+  "tm19:tun19:device_tm19"
+  "tm20:tun20:device_tm20"
+  "tm21:tun21:device_tm21"
+  "tm22:tun22:device_tm22"
 )
 
 # =============== TRIỂN KHAI ===============
 for pair in "${CONTAINERS[@]}"; do
-  name="${pair%%:*}"
-  tun="${pair#*:}"
+  name="${pair%%:*}"                      # tm1
+  rest="${pair#*:}"                      # tun1:device_tm1
+  tun="${rest%%:*}"                      # tun1
+  device_name="${rest#*:}"               # device_tm1
 
   echo "🧪 [SETUP] Xoá container cũ $name nếu có..."
   docker rm -f "$name" >/dev/null 2>&1 || true
 
-  echo "🚀 [RUN] Khởi chạy $name qua tuyến mạng $tun ..."
+  echo "🚀 [RUN] Khởi chạy $name qua $tun với tên thiết bị: $device_name ..."
   docker run -d --restart=always \
     --network=container:"$tun" \
     --name "$name" \
     "$IMAGE_TM" start accept \
       --token "$TOKEN" \
-      --device-name "$name"
+      --device-name "$device_name"
 done
 
 echo ""
@@ -56,5 +58,6 @@ echo "📡 Gợi ý test IP từng tuyến:"
 for pair in "${CONTAINERS[@]}"; do
   name="${pair%%:*}"
   tun="${pair#*:}"
+  tun="${tun%%:*}"
   echo "  docker run --rm --network=container:$tun curlimages/curl:latest -s ifconfig.me"
 done
