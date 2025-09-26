@@ -25,6 +25,8 @@ NODES=(
   "ur18:$HOME/.urnetwork-node18:tun18"
   "ur19:$HOME/.urnetwork-node19:tun19"
   "ur20:$HOME/.urnetwork-node20:tun20"
+  "ur21:$HOME/.urnetwork-node21:tun21"
+  "ur22:$HOME/.urnetwork-node22:tun22"
 )
 
 echo "=== [CLEANUP] Xoá container cũ (nếu có) ==="
