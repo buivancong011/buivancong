@@ -25,8 +25,6 @@ UPSTREAMS=(
   "http://user34602:1756884666@103.82.25.9:34602"
   "http://user35992:1756884726@103.82.25.9:35992"
   "http://user36420:1756884951@103.82.25.9:36420"
-
-
 )
 
 START_SOCKS=1080
@@ -111,7 +109,7 @@ start_route() {
 
   cleanup_route "$idx"
 
-  # 1) DNS per-route (fastest + backup) với timeout/rotate
+  # 1) DNS per-route
   local fast_dns; fast_dns="$(pick_fastest_dns)"
   {
     echo "options ndots:0"
@@ -134,7 +132,7 @@ start_route() {
     -check "http://connectivitycheck.gstatic.com/generate_204#expect=204" \
     -checkinterval 10 || { echo "[ERR] glider $g fail"; return 1; }
 
-  # 4) tun2socks (mount gai.conf để ưu tiên IPv4)
+  # 4) tun2socks
   docker run -d --name "$t" --restart=always \
     --cap-add=NET_ADMIN \
     -v /dev/net/tun:/dev/net/tun \
@@ -148,13 +146,11 @@ start_route() {
                        ip link set dev tun0 mtu ${mtu} 2>/dev/null || true" \
     "$IMG_TUN" || { echo "[ERR] tun2socks $t fail"; docker logs "$g" || true; return 1; }
 
-  # 5) Hậu xử lý đảm bảo MTU đã áp (retry ngắn)
   for _ in $(seq 1 10); do
     docker exec "$t" sh -c "ip link set dev tun0 mtu ${mtu}" && break || sleep 0.5
   done
   docker exec "$t" sh -c "ip link show tun0 | sed -n '1p'" >/dev/null || true
 
-  # 6) In egress IP (best-effort)
   echo -n "[ROUTE $idx] Egress IP: "
   docker run --rm --network=container:"$t" curlimages/curl:latest -4 -s --max-time 6 https://api.ipify.org || true
   echo
@@ -208,18 +204,28 @@ watch_loop() {
 }
 
 # ===================== CLI =====================
-# ./proxy.sh           -> khởi tạo tất cả tuyến
-# ./proxy.sh status    -> in IP từng tuyến
-# ./proxy.sh watch     -> theo dõi IP thay đổi
-# ./proxy.sh down      -> xoá toàn bộ tuyến
 case "${1:-up}" in
   up)
     i=1
     for up in "${UPSTREAMS[@]}"; do start_route "$i" "$up"; ((i++)); done
-    echo; echo "✅ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN. Dùng: --network=container:tunN"
+    echo; echo "✅ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN."
+    ;;
+  up-skip)
+    i=1
+    for up in "${UPSTREAMS[@]}"; do
+      t="${TUN_NAME_BASE}${i}"
+      if docker ps --format '{{.Names}}' | grep -qx "$t"; then
+        echo "[SKIP] $t đã tồn tại, bỏ qua..."
+      else
+        start_route "$i" "$up"
+      fi
+      ((i++))
+    done
     ;;
   status) status_all ;;
   watch)  watch_loop ;;
   down)   down_all ;;
-  *) echo "Usage: $0 [up|status|watch|down]"; exit 1 ;;
+  *)
+    echo "Usage: $0 [up|up-skip|status|watch|down]"
+    exit 1 ;;
 esac
