@@ -43,7 +43,7 @@ for pair in "${CONTAINERS[@]}"; do
   docker run -d --restart=always \
     --network=container:"$tun" \
     --name "$name" \
-    --hostname "$name" \
+    
     --label "app=traffmonetizer" \
     --label "tm.index=$name" \
     --label "tm.network=$tun" \
