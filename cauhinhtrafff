@@ -7,7 +7,26 @@ TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
 # Tên container bạn muốn chạy
 CONTAINERS=(
-
+  "tm1:tun1"
+  "tm2:tun2"
+  "tm3:tun3"
+  "tm4:tun4"
+  "tm5:tun5"
+  "tm6:tun6"
+  "tm7:tun7"
+  "tm8:tun8"
+  "tm9:tun9"
+  "tm10:tun10"
+  "tm11:tun11"
+  "tm12:tun12"
+  "tm13:tun13"
+  "tm14:tun14"
+  "tm15:tun15"
+  "tm16:tun16"
+  "tm17:tun17"
+  "tm18:tun18"
+  "tm19:tun19"
+  "tm20:tun20"
   "tm21:tun21"
   "tm22:tun22"
 )
@@ -24,10 +43,9 @@ for pair in "${CONTAINERS[@]}"; do
   docker run -d --restart=always \
     --network=container:"$tun" \
     --name "$name" \
-    --label "app=traffmonetizer" \
-    --label "tm.index=$name" \
-    --label "tm.network=$tun" \
-    "$IMAGE_TM" start accept --token "$TOKEN"
+    "$IMAGE_TM" start accept \
+      --token "$TOKEN" \
+      --device-name "$name"
 done
 
 echo ""
