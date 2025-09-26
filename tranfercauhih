@@ -5,7 +5,7 @@ set -Eeuo pipefail
 IMAGE_TM="traffmonetizer/cli_v2:latest"
 TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
-# Tên container bạn muốn chạy
+# Danh sách container và tên network
 CONTAINERS=(
   "tm1:tun1"
   "tm2:tun2"
@@ -27,6 +27,8 @@ CONTAINERS=(
   "tm18:tun18"
   "tm19:tun19"
   "tm20:tun20"
+  "tm21:tun21"
+  "tm22:tun22"
 )
 
 # =============== TRIỂN KHAI ===============
@@ -41,6 +43,10 @@ for pair in "${CONTAINERS[@]}"; do
   docker run -d --restart=always \
     --network=container:"$tun" \
     --name "$name" \
+    --hostname "$name" \
+    --label "app=traffmonetizer" \
+    --label "tm.index=$name" \
+    --label "tm.network=$tun" \
     "$IMAGE_TM" start accept --token "$TOKEN"
 done
 
