@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ============== CONFIG ==============
+IMAGE_TM="traffmonetizer/cli_v2:latest"
+# Gắn cố định token bạn đưa:
+TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
+CONCURRENCY="${CONCURRENCY:-8}"   # số job song song khi up/down
+MAX_TUNS="${MAX_TUNS:-0}"         # 0 = không giới hạn, >0 = chỉ lấy tối đa N tun đầu
+
+# ============== HELPERS ==============
+die() { echo "ERROR: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "Thiếu lệnh: $1"; }
+
+pull_image() {
+  echo "[INFO] Kéo image $IMAGE_TM (nếu chưa có)..."
+  docker pull "$IMAGE_TM" >/dev/null || true
+}
+
+# Liệt kê tunN đang CHẠY, sort theo N
+list_up_tuns_sorted() {
+  docker ps --format '{{.Names}}' \
+  | grep -E '^tun[0-9]+$' \
+  | sed -E 's/^tun([0-9]+)$/\1\t&/' \
+  | sort -n -k1,1 \
+  | cut -f2
+}
+
+# Tạo cặp tmN:tunN:device_tmN từ danh sách tunN
+build_pairs_from_tuns() {
+  local count=0
+  local pairs=()
+  while read -r tun; do
+    [[ -n "$tun" ]] || continue
+    local n; n=$(sed -E 's/^tun([0-9]+)$/\1/' <<<"$tun")
+    [[ "$n" =~ ^[0-9]+$ ]] || continue
+    pairs+=("tm${n}:${tun}:device_tm${n}")
+    ((count++))
+    if (( MAX_TUNS > 0 && count >= MAX_TUNS )); then
+      break
+    fi
+  done < <(list_up_tuns_sorted)
+
+  if (( ${#pairs[@]} == 0 )); then
+    die "Không phát hiện mạng/container tunN nào đang chạy. Hãy bring-up các tun trước."
+  fi
+
+  CONTAINERS_EFFECTIVE=("${pairs[@]}")
+  echo "[INFO] Phát hiện ${#CONTAINERS_EFFECTIVE[@]} tun đang chạy → sẽ triển khai bấy nhiêu tm."
+}
+
+have_container() { docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
+is_running()    { docker ps     --format '{{.Names}}' | grep -Fxq "$1"; }
+have_ns()       { docker ps     --format '{{.Names}}' | grep -Fxq "$1"; }
+
+run_one() {
+  local pair="$1"
+  local name="${pair%%:*}"                 # tmN
+  local rest="${pair#*:}"                  # tunN:device_tmN
+  local tun="${rest%%:*}"                  # tunN
+  local dev="${rest#*:}"                   # device_tmN
+
+  docker rm -f "$name" >/dev/null 2>&1 || true
+
+  if ! have_ns "$tun"; then
+    echo "⚠️  Bỏ qua $name: '$tun' không còn chạy."
+    return 0
+  fi
+
+  docker run -d --restart=always \
+    --network="container:$tun" \
+    --name "$name" \
+    "$IMAGE_TM" start accept \
+      --device-name "$dev" \
+      --token "$TOKEN" >/dev/null
+
+  echo "✅ RUN $name qua $tun (device=$dev)"
+}
+
+down_one() {
+  local name="$1"
+  if have_container "$name"; then
+    docker rm -f "$name" >/dev/null && echo "🧹 RM  $name"
+  fi
+}
+
+status_one() {
+  local pair="$1"
+  local name="${pair%%:*}"
+  if is_running "$name"; then
+    local st; st=$(docker ps --filter "name=^${name}$" --format '{{.Status}}')
+    echo "🟢 $name ($st)"
+  elif have_container "$name"; then
+    local st; st=$(docker ps -a --filter "name=^${name}$" --format '{{.Status}}')
+    echo "🟡 $name (stopped: $st)"
+  else
+    echo "⚪ $name (absent)"
+  fi
+}
+
+test_one() {
+  local pair="$1"
+  local tun="${pair#*:}"; tun="${tun%%:*}"
+  if have_ns "$tun"; then
+    local ip
+    ip=$(docker run --rm --network=container:"$tun" curlimages/curl:latest -4 -s --max-time 6 https://api.ipify.org || true)
+    [[ -n "$ip" ]] && echo "🌐 $tun -> $ip" || echo "❌ $tun -> n/a"
+  else
+    echo "⚠️  $tun chưa chạy"
+  fi
+}
+
+logs_one() {
+  local pair="$1"
+  local name="${pair%%:*}"
+  if have_container "$name"; then
+    echo "---------- logs: $name ----------"
+    docker logs --tail=50 "$name" || true
+  else
+    echo "⚪ $name (absent)"
+  fi
+}
+
+# map with concurrency
+par_map() {
+  local fn="$1"; shift
+  local -a items=("$@")
+  (( ${#items[@]} > 0 )) || { echo "⚠️  Không có tuyến nào để xử lý."; return 0; }
+  printf '%s\n' "${items[@]}" | xargs -I{} -P "${CONCURRENCY}" bash -c "$fn \"{}\""
+}
+
+# ============== COMMANDS ==============
+cmd_up() {
+  need docker
+  [[ -n "$TOKEN" ]] || die "TOKEN trống."
+  pull_image
+  build_pairs_from_tuns
+  par_map 'run_one' "${CONTAINERS_EFFECTIVE[@]}"
+}
+
+# Gỡ tất cả tm[0-9]+
+cmd_down() {
+  local names
+  names=$(docker ps -a --format '{{.Names}}' | grep -E '^tm[0-9]+$' || true)
+  if [[ -z "$names" ]]; then
+    echo "ℹ️  Không có container tmN nào."
+    return 0
+  fi
+  printf '%s\n' "$names" | xargs -r -n1 -P "${CONCURRENCY}" bash -c 'docker rm -f "$0" >/dev/null && echo "🧹 RM  $0"'
+}
+
+cmd_status() { build_pairs_from_tuns; par_map 'status_one' "${CONTAINERS_EFFECTIVE[@]}"; }
+cmd_test()   { build_pairs_from_tuns; par_map 'test_one'   "${CONTAINERS_EFFECTIVE[@]}"; }
+cmd_logs()   { build_pairs_from_tuns; par_map 'logs_one'   "${CONTAINERS_EFFECTIVE[@]}"; }
+cmd_restart(){ cmd_down; sleep 1; cmd_up; }
+
+usage() {
+  cat <<EOF
+Usage: $0 {up|down|restart|status|test|logs}
+
+ENV (tùy chọn):
+  CONCURRENCY=8        Số job chạy song song khi up/down
+  MAX_TUNS=0           0 = dùng hết tun đang chạy; >0 = chỉ lấy tối đa N tun đầu
+EOF
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    up)       cmd_up ;;
+    down)     cmd_down ;;
+    restart)  cmd_restart ;;
+    status)   cmd_status ;;
+    test)     cmd_test ;;
+    logs)     cmd_logs ;;
+    *)        usage; exit 1 ;;
+  esac
+}
+main "$@"
