@@ -1,0 +1,242 @@
+
+#!/bin/bash
+set -Eeuo pipefail
+
+# ===================== CONFIG =====================
+# Khai báo upstream proxy dạng URI. Có thể trộn nhiều loại:
+# - HTTP(S):  http://user:pass@host:port
+# - SOCKS5:   socks5://user:pass@host:port
+# - Shadowsocks: ss://method:password@host:port
+# - VMess/Trojan/VLESS/...: để glider -forward tương ứng (xem docs glider)
+UPSTREAMS=(
+"http://user19026:1756576270@s11.pxus.live:19026"
+"http://user33837:1758970996@s13.pxus.live:33837"
+"http://user17069:1759835282@s4.pxus.live:17069"
+"http://user38679:1758955640@s13.pxus.live:38679"
+"http://user29585:1758906759@s11.pxus.live:29585"
+"http://user11956:1758907044@s11.pxus.live:11956"
+"http://user36957:1758177017@s15.pxus.live:36957"
+"http://user45216:1759408234@s13.pxus.live:45216"
+"http://user23446:1758163586@s15.pxus.live:23446"
+"http://user49032:1758360642@s3.pxus.live:49032"
+"http://user57776:1758123061@s13.pxus.live:57776"
+"http://user24640:1758163571@s3.pxus.live:24640"
+"http://user59237:1759040239@s13.pxus.live:59237"
+"http://user51433:1758543304@s13.pxus.live:51433"
+"http://user52671:1759227327@s13.pxus.live:52671"
+"http://user57634:1759408219@s13.pxus.live:57634"
+"http://user33468:1758477645@s11.pxus.live:33468"
+"http://user13053:1759408219@s13.pxus.live:13053"
+"http://user36796:1758536175@s13.pxus.live:36796"
+"http://user49196:1759040224@s13.pxus.live:49196"
+"http://user13345:1758906744@s11.pxus.live:13345"
+"http://user55448:1759308326@s13.pxus.live:55448"
+"http://user38348:1759806334@s11.pxus.live:38348"
+"http://user27718:1759335428@s13.pxus.live:27718"
+"http://user38434:1758768520@s11.pxus.live:38434"
+"http://user42043:1758945299@s11.pxus.live:42043"
+"http://user23119:1759408219@s13.pxus.live:23119"
+"http://user17038:1758477690@s11.pxus.live:17038"
+"http://user38287:1758477765@s11.pxus.live:38287"
+"http://user36498:1758177032@s15.pxus.live:36498"
+"http://user57124:1759408234@s13.pxus.live:57124"
+"http://user15007:1758189488@s15.pxus.live:15007"
+"http://user28448:1759307440@s13.pxus.live:28448"
+"http://user34996:1758189503@s15.pxus.live:34996"
+"http://user27474:1758906804@s11.pxus.live:27474"
+"http://user42560:1758906759@s11.pxus.live:42560"
+"http://user40765:1759114872@s13.pxus.live:40765"
+"http://user21956:1756576255@s11.pxus.live:21956"
+"http://user19206:1759806364@s11.pxus.live:19206"
+"http://user26684:1758907044@s11.pxus.live:26684"
+"http://user38825:1758360657@s3.pxus.live:38825"
+"http://user19916:1758477780@s11.pxus.live:19916"
+"http://user41030:1759806364@s11.pxus.live:41030"
+"http://user59888:1759408234@s13.pxus.live:59888"
+"http://user18055:1758477765@s11.pxus.live:18055"
+"http://user15042:1758163511@s15.pxus.live:15042"
+"http://user23315:1758177017@s15.pxus.live:23315"
+"http://user54491:1758123031@s2.pxus.live:54491"
+"http://user24091:1758179733@s15.pxus.live:24091"
+"http://user52842:1759127404@s1.pxus.live:52842"
+"http://user11491:1756643403@s11.pxus.live:11491"
+"http://user23412:1758906024@s4.pxus.live:23412"
+"http://user13080:1759806334@s11.pxus.live:13080"
+"http://user37477:1758897005@s11.pxus.live:37477"
+"http://user23972:1758477660@s11.pxus.live:23972"
+"http://user35905:1758163511@s11.pxus.live:35905"
+"http://user20246:1758768505@s11.pxus.live:20246"
+"http://user23722:1758477750@s11.pxus.live:23722"
+"http://user15487:1758907029@s11.pxus.live:15487"
+"http://user16356:1759040239@s13.pxus.live:16356"
+"http://user49298:1759408264@s13.pxus.live:49298"
+"http://user52291:1759114872@s13.pxus.live:52291"
+"http://user54163:1759040224@s13.pxus.live:54163"
+"http://user42043:1759408249@s13.pxus.live:42043"
+"http://user17841:1758360642@s3.pxus.live:17841"
+"http://user39502:1758543304@s13.pxus.live:39502"
+"http://user21320:1759040255@s13.pxus.live:21320"
+"http://user41653:1758259144@s13.pxus.live:41653"
+"http://user25033:1758357055@s13.pxus.live:25033"
+
+
+
+
+)
+
+
+# Cổng SOCKS5 lắng nghe trên host cho từng tuyến (tuyến i dùng START_SOCKS+i)
+START_SOCKS=1080
+
+# Tên base cho container theo tuyến
+GLIDER_NAME_BASE="glider"
+TUN_NAME_BASE="tun"
+DOH_NAME_BASE="doh"
+
+# Phiên bản image
+IMG_GLIDER="nadoo/glider:latest"
+IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
+IMG_DOH="cloudflare/cloudflared:latest"
+
+# Log level cho tun2socks
+TUN_LOGLEVEL="info"   # debug|info|warn|error
+
+# MTU tuỳ tuyến (để trống để mặc định). Ví dụ 1400 nếu gặp timeouts:
+TUN_MTU=""            # ví dụ: "1400"
+
+# ===================== PRECHECK =====================
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
+
+# Linux cần /dev/net/tun
+if [[ ! -e /dev/net/tun ]]; then
+  echo "[INFO] Tạo /dev/net/tun..."
+  sudo mkdir -p /dev/net || true
+  sudo mknod /dev/net/tun c 10 200 || true
+  sudo chmod 600 /dev/net/tun || true
+fi
+
+# ===================== FUNCTIONS =====================
+cleanup_route() {
+  local idx="$1"
+  local g="${GLIDER_NAME_BASE}${idx}"
+  local t="${TUN_NAME_BASE}${idx}"
+  local d="${DOH_NAME_BASE}${idx}"
+  docker rm -f "$d" "$t" "$g" >/dev/null 2>&1 || true
+}
+
+start_route() {
+  local idx="$1"
+  local upstream="$2"
+  local socks_port=$((START_SOCKS + idx - 1))
+
+  local g="${GLIDER_NAME_BASE}${idx}"
+  local t="${TUN_NAME_BASE}${idx}"
+  local d="${DOH_NAME_BASE}${idx}"
+  local resolv_file="resolv_${idx}.conf"
+
+  echo "------------------------------------------------------------"
+  echo "[ROUTE $idx] Upstream: $upstream"
+  echo "[ROUTE $idx] SOCKS5 listen on host: ${socks_port}"
+
+  # 1) Cleanup cũ
+  cleanup_route "$idx"
+
+  # 2) Tạo glider: chuyển mọi upstream -> SOCKS5 cục bộ
+  echo "[ROUTE $idx] Khởi chạy glider -> socks5://0.0.0.0:${socks_port}"
+  docker run -d --name "$g" --restart=always --network host "$IMG_GLIDER" \
+    -verbose \
+    -listen "socks5://0.0.0.0:${socks_port}" \
+    -forward "$upstream"
+
+  # 3) resolv.conf cục bộ (DNS sẽ hỏi 127.0.0.1 trong namespace tun)
+  cat > "$resolv_file" <<EOF
+options ndots:0
+nameserver 127.0.0.1
+EOF
+
+  # 4) tun2socks
+  #   PROXY trỏ tới SOCKS5 trên host qua địa chỉ bridge 172.17.0.1 (Linux Docker)
+  #   Nếu hệ khác, có thể đổi sang host.docker.internal:PORT (Docker Desktop)
+  echo "[ROUTE $idx] Khởi chạy tun2socks..."
+  docker run -d --name "$t" --restart=always \
+    --cap-add=NET_ADMIN \
+    -v /dev/net/tun:/dev/net/tun \
+    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
+    -e PROXY="socks5://172.17.0.1:${socks_port}" \
+    -e LOGLEVEL="$TUN_LOGLEVEL" \
+    -e EXTRA_COMMANDS="ip rule add iif lo ipproto udp dport 53 lookup main;" \
+    "$IMG_TUN"
+
+  # Tuỳ chọn set MTU nếu cấu hình
+  if [[ -n "${TUN_MTU}" ]]; then
+    echo "[ROUTE $idx] Set MTU=${TUN_MTU} (best-effort)"
+    docker exec -it "$t" sh -c "ip link set dev tun0 mtu ${TUN_MTU} || true"
+  fi
+
+  # 5) Cloudflared DoH trong cùng namespace với tun
+  echo "[ROUTE $idx] Khởi chạy cloudflared DoH..."
+  docker run -d --name "$d" --restart=always \
+    --network=container:"$t" \
+    --user root \
+    "$IMG_DOH" \
+    proxy-dns --address 127.0.0.1 --port 53
+
+  # 6) Kiểm tra IP qua tuyến
+  echo "[ROUTE $idx] Kiểm tra IP egress..."
+  docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+  echo
+  echo "[ROUTE $idx] SẴN SÀNG. Gắn container vào tuyến này bằng:"
+  echo "  docker run ... --network=container:${t} <image> ..."
+}
+
+down_all() {
+  echo "[CLEANUP] Xoá toàn bộ tuyến..."
+  local i=1
+  for _ in "${UPSTREAMS[@]}"; do
+    cleanup_route "$i"
+    rm -f "resolv_${i}.conf" || true
+    ((i++))
+  done
+  echo "[DONE] Đã xoá."
+}
+
+status_all() {
+  local i=1
+  for _ in "${UPSTREAMS[@]}"; do
+    local t="${TUN_NAME_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$t"; then
+      printf "[STATUS] %s " "$t"
+      docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+    else
+      echo "[STATUS] $t: not running"
+    fi
+    ((i++))
+  done
+}
+
+# ===================== CLI =====================
+# ./script.sh          -> khởi chạy tất cả tuyến
+# ./script.sh status   -> in IP từng tuyến
+# ./script.sh down     -> xoá toàn bộ tuyến
+case "${1:-up}" in
+  up)
+    i=1
+    for up in "${UPSTREAMS[@]}"; do
+      start_route "$i" "$up"
+      ((i++))
+    done
+    echo
+    echo "✅ ĐÃ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN."
+    echo "👉 Gắn container client vào tuyến N:  --network=container:tunN"
+    ;;
+  status)
+    status_all
+    ;;
+  down)
+    down_all
+    ;;
+  *)
+    echo "Usage: $0 [up|status|down]"
+    exit 1
+    ;;
+esac
