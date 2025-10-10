@@ -1,199 +1,232 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-# ===================== CONFIG =====================
-# Danh sách proxy SOCKS5. Có thể để socks5h:// hoặc socks5://
-# (tun2socks chỉ hỗ trợ socks5://; script sẽ tự đổi socks5h -> socks5 khi chạy)
+# ========= PROXIES EMBEDDED =========
+# Giữ socks5h để bạn dễ quản; tun2socks không hiểu socks5h nên mình tự đổi sang socks5 khi chạy.
 UPSTREAMS=(
-  "socks5h://156.239.204.25:1339"
-  # thêm các proxy khác...
+"socks5h://156.239.204.25:1339"
+"socks5h://156.239.201.49:1339"
+"socks5h://156.239.202.151:1339"
+"socks5h://156.239.201.0:1339"
+"socks5h://156.239.196.11:1339"
+"socks5h://156.239.203.251:1339"
+"socks5h://156.239.205.107:1339"
+"socks5h://156.239.198.52:1339"
+"socks5h://156.239.195.73:1339"
+"socks5h://156.239.197.103:1339"
+"socks5h://156.239.199.213:1339"
+"socks5h://156.239.199.167:1339"
+"socks5h://156.239.204.52:1339"
+"socks5h://156.239.202.70:1339"
+"socks5h://156.239.205.75:1339"
+"socks5h://156.239.204.206:1339"
+"socks5h://156.239.200.103:1339"
+"socks5h://156.239.193.62:1339"
+"socks5h://156.239.197.99:1339"
+"socks5h://156.239.198.0:1339"
+"socks5h://156.239.203.195:1339"
+"socks5h://156.239.197.224:1339"
+"socks5h://156.239.199.24:1339"
+"socks5h://156.239.193.140:1339"
+"socks5h://156.239.194.142:1339"
+"socks5h://156.239.207.106:1339"
+"socks5h://156.239.207.0:1339"
+"socks5h://156.239.203.225:1339"
+"socks5h://156.239.205.187:1339"
+"socks5h://156.239.200.202:1339"
+"socks5h://156.239.194.91:1339"
+"socks5h://156.239.203.182:1339"
+"socks5h://156.239.192.94:1339"
+"socks5h://156.239.198.202:1339"
+"socks5h://156.239.200.17:1339"
+"socks5h://156.239.205.239:1339"
+"socks5h://156.239.194.215:1339"
+"socks5h://156.239.200.138:1339"
+"socks5h://156.239.195.69:1339"
+"socks5h://156.239.192.177:1339"
+"socks5h://156.239.201.64:1339"
+"socks5h://156.239.205.121:1339"
+"socks5h://156.239.201.114:1339"
+"socks5h://156.239.192.11:1339"
+"socks5h://156.239.206.200:1339"
+"socks5h://156.239.199.234:1339"
+"socks5h://156.239.195.189:1339"
+"socks5h://156.239.207.222:1339"
+"socks5h://156.239.199.103:1339"
+"socks5h://156.239.197.3:1339"
+"socks5h://156.239.223.107:1339"
+"socks5h://156.239.213.44:1339"
+"socks5h://156.239.221.33:1339"
+"socks5h://156.239.220.58:1339"
+"socks5h://156.239.218.103:1339"
+"socks5h://156.239.212.135:1339"
+"socks5h://156.239.211.246:1339"
+"socks5h://156.239.217.126:1339"
+"socks5h://156.239.212.18:1339"
+"socks5h://156.239.219.82:1339"
+"socks5h://156.239.219.113:1339"
+"socks5h://156.239.215.30:1339"
+"socks5h://156.239.209.42:1339"
+"socks5h://156.239.216.53:1339"
+"socks5h://156.239.212.140:1339"
+"socks5h://156.239.215.254:1339"
+"socks5h://156.239.221.183:1339"
+"socks5h://156.239.211.102:1339"
+"socks5h://156.239.217.246:1339"
+"socks5h://156.239.213.129:1339"
+"socks5h://156.239.222.188:1339"
+"socks5h://156.239.216.106:1339"
+"socks5h://156.239.210.1:1339"
+"socks5h://156.239.209.140:1339"
+"socks5h://156.239.218.68:1339"
+"socks5h://156.239.216.147:1339"
+"socks5h://156.239.222.133:1339"
+"socks5h://156.239.213.255:1339"
+"socks5h://156.239.211.114:1339"
+"socks5h://156.239.215.101:1339"
+"socks5h://156.239.223.9:1339"
+"socks5h://156.239.221.24:1339"
+"socks5h://156.239.217.162:1339"
+"socks5h://156.239.220.207:1339"
+"socks5h://156.239.222.138:1339"
+"socks5h://156.239.221.166:1339"
+"socks5h://156.239.219.45:1339"
+"socks5h://156.239.217.172:1339"
+"socks5h://156.239.223.220:1339"
+"socks5h://156.239.215.54:1339"
+"socks5h://156.239.220.5:1339"
+"socks5h://156.239.214.6:1339"
+"socks5h://156.239.221.23:1339"
+"socks5h://156.239.221.105:1339"
+"socks5h://156.239.218.63:1339"
+"socks5h://156.239.222.201:1339"
+"socks5h://156.239.212.73:1339"
+"socks5h://156.239.219.187:1339"
+"socks5h://156.239.214.181:1339"
+"socks5h://156.239.217.223:1339"
 )
 
-TUN_NAME_BASE="tun"                       # => tun1, tun2, ...
+# ========= CONFIG =========
 IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
-TUN_LOGLEVEL="info"                       # debug|info|warn|error
-TUN_MTU=""                                # ví dụ "1400" nếu hay timeout
-TUN_RESOLVER="1.1.1.1"                    # 8.8.8.8 / 9.9.9.9 đều OK
+LOGLEVEL="info"                 # debug|info|warn|error
+TUN_NAME_PREFIX="tun"
+UNIQUE_ID="$(tr -dc 'a-f0-9' </dev/urandom | head -c 8)"
+DNS_FILE="resolv_tun.conf"
+MTU=""                          # ví dụ "1400" nếu cần
 
-# Probe (lọc proxy chết trước khi tạo route)
-PROBE_MAX_RETRY=1
-PROBE_TIMEOUT=8
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Docker chưa cài."; exit 1; }
 
-# ===================== PRECHECK =====================
-command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
-
+# /dev/net/tun
 if [[ ! -e /dev/net/tun ]]; then
-  echo "[INFO] Tạo /dev/net/tun..."
+  echo "[INFO] Tạo /dev/net/tun…"
   sudo mkdir -p /dev/net || true
   sudo mknod /dev/net/tun c 10 200 || true
   sudo chmod 600 /dev/net/tun || true
 fi
 
-# ===================== HELPERS =====================
-validate_socks() {
-  local u="$1"
-  # chấp nhận socks5:// hoặc socks5h://, có/không user:pass
-  [[ "$u" =~ ^socks5(h)?://([^/@:]+:[^/@]+@)?([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+$ ]]
-}
-
-probe_proxy_once() {
-  local u="$1"
-  curl -sSx "$u" -I "https://www.google.com" --max-time "$PROBE_TIMEOUT" >/dev/null 2>&1
-}
-
-probe_proxy() {
-  local u="$1"
-  local i
-  for ((i=0; i<=PROBE_MAX_RETRY; i++)); do
-    if probe_proxy_once "$u"; then return 0; fi
-    sleep 1
-  done
-  return 1
-}
-
-wait_until_running() {
-  local name="$1"; local timeout="${2:-25}"
-  local i=0 st="missing"
-  while (( i < timeout )); do
-    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo "missing")"
-    if [[ "$st" == "running" ]]; then return 0; fi
-    sleep 1; ((i++))
-  done
-  echo "[WAIT] $name chưa running (status: $st)"
-  return 1
-}
-
-cleanup_route() {
-  local idx="$1"
-  docker rm -f "${TUN_NAME_BASE}${idx}" >/dev/null 2>&1 || true
-  rm -f "resolv_${idx}.conf" || true
-}
-
-# ===================== CORE =====================
-start_route() {
-  local idx="$1"
-  local upstream="$2"
-  local t="${TUN_NAME_BASE}${idx}"
-  local resolv_file="resolv_${idx}.conf"
-
-  echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] Upstream: $upstream"
-
-  # 0) Validate
-  if ! validate_socks "$upstream"; then
-    echo "[ROUTE $idx] ❌ URL không hợp lệ → bỏ qua."
-    return 0
-  fi
-
-  # 1) Probe (lọc proxy chết)
-  if ! probe_proxy "$upstream"; then
-    echo "[ROUTE $idx] ❌ Proxy không phản hồi (probe fail) → bỏ qua."
-    return 0
-  fi
-
-  # 2) Cleanup cũ
-  cleanup_route "$idx"
-
-  # 3) resolv.conf trong namespace tun → ép DNS TCP (use-vc) và route qua proxy
-  cat > "$resolv_file" <<EOF
+# DNS đi qua proxy (TCP)
+cat > "$DNS_FILE" <<EOF
 options ndots:0
 options use-vc
 options attempts:2
 options timeout:3
-nameserver ${TUN_RESOLVER}
+nameserver 8.8.8.8
+nameserver 1.1.1.1
 EOF
 
-  # 4) Chạy tun2socks
-  #    - PROXY: tự đổi socks5h:// thành socks5:// cho tương thích tun2socks
-  #    - EXTRA_COMMANDS rỗng: KHÔNG bypass UDP/53; DNS đi theo đường tun/proxy
-  echo "[ROUTE $idx] Khởi chạy tun2socks..."
-  docker run -d --name "$t" --restart=always \
+validate_uri() {
+  local u="$1"
+  [[ "$u" =~ ^socks5h?://([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+$ ]]
+}
+
+probe_proxy() {
+  local u="$1"
+  curl -sSx "$u" -I "https://www.google.com" --max-time 8 >/dev/null 2>&1
+}
+
+wait_running() {
+  local name="$1" t=0
+  while (( t < 20 )); do
+    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo missing)"
+    [[ "$st" == "running" ]] && return 0
+    sleep 1; ((t++))
+  done
+  return 1
+}
+
+start_one() {
+  local idx="$1" raw="$2"
+  local name="${TUN_NAME_PREFIX}${UNIQUE_ID}${idx}"
+  [[ -z "$raw" ]] && return 0
+
+  echo "------------------------------------------------------------"
+  echo "[ROUTE $idx] Upstream: $raw"
+
+  if ! validate_uri "$raw"; then
+    echo "[ROUTE $idx] ❌ URI không hợp lệ"; return 0
+  fi
+  if ! probe_proxy "$raw"; then
+    echo "[ROUTE $idx] ❌ Proxy không phản hồi (probe fail)"; return 0
+  fi
+
+  # Đổi socks5h -> socks5 cho tun2socks
+  local proxy="${raw/socks5h:\/\//socks5://}"
+
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  docker run -d --name "$name" --restart=always \
     --cap-add=NET_ADMIN \
     -v /dev/net/tun:/dev/net/tun \
-    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
-    -e "PROXY=${upstream/socks5h:\/\//socks5://}" \
-    -e "LOGLEVEL=${TUN_LOGLEVEL}" \
+    -v "$PWD/$DNS_FILE":/etc/resolv.conf:ro \
+    -e "PROXY=$proxy" \
+    -e "LOGLEVEL=$LOGLEVEL" \
     -e "EXTRA_COMMANDS=" \
     "$IMG_TUN" >/dev/null || { echo "[ROUTE $idx] ❌ Lỗi khởi chạy"; return 0; }
 
-  # 5) Đợi container running
-  if ! wait_until_running "$t" 25; then
-    echo "[ROUTE $idx] ❌ Container chưa sẵn sàng. Log gần đây:"
-    docker logs --tail 80 "$t" || true
+  if ! wait_running "$name"; then
+    echo "[ROUTE $idx] ❌ Container chưa running. Logs:"
+    docker logs --tail 80 "$name" || true
     return 0
   fi
 
-  # 6) Chờ ổn định + set MTU (nếu có)
-  sleep 2
-  if [[ -n "$TUN_MTU" ]]; then
-    docker exec "$t" sh -c "ip link set dev tun0 mtu $TUN_MTU || true" >/dev/null 2>&1 || true
-  fi
+  [[ -n "$MTU" ]] && docker exec "$name" sh -c "ip link set dev tun0 mtu $MTU || true" >/dev/null 2>&1 || true
 
-  # 7) Kiểm tra IP egress (retry nếu namespace chưa join được)
   echo "[ROUTE $idx] ✅ Sẵn sàng. IP egress:"
   for try in 1 2 3; do
-    if docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me; then
-      echo
-      break
-    else
-      st="$(docker inspect -f '{{.State.Status}}' "$t" 2>/dev/null || echo missing)"
-      echo "[CHECK] Thử $try/3 thất bại (status: $st) → đợi 2s rồi thử lại..."
-      sleep 2
-      if [[ "$st" != "running" ]]; then
-        echo "[LOG] Dump log gần đây:"
-        docker logs --tail 80 "$t" || true
-      fi
+    if docker run --rm --network=container:"$name" curlimages/curl:latest -s https://ifconfig.me; then
+      echo; break
     fi
+    echo "[ROUTE $idx] thử $try/3… đợi 2s"; sleep 2
   done
 
-  echo
-  echo "[ROUTE $idx] Gắn container client:"
-  echo "  docker run ... --network=container:${t} <image> ..."
+  echo "[ROUTE $idx] Gắn app vào tuyến này:"
+  echo "  docker run ... --network=container:${name} <image> ..."
 }
 
 status_all() {
-  local i=1 t
-  for _ in "${UPSTREAMS[@]}"; do
-    t="${TUN_NAME_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$t"; then
-      printf "[STATUS] %s (%s) IP: " \
-        "$t" "$(docker inspect -f '{{.State.Status}}' "$t" 2>/dev/null)"
-      docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
-      echo
-    else
-      echo "[STATUS] $t: not running"
-    fi
-    ((i++))
+  for c in $(docker ps --format '{{.Names}}' | grep "^${TUN_NAME_PREFIX}${UNIQUE_ID}" || true); do
+    printf "[STATUS] %s (%s) IP: " "$c" "$(docker inspect -f '{{.State.Status}}' "$c")"
+    docker run --rm --network=container:"$c" curlimages/curl:latest -s https://ifconfig.me || true
+    echo
   done
 }
 
 down_all() {
-  echo "[CLEANUP] Xoá toàn bộ tuyến..."
-  local i=1
-  for _ in "${UPSTREAMS[@]}"; do
-    cleanup_route "$i"
-    ((i++))
-  done
+  echo "[CLEANUP] Xóa tất cả tuyến thuộc batch này…"
+  docker ps -a --format '{{.Names}}' | grep "^${TUN_NAME_PREFIX}${UNIQUE_ID}" | xargs -r docker rm -f
+  rm -f "$DNS_FILE" || true
   echo "[DONE]"
 }
 
-# ===================== CLI =====================
 case "${1:-up}" in
   up)
-    i=1
+    i=0
     for up in "${UPSTREAMS[@]}"; do
-      start_route "$i" "$up"
-      ((i++))
-      sleep 0.3
+      ((i++)); start_one "$i" "$up"; sleep 0.3
     done
-    echo
-    echo "✅ ĐÃ KHỞI TẠO (hoặc bỏ qua) ${#UPSTREAMS[@]} tuyến."
-    echo "👉 Dùng: docker run ... --network=container:tunN ..."
+    echo; echo "👉 Đã xử lý ${#UPSTREAMS[@]} proxy."
+    echo "👉 Dùng: docker run … --network=container:tun${UNIQUE_ID}N …"
     ;;
   status) status_all ;;
-  down)   down_all ;;
-  *)
-    echo "Usage: $0 [up|status|down]"
-    exit 1
-    ;;
+  down)   down_all   ;;
+  *) echo "Usage: $0 [up|status|down]" ;;
 esac
