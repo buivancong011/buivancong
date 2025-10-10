@@ -130,26 +130,23 @@ start_one() {
   fi
 
   # === Đo độ trễ: retry nếu gặp lỗi "cannot join network namespace" ===
-  local t=""; local attempt=0
+local t=""; local attempt=0
   while :; do
     attempt=$((attempt+1))
     t="$(docker run --rm --network=container:"$name" curlimages/curl -s -o /dev/null \
         -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s' \
-        https://www.cloudflare.com/cdn-cgi/trace 2>&1 || true)"
-
-    # Nếu lỗi do namespace (container restart/đổi PID), đợi rồi thử lại
+        https://1.1.1.1/cdn-cgi/trace 2>&1 || true)"
+    # retry nếu vừa đúng lúc container đổi namespace
     if echo "$t" | grep -qi 'cannot join network namespace'; then
-      [[ $attempt -lt 10 ]] && { sleep 1; continue; } || true
+      [[ $attempt -lt 10 ]] && { sleep 1; continue; }
     fi
     break
   done
-
-  # Nếu curl trả lỗi non-zero, in “FAIL” kèm gợi ý xem log
   if echo "$t" | grep -qiE 'cannot join network|error|FAIL'; then
     echo "[ROUTE $idx] latency: FAIL"
     echo "[ROUTE $idx] Gợi ý: docker logs $name ; docker inspect $name --format '{{json .State}}'"
   else
-    echo "[ROUTE $idx] latency: $t"
+    echo "[ROUTE $idx] latency(IP): $t"
   fi
 
   echo "[ROUTE $idx] RUNNING: $name"
