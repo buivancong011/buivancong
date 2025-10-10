@@ -1,0 +1,59 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+# Ảnh Myst
+IMG="mysteriumnetwork/myst:latest"
+
+# Tham số bổ sung cho Myst (không bắt buộc).
+# Ví dụ:
+#   MYST_EXTRA_ARGS="--agreed-privacy-policy --openvpn --wireguard"
+# hoặc các flag cấu hình khác theo tài liệu Myst.
+MYST_EXTRA_ARGS="${MYST_EXTRA_ARGS:-}"
+
+# Liệt kê tất cả container tên dạng sboxN đang RUNNING
+mapfile -t SBOXES < <(docker ps --format '{{.Names}}' | grep -E '^sbox[0-9]+$' || true)
+
+if [[ ${#SBOXES[@]} -eq 0 ]]; then
+  echo "[ERR] Không tìm thấy container sbox nào đang chạy."
+  echo "→ Hãy chạy các route sbox trước (ví dụ sbox1, sbox2, ...), rồi chạy lại script này."
+  exit 1
+fi
+
+echo "Tìm thấy ${#SBOXES[@]} route sbox: ${SBOXES[*]}"
+echo
+
+for s in "${SBOXES[@]}"; do
+  idx="${s#sbox}"                      # lấy số N từ sboxN
+  name="myst-${s}"                     # tên container Myst
+  vol="myst-data${idx}"                # volume lưu dữ liệu Myst (identity, cấu hình)
+
+  echo "------------------------------------------------------------"
+  echo "[*] Tạo Myst cho ${s}"
+  echo "    - container: ${name}"
+  echo "    - volume:    ${vol}"
+  echo "    - network:   container:${s}"
+
+  # Xoá Myst cũ (nếu có)
+  docker rm -f "${name}" >/dev/null 2>&1 || true
+
+  # Tạo volume nếu chưa có
+  docker volume create "${vol}" >/dev/null
+
+  # CHẠY Myst trong network namespace của sboxN
+  docker run -d \
+    --name "${name}" \
+    --network="container:${s}" \
+    --restart unless-stopped \
+    -v "${vol}:/var/lib/mysterium-node" \
+    "${IMG}" \
+    service --agreed-terms-and-conditions ${MYST_EXTRA_ARGS}
+
+  # In trạng thái nhanh
+  sleep 2
+  docker ps --format '{{.Names}}\t{{.Status}}' | grep -E "^${name}\b" || true
+done
+
+echo
+echo "✅ ĐÃ KHỞI TẠO Myst cho tất cả sbox đang chạy."
+echo "→ Xem log một node:  docker logs -f myst-sbox1"
+echo "→ Kiểm tra nhanh toàn bộ: docker ps --format '{{.Names}}\t{{.Status}}' | grep '^myst-'"
