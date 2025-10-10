@@ -2,126 +2,22 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách proxy SOCKS5 (khuyến nghị socks5h:// để ép DNS qua proxy)
-# Hỗ trợ:
-#   - socks5h://IP:PORT
-#   - socks5h://user:pass@IP:PORT
-#   - socks5://... (vẫn được, nhưng socks5h đảm bảo DNS qua proxy)
+# Danh sách proxy SOCKS5. Có thể để socks5h:// hoặc socks5://
+# (tun2socks chỉ hỗ trợ socks5://; script sẽ tự đổi socks5h -> socks5 khi chạy)
 UPSTREAMS=(
-"socks5h://156.239.215.254:1339"
-"socks5h://156.239.204.25:1339"
-"socks5h://156.239.201.49:1339"
-"socks5h://156.239.202.151:1339"
-"socks5h://156.239.201.0:1339"
-"socks5h://156.239.196.11:1339"
-"socks5h://156.239.203.251:1339"
-"socks5h://156.239.205.107:1339"
-"socks5h://156.239.198.52:1339"
-"socks5h://156.239.195.73:1339"
-"socks5h://156.239.197.103:1339"
-"socks5h://156.239.199.213:1339"
-"socks5h://156.239.199.167:1339"
-"socks5h://156.239.204.52:1339"
-"socks5h://156.239.202.70:1339"
-"socks5h://156.239.205.75:1339"
-"socks5h://156.239.204.206:1339"
-"socks5h://156.239.200.103:1339"
-"socks5h://156.239.193.62:1339"
-"socks5h://156.239.197.99:1339"
-"socks5h://156.239.198.0:1339"
-"socks5h://156.239.203.195:1339"
-"socks5h://156.239.197.224:1339"
-"socks5h://156.239.199.24:1339"
-"socks5h://156.239.193.140:1339"
-"socks5h://156.239.194.142:1339"
-"socks5h://156.239.207.106:1339"
-"socks5h://156.239.207.0:1339"
-"socks5h://156.239.203.225:1339"
-"socks5h://156.239.205.187:1339"
-"socks5h://156.239.200.202:1339"
-"socks5h://156.239.194.91:1339"
-"socks5h://156.239.203.182:1339"
-"socks5h://156.239.192.94:1339"
-"socks5h://156.239.198.202:1339"
-"socks5h://156.239.200.17:1339"
-"socks5h://156.239.205.239:1339"
-"socks5h://156.239.194.215:1339"
-"socks5h://156.239.200.138:1339"
-"socks5h://156.239.195.69:1339"
-"socks5h://156.239.192.177:1339"
-"socks5h://156.239.201.64:1339"
-"socks5h://156.239.205.121:1339"
-"socks5h://156.239.201.114:1339"
-"socks5h://156.239.192.11:1339"
-"socks5h://156.239.206.200:1339"
-"socks5h://156.239.199.234:1339"
-"socks5h://156.239.195.189:1339"
-"socks5h://156.239.207.222:1339"
-"socks5h://156.239.199.103:1339"
-"socks5h://156.239.197.3:1339"
-"socks5h://156.239.223.107:1339"
-"socks5h://156.239.213.44:1339"
-"socks5h://156.239.221.33:1339"
-"socks5h://156.239.220.58:1339"
-"socks5h://156.239.218.103:1339"
-"socks5h://156.239.212.135:1339"
-"socks5h://156.239.211.246:1339"
-"socks5h://156.239.217.126:1339"
-"socks5h://156.239.212.18:1339"
-"socks5h://156.239.219.82:1339"
-"socks5h://156.239.219.113:1339"
-"socks5h://156.239.215.30:1339"
-"socks5h://156.239.209.42:1339"
-"socks5h://156.239.216.53:1339"
-"socks5h://156.239.212.140:1339"
-"socks5h://156.239.215.254:1339"
-"socks5h://156.239.221.183:1339"
-"socks5h://156.239.211.102:1339"
-"socks5h://156.239.217.246:1339"
-"socks5h://156.239.213.129:1339"
-"socks5h://156.239.222.188:1339"
-"socks5h://156.239.216.106:1339"
-"socks5h://156.239.210.1:1339"
-"socks5h://156.239.209.140:1339"
-"socks5h://156.239.218.68:1339"
-"socks5h://156.239.216.147:1339"
-"socks5h://156.239.222.133:1339"  # <-- NOTE: original line had port 1338 at end, kept IP and changed to 1339
-"socks5h://156.239.213.255:1339"
-"socks5h://156.239.211.114:1339"
-"socks5h://156.239.215.101:1339"
-"socks5h://156.239.223.9:1339"
-"socks5h://156.239.221.24:1339"
-"socks5h://156.239.217.162:1339"
-"socks5h://156.239.220.207:1339"
-"socks5h://156.239.222.138:1339"
-"socks5h://156.239.221.166:1339"
-"socks5h://156.239.219.45:1339"
-"socks5h://156.239.217.172:1339"
-"socks5h://156.239.223.220:1339"
-"socks5h://156.239.215.54:1339"
-"socks5h://156.239.220.5:1339"
-"socks5h://156.239.214.6:1339"
-"socks5h://156.239.221.23:1339"
-"socks5h://156.239.221.105:1339"
-"socks5h://156.239.218.63:1339"
-"socks5h://156.239.222.201:1339"
-"socks5h://156.239.212.73:1339"
-"socks5h://156.239.219.187:1339"
-"socks5h://156.239.214.181:1339"
-"socks5h://156.239.217.223:1339"
-"socks5h://156.239.217.246:1339"
+  "socks5h://156.239.204.25:1339"
+  # thêm các proxy khác...
 )
 
-
-TUN_NAME_BASE="tun"                       # tên container base: tun1, tun2, ...
-IMG_TUN="xjasonlyu/tun2socks:v2.6.0"      # image tun2socks
+TUN_NAME_BASE="tun"                       # => tun1, tun2, ...
+IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
 TUN_LOGLEVEL="info"                       # debug|info|warn|error
 TUN_MTU=""                                # ví dụ "1400" nếu hay timeout
 TUN_RESOLVER="1.1.1.1"                    # 8.8.8.8 / 9.9.9.9 đều OK
 
 # Probe (lọc proxy chết trước khi tạo route)
-PROBE_MAX_RETRY=1                         # tổng (1 + PROBE_MAX_RETRY) lần thử
-PROBE_TIMEOUT=8                           # giây
+PROBE_MAX_RETRY=1
+PROBE_TIMEOUT=8
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -142,7 +38,6 @@ validate_socks() {
 
 probe_proxy_once() {
   local u="$1"
-  # dùng HEAD tới Google; socks5h sẽ kiểm tra cả DNS qua proxy
   curl -sSx "$u" -I "https://www.google.com" --max-time "$PROBE_TIMEOUT" >/dev/null 2>&1
 }
 
@@ -157,14 +52,12 @@ probe_proxy() {
 }
 
 wait_until_running() {
-  local name="$1"
-  local timeout="${2:-25}" # giây
+  local name="$1"; local timeout="${2:-25}"
   local i=0 st="missing"
   while (( i < timeout )); do
     st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo "missing")"
     if [[ "$st" == "running" ]]; then return 0; fi
-    sleep 1
-    ((i++))
+    sleep 1; ((i++))
   done
   echo "[WAIT] $name chưa running (status: $st)"
   return 1
@@ -201,9 +94,7 @@ start_route() {
   # 2) Cleanup cũ
   cleanup_route "$idx"
 
-  # 3) resolv.conf trong namespace tun
-  #    - use-vc: ép DNS qua TCP để tránh lỗi UDP/ASSOCIATE trên nhiều SOCKS5
-  #    - attempts/timeout: giảm treo
+  # 3) resolv.conf trong namespace tun → ép DNS TCP (use-vc) và route qua proxy
   cat > "$resolv_file" <<EOF
 options ndots:0
 options use-vc
@@ -213,15 +104,16 @@ nameserver ${TUN_RESOLVER}
 EOF
 
   # 4) Chạy tun2socks
-  #    EXTRA_COMMANDS="" → KHÔNG bypass UDP/53; DNS đi theo đường tun/proxy
+  #    - PROXY: tự đổi socks5h:// thành socks5:// cho tương thích tun2socks
+  #    - EXTRA_COMMANDS rỗng: KHÔNG bypass UDP/53; DNS đi theo đường tun/proxy
   echo "[ROUTE $idx] Khởi chạy tun2socks..."
   docker run -d --name "$t" --restart=always \
     --cap-add=NET_ADMIN \
     -v /dev/net/tun:/dev/net/tun \
     -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
-    -e PROXY="$upstream" \
-    -e LOGLEVEL="$TUN_LOGLEVEL" \
-    -e EXTRA_COMMANDS="" \
+    -e "PROXY=${upstream/socks5h:\/\//socks5://}" \
+    -e "LOGLEVEL=${TUN_LOGLEVEL}" \
+    -e "EXTRA_COMMANDS=" \
     "$IMG_TUN" >/dev/null || { echo "[ROUTE $idx] ❌ Lỗi khởi chạy"; return 0; }
 
   # 5) Đợi container running
@@ -231,7 +123,7 @@ EOF
     return 0
   fi
 
-  # 6) Chờ ổn định + set MTU (nếu đặt)
+  # 6) Chờ ổn định + set MTU (nếu có)
   sleep 2
   if [[ -n "$TUN_MTU" ]]; then
     docker exec "$t" sh -c "ip link set dev tun0 mtu $TUN_MTU || true" >/dev/null 2>&1 || true
