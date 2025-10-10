@@ -1,28 +1,30 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -Eeuo pipefail
 
-# ===================== CONFIG =====================
-# Danh sách proxy SOCKS5 có auth (port 1339) — format: user:pass@ip:port
-PROXIES=(
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.204.25:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.201.49:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.202.151:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.201.0:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.196.11:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.203.251:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.205.107:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.198.52:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.195.73:1339"
-"cao_nAEfN2:g2Bawi4kkDZyztX@156.239.197.103:1339"
-)
+# ========= USER CONFIG =========
+# Dán đầy đủ list SOCKS5 của bạn (cổng 1339) theo định dạng: ip:port:user:pass
+read -r -d '' PROXY_LIST <<'EOF'
+156.239.204.25:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.201.49:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.202.151:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.201.0:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.196.11:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.203.251:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.205.107:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.198.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.195.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+156.239.197.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX
+# ... (bạn có thể dán tiếp các dòng còn lại ở đây) ...
+EOF
 
+# MTU của TUN (có thể để 1500, hoặc giảm 1400 nếu hay timeouts)
+TUN_MTU=1500
+
+# ========= IMAGES =========
 IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
-NAME_BASE="sbox"
-TUN_MTU="1400"   # giảm nếu gặp fragmentation
 
-# ===================== PRECHECK =====================
-command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker"; exit 1; }
-
+# ========= PRECHECK =========
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
 if [[ ! -e /dev/net/tun ]]; then
   echo "[INFO] Tạo /dev/net/tun..."
   sudo mkdir -p /dev/net || true
@@ -30,161 +32,133 @@ if [[ ! -e /dev/net/tun ]]; then
   sudo chmod 666 /dev/net/tun || true
 fi
 
-# ===================== FUNCTIONS =====================
-mk_cfg() {
-  local idx="$1"
-  local userpass_hostport="$2"  # user:pass@host:port
-  local userpass="${userpass_hostport%@*}"
-  local hostport="${userpass_hostport#*@}"
-  local user="${userpass%%:*}"
-  local pass="${userpass#*:}"
-  local host="${hostport%%:*}"
-  local port="${hostport##*:}"
+usage() {
+  cat <<USAGE
+Usage:
+  $0 up         # khởi chạy tất cả sboxN (DNS đi qua proxy)
+  $0 status     # đo latency HTTPS (1.1.1.1) qua từng sboxN
+  $0 down       # xoá toàn bộ sboxN
+Gắn app vào route N:   docker run ... --network=container:sboxN <image> ...
+App CLI (DNS tại proxy): curl --socks5-hostname USER:PASS@IP:PORT https://...
+USAGE
+}
 
-  cat > "sbox_${idx}.json" <<EOF
+mk_sbox_config() {
+  # $1=idx  $2=ip  $3=port  $4=user  $5=pass
+  local idx="$1" ip="$2" port="$3" user="$4" pass="$5"
+  local cfg="sbox_${idx}.json"
+  cat > "$cfg" <<JSON
 {
-  "log": { "level": "warn" },
+  "log": { "level": "info" },
+
+  "dns": {
+    "servers": [
+      {
+        "tag": "dns-remote",
+        "address": "tls://1.1.1.1",
+        "address_resolver": "local",
+        "strategy": "prefer_ipv4",
+        "detour": "socks-out"
+      },
+      { "tag": "local", "address": "local" }
+    ],
+    "rules": [
+      { "outbound": ["any"], "server": "dns-remote" }
+    ],
+    "final": "dns-remote"
+  },
+
   "inbounds": [
     {
       "type": "tun",
-      "tag": "in-tun",
-      "interface_name": "${NAME_BASE}${idx}",
-      "address": ["172.31.${idx}.1/30"],     // <-- dùng "address" (mới)
+      "tag": "tun-in",
+      "inet4_address": "172.19.${idx}.1/30",
       "mtu": ${TUN_MTU},
-      "auto_route": true,
-      "strict_route": false,
       "stack": "system",
-      "sniff": true
+      "sniff": true,
+      "auto_route": true,
+      "strict_route": true
     }
   ],
+
   "outbounds": [
     {
       "type": "socks",
-      "tag": "upstream",
-      "server": "${host}",
+      "tag": "socks-out",
+      "server": "${ip}",
       "server_port": ${port},
       "version": "5",
       "username": "${user}",
       "password": "${pass}"
     },
     { "type": "direct", "tag": "direct" },
-    { "type": "block",  "tag": "block"  }
+    { "type": "block", "tag": "block" }
   ],
+
   "route": {
-    "final": "upstream",
-    "auto_detect_interface": true
+    "auto_detect_interface": true,
+    "final": "socks-out"
   }
 }
-EOF
+JSON
 }
 
-
-start_one() {
-  local idx="$1"
-  local up="$2"
-  local name="${NAME_BASE}${idx}"
-
+start_sbox() {
+  local idx="$1" ip="$2" port="$3" user="$4" pass="$5"
+  local name="sbox${idx}"
   docker rm -f "$name" >/dev/null 2>&1 || true
-  mk_cfg "$idx" "$up"
-
-  echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] SOCKS5: ${up}"
+  mk_sbox_config "$idx" "$ip" "$port" "$user" "$pass"
   docker run -d --name "$name" --restart=always \
     --cap-add=NET_ADMIN --device /dev/net/tun \
-    -v "$PWD/sbox_${idx}.json":/etc/sing-box/config.json:ro \
+    -v "$PWD/sbox_${idx}.json:/etc/sing-box/config.json:ro" \
     "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+}
 
-  # Đợi container thật sự running & không restarting
-  local ok=""
-  for _ in {1..20}; do
-    local st
-    st="$(docker inspect -f '{{.State.Status}} {{.State.Running}} {{.State.Restarting}}' "$name" 2>/dev/null || true)"
-    if [[ "$st" =~ running\ true\ false ]]; then ok="yes"; break; fi
+check_latency_ip() {
+  local idx="$1"
+  docker run --rm --network=container:sbox${idx} curlimages/curl \
+    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+    https://1.1.1.1 || true
+}
+
+cmd_up() {
+  local i=0
+  while IFS=: read -r ip port user pass; do
+    [[ -z "${ip:-}" || "${ip:0:1}" == "#" ]] && continue
+    i=$((i+1))
+    echo "------------------------------------------------------------"
+    echo "[ROUTE $i] SOCKS5: ${user}:${pass}@${ip}:${port}"
+    start_sbox "$i" "$ip" "$port" "$user" "$pass"
+    # đợi ngắn cho sbox lên
     sleep 0.5
-  done
-  if [[ -z "$ok" ]]; then
-    echo "[ROUTE $idx] ❌ Container không ổn định (restarting). Logs:"
-    docker logs "$name" || true
-    return
-  fi
-
-  # Set MTU (best-effort)
-  if [[ -n "${TUN_MTU}" ]]; then
-    docker exec "$name" sh -c "ip link set dev ${NAME_BASE}${idx} mtu ${TUN_MTU} || true" >/dev/null 2>&1 || true
-  fi
-
-  # Đo latency qua IP (không cần DNS), có retry khi join namespace lỗi
-  local t=""; local attempt=0
-  while :; do
-    attempt=$((attempt+1))
-    t="$(docker run --rm --network=container:"$name" curlimages/curl -s -o /dev/null \
-        -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s' \
-        https://1.1.1.1/cdn-cgi/trace 2>&1 || true)"
-    if echo "$t" | grep -qi 'cannot join network namespace'; then
-      [[ $attempt -lt 10 ]] && { sleep 1; continue; }
-    fi
-    break
-  done
-
-  if echo "$t" | grep -qiE 'cannot join network|error|FAIL'; then
-    echo "[ROUTE $idx] latency(IP): FAIL"
-    echo "[ROUTE $idx] Gợi ý: docker logs $name ; docker inspect $name --format '{{json .State}}'"
-  else
-    echo "[ROUTE $idx] latency(IP): $t"
-  fi
-
-  echo "[ROUTE $idx] RUNNING: $name"
-  echo "→ App SOCKS5H (DNS tại proxy):  curl --socks5-hostname USER:PASS@IP:PORT https://..."
-  echo "→ App chia sẻ netns:           docker run ... --network=container:${name} <image> ..."
-}
-
-stop_all() {
-  echo "[CLEANUP] Xoá toàn bộ ${NAME_BASE}* ..."
-  docker ps -a --format '{{.Names}}' | grep -E "^${NAME_BASE}[0-9]+$" | xargs -r docker rm -f
-  rm -f sbox_*.json
-  echo "[DONE]"
-}
-
-status_all() {
-  local names
-  names=$(docker ps --format '{{.Names}}' | grep -E "^${NAME_BASE}[0-9]+$" || true)
-  [[ -z "${names}" ]] && { echo "Không có ${NAME_BASE} nào đang chạy."; return; }
-  for n in $names; do
-    printf "%s  " "$n"
-    docker run --rm --network=container:"$n" curlimages/curl -s https://1.1.1.1/cdn-cgi/trace | sed -n 's/^ip=\(.*\)$/\1/p' || echo "FAIL"
-  done
+    echo -n "[ROUTE $i] latency(IP): "
+    check_latency_ip "$i"
+  done <<< "$PROXY_LIST"
   echo
+  echo "✅ ĐÃ KHỞI TẠO $(docker ps --format '{{.Names}}' | grep -c '^sbox' || true) ROUTES (sing-box, DNS qua proxy)."
+  echo "👉 Gắn app:  docker run ... --network=container:sboxN <image> ..."
+  echo "👉 App CLI SOCKS5H:  curl --socks5-hostname USER:PASS@IP:PORT https://..."
 }
 
-test_all() {
-  local names
-  names=$(docker ps --format '{{.Names}}' | grep -E "^${NAME_BASE}[0-9]+$" || true)
-  [[ -z "${names}" ]] && { echo "Không có ${NAME_BASE} nào đang chạy."; return; }
-  for n in $names; do
-    printf "%-8s " "$n"
-    docker run --rm --network=container:"$n" curlimages/curl -s -o /dev/null \
-      -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-      https://1.1.1.1/cdn-cgi/trace || echo "FAIL"
+cmd_status() {
+  for n in $(docker ps --format '{{.Names}}' | awk '/^sbox/{gsub("sbox","");print}'); do
+    printf "sbox%-3s " "$n"
+    check_latency_ip "$n"
   done
 }
 
-# ===================== CLI =====================
-case "${1:-up}" in
-  up)
-    i=1
-    for up in "${PROXIES[@]}"; do
-      start_one "$i" "$up"
-      ((i++))
-    done
-    echo
-    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box, KHÔNG DoH; test qua IP)."
-    echo "ℹ️  App thực tế: ưu tiên SOCKS5H để DNS resolve tại proxy."
-    ;;
-  status) status_all ;;
-  down)   stop_all ;;
-  test)   test_all ;;
-  *)
-    echo "Usage: $0 [up|status|down|test]"
-    exit 1
-    ;;
+cmd_down() {
+  echo "[CLEANUP] Xoá sboxN..."
+  for n in $(docker ps -a --format '{{.Names}}' | awk '/^sbox/{gsub("sbox","");print}'); do
+    docker rm -f "sbox${n}" >/dev/null 2>&1 || true
+    rm -f "sbox_${n}.json" || true
+  done
+  echo "✅ DONE."
+}
+
+case "${1:-}" in
+  up)     cmd_up ;;
+  status) cmd_status ;;
+  down)   cmd_down ;;
+  *)      usage; exit 1 ;;
 esac
