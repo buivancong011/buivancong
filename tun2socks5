@@ -1,21 +1,42 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -Eeuo pipefail
 
-# ======= CẤU HÌNH =======
-UPSTREAMS=(
-  "socks5://156.239.204.25:1339"
-  "socks5://156.239.201.49:1339"
-  "socks5://156.239.202.151:1339"
-  "socks5://156.239.201.0:1339"
-  "socks5://156.239.196.11:1339"
+# ===================== CONFIG =====================
+# Danh sách SOCKS5 (dạng: host:port hoặc user:pass@host:port)
+PROXIES=(
+"156.239.204.25:1339"
+"156.239.201.49:1339"
+"156.239.202.151:1339"
+"156.239.201.0:1339"
+"156.239.196.11:1339"
+"156.239.203.251:1339"
+"156.239.205.107:1339"
+"156.239.198.52:1339"
+"156.239.195.73:1339"
+"156.239.197.103:1339"
+"156.239.199.213:1339"
+"156.239.199.167:1339"
+"156.239.215.254:1339"
 )
-IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
-TUN_NAME_BASE="tun"
-TUN_LOGLEVEL="info"     # debug|info|warn|error
-TUN_MTU=""              # ví dụ "1400" nếu gặp timeout
 
-# ======= PRECHECK =======
-command -v docker >/dev/null 2>&1 || { echo "[ERR] Chưa cài Docker"; exit 1; }
+# Tên base container
+SB_NAME_BASE="net-proxy"        # net-proxy1, net-proxy2,...
+
+# Image
+IMG_SINGBOX="ghcr.io/sagernet/sing-box:latest"
+
+# DoH server (DNS sẽ đi qua proxy nhờ "detour": "proxy")
+DOH_ADDR="https://1.1.1.1/dns-query"
+
+# Log level
+SB_LOGLEVEL="info"              # debug|info|warn|error
+
+# File xuất IP
+OUT_FILE="route_ips.csv"
+
+# ===================== PRECHECK =====================
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Docker chưa cài."; exit 1; }
+
 if [[ ! -e /dev/net/tun ]]; then
   echo "[INFO] Tạo /dev/net/tun..."
   sudo mkdir -p /dev/net || true
@@ -23,114 +44,209 @@ if [[ ! -e /dev/net/tun ]]; then
   sudo chmod 600 /dev/net/tun || true
 fi
 
-# ======= HÀM PHỤ =======
+# ===================== FUNCTIONS =====================
 cleanup_one() {
   local idx="$1"
-  docker rm -f "${TUN_NAME_BASE}${idx}" >/dev/null 2>&1 || true
-  rm -f "resolv_${idx}.conf" || true
+  docker rm -f "${SB_NAME_BASE}${idx}" >/dev/null 2>&1 || true
+  rm -f "singbox_${idx}.json" || true
 }
 
-probe_socks5_tcp() {
-  # Test TCP qua proxy (không test DNS). Thành công => proxy mở cổng OK.
-  local proxy="$1"
-  curl -sS -x "$proxy" -I https://www.google.com --max-time 5 >/dev/null
+parse_proxy() {
+  # Input: "$1" = "host:port" hoặc "user:pass@host:port"
+  local raw="$1"
+  local user="" pass="" hostport="$raw" host="" port=""
+
+  if [[ "$raw" == *"@"* ]]; then
+    local creds="${raw%%@*}"; hostport="${raw#*@}"
+    user="${creds%%:*}"; pass="${creds#*:}"
+  fi
+  host="${hostport%%:*}"
+  port="${hostport##*:}"
+
+  echo "$user|$pass|$host|$port"
+}
+
+gen_singbox_config() {
+  local idx="$1"
+  local raw="$2"
+  local parsed; parsed=$(parse_proxy "$raw")
+  local user="${parsed%%|*}"; parsed="${parsed#*|}"
+  local pass="${parsed%%|*}"; parsed="${parsed#*|}"
+  local host="${parsed%%|*}"; local port="${parsed#*|}"
+  local cfg="singbox_${idx}.json"
+
+  # Khối outbound socks (thêm username/password nếu có)
+  local OUT_SOCKS
+  if [[ -n "$user" || -n "$pass" ]]; then
+    OUT_SOCKS=$(cat <<JSON
+{ "tag": "proxy", "type": "socks",
+  "server": "${host}", "server_port": ${port}, "version": "5",
+  "username": "${user}", "password": "${pass}"
+}
+JSON
+)
+  else
+    OUT_SOCKS=$(cat <<JSON
+{ "tag": "proxy", "type": "socks",
+  "server": "${host}", "server_port": ${port}, "version": "5"
+}
+JSON
+)
+  fi
+
+  cat > "$cfg" <<EOF
+{
+  "log": { "level": "${SB_LOGLEVEL}" },
+
+  "dns": {
+    "strategy": "prefer_ipv4",
+    "servers": [
+      { "tag": "doh", "address": "${DOH_ADDR}", "detour": "proxy" },
+      { "tag": "local", "address": "local" }
+    ]
+  },
+
+  "inbounds": [
+    {
+      "type": "tun",
+      "inet4_address": "172.19.${idx}.1/30",
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "system",
+      "sniff": true,
+      "sniff_override_destination": true
+    }
+  ],
+
+  "outbounds": [
+    ${OUT_SOCKS},
+    { "tag": "direct", "type": "direct" },
+    { "tag": "block", "type": "block" }
+  ],
+
+  "route": {
+    "rules": [
+      { "outbound": "proxy", "network": "tcp,udp" }
+    ]
+  }
+}
+EOF
 }
 
 start_one() {
   local idx="$1"
-  local proxy="$2"
-  local name="${TUN_NAME_BASE}${idx}"
-  local resolv="resolv_${idx}.conf"
+  local raw="$2"
 
   echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] Upstream: $proxy"
-
-  # Test nhanh proxy (TCP)
-  if ! probe_socks5_tcp "$proxy"; then
-    echo "[ROUTE $idx] ❌ Proxy không phản hồi TCP → bỏ qua."
-    return 0
-  fi
-
+  echo "[ROUTE $idx] Upstream: $raw"
   cleanup_one "$idx"
+  gen_singbox_config "$idx" "$raw"
 
-  # DNS: dùng DNS bình thường (không DoH, không socks5h). Nếu bạn muốn DNS qua proxy,
-  # ta cần ‘TCP hóa’ DNS hoặc overlay khác. Tạm thời dùng 1.1.1.1 để ổn định.
-  cat >"$resolv" <<EOF
-options ndots:0
-nameserver 1.1.1.1
-nameserver 1.0.0.1
-EOF
-
-  echo "[ROUTE $idx] Khởi chạy tun2socks..."
-  docker run -d --name "$name" --restart=always \
+  local sb="${SB_NAME_BASE}${idx}"
+  echo "[ROUTE $idx] Khởi chạy sing-box (TUN + DNS qua proxy)..."
+  docker run -d --name "$sb" --restart=always \
     --cap-add=NET_ADMIN \
-    -v /dev/net/tun:/dev/net/tun \
-    -v "$PWD/$resolv":/etc/resolv.conf:ro \
-    -e PROXY="$proxy" \
-    -e LOGLEVEL="$TUN_LOGLEVEL" \
-    -e EXTRA_COMMANDS="ip rule add iif lo ipproto udp dport 53 lookup main;" \
-    "$IMG_TUN" >/dev/null || { echo "[ROUTE $idx] ❌ Lỗi khởi chạy"; return 0; }
+    --device=/dev/net/tun \
+    -v "$PWD/singbox_${idx}.json:/etc/sing-box/config.json:ro" \
+    "$IMG_SINGBOX" run -c /etc/sing-box/config.json >/dev/null
 
-  [[ -n "$TUN_MTU" ]] && docker exec "$name" sh -c "ip link set dev tun0 mtu $TUN_MTU || true" >/dev/null 2>&1 || true
-
-  # Chờ container lên rồi check IP egress
-  for _ in 1 2 3; do
-    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
-    [[ "$st" == "running" ]] && break
-    sleep 1
+  # Đợi tuyến sẵn sàng (tối đa ~8s)
+  for _ in 1 2 3 4; do
+    sleep 2
+    if docker run --rm --network=container:"$sb" curlimages/curl:latest -s --max-time 6 https://ifconfig.me >/dev/null 2>&1; then
+      break
+    fi
   done
 
-  if [[ "$(docker inspect -f '{{.State.Status}}' "$name" || echo "")" != "running" ]]; then
-    echo "[ROUTE $idx] ❌ Container không chạy (status != running). Log:"
-    docker logs --tail=50 "$name" || true
-    return 0
+  # Test & lấy IP
+  local ip=""
+  ip=$(docker run --rm --network=container:"$sb" \
+        curlimages/curl:latest -s --max-time 10 https://ifconfig.me || true)
+
+  if [[ -n "$ip" ]]; then
+    echo "[ROUTE $idx] ✅ Hoạt động. Public IP: $ip"
+  else
+    echo "[ROUTE $idx] ⚠️ Không lấy được IP (có thể DNS/proxy lỗi)."
   fi
 
-  echo "[ROUTE $idx] ✅ Sẵn sàng. IP egress:"
-  docker run --rm --network=container:"$name" curlimages/curl:latest -s https://ifconfig.me || true
-  echo
-  echo "[ROUTE $idx] Gắn container client:"
-  echo "  docker run ... --network=container:${name} <image> ..."
+  # Gợi ý dùng tuyến này cho container khác
+  echo "👉 Dùng tuyến $idx:"
+  echo "   docker run --rm --network=container:${sb} curlimages/curl:latest -s https://ifconfig.me"
+}
+
+status_all() {
+  local i=1
+  for _ in "${PROXIES[@]}"; do
+    local sb="${SB_NAME_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$sb"; then
+      printf "[STATUS] %-12s " "$sb"
+      docker run --rm --network=container:"$sb" \
+        curlimages/curl:latest -s --max-time 6 https://ifconfig.me || true
+      docker ps --format ' - {{.Names}}: {{.Status}}' | grep -E "$sb" || true
+    else
+      echo "[STATUS] $sb: not running"
+    fi
+    ((i++))
+  done
+}
+
+write_ip_table() {
+  echo "route,proxy,public_ip" > "$OUT_FILE"
+  local i=1
+  for p in "${PROXIES[@]}"; do
+    local sb="${SB_NAME_BASE}${i}"
+    local ip=""
+    if docker ps --format '{{.Names}}' | grep -qx "$sb"; then
+      ip=$(docker run --rm --network=container:"$sb" \
+            curlimages/curl:latest -s --max-time 10 https://ifconfig.me || true)
+    fi
+    echo "${i},${p},${ip}" >> "$OUT_FILE"
+    ((i++))
+  done
+  echo "[INFO] Đã ghi bảng IP → $OUT_FILE"
 }
 
 down_all() {
-  echo "[CLEANUP] Xoá toàn bộ tuyến..."
+  echo "[CLEANUP] Xoá tất cả sing-box container..."
   local i=1
-  for _ in "${UPSTREAMS[@]}"; do
+  for _ in "${PROXIES[@]}"; do
     cleanup_one "$i"
     ((i++))
   done
   echo "[DONE]"
 }
 
-status_all() {
-  local i=1
-  for _ in "${UPSTREAMS[@]}"; do
-    local n="${TUN_NAME_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$n"; then
-      printf "[STATUS] %s IP: " "$n"
-      docker run --rm --network=container:"$n" curlimages/curl:latest -s https://ifconfig.me || true
-      echo
-    else
-      echo "[STATUS] $n: not running"
-    fi
-    ((i++))
-  done
-}
-
-# ======= CLI =======
+# ===================== CLI =====================
 case "${1:-up}" in
   up)
     i=1
-    for p in "${UPSTREAMS[@]}"; do
+    for p in "${PROXIES[@]}"; do
       start_one "$i" "$p"
       ((i++))
+      sleep 0.3
     done
+    write_ip_table
     echo
-    echo "✅ ĐÃ KHỞI TẠO (hoặc bỏ qua) ${#UPSTREAMS[@]} tuyến."
-    echo "👉 Dùng: docker run ... --network=container:tunN ..."
+    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} TUYẾN."
+    echo "👉 Kiểm tra nhanh: bash $0 status"
+    echo "👉 Bảng IP: $OUT_FILE"
     ;;
-  status) status_all ;;
-  down)   down_all ;;
-  *) echo "Usage: $0 [up|status|down]"; exit 1 ;;
+  status)
+    status_all
+    ;;
+  list)
+    if [[ -f "$OUT_FILE" ]]; then
+      echo "=== $OUT_FILE ==="
+      column -s, -t "$OUT_FILE" || cat "$OUT_FILE"
+    else
+      echo "[WARN] Chưa có $OUT_FILE — hãy chạy: bash $0 up"
+    fi
+    ;;
+  down)
+    down_all
+    ;;
+  *)
+    echo "Usage: $0 [up|status|list|down]"
+    exit 1
+    ;;
 esac
