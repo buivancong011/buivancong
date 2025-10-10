@@ -2,261 +2,279 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Khai báo upstream proxy dạng URI. Có thể trộn nhiều loại:
-# - HTTP(S):  http://user:pass@host:port
-# - SOCKS5:   socks5://user:pass@host:port
-# - Shadowsocks: ss://method:password@host:port
-# - VMess/Trojan/VLESS/...: để glider -forward tương ứng (xem docs glider)
-UPSTREAMS=(
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.204.25:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.201.49:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.202.151:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.201.0:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.196.11:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.203.251:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.205.107:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.198.52:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.195.73:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.197.103:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.199.213:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.199.167:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.204.52:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.202.70:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.205.75:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.204.206:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.200.103:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.193.62:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.197.99:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.198.0:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.203.195:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.197.224:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.199.24:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.193.140:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.194.142:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.207.106:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.207.0:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.203.225:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.205.187:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.200.202:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.194.91:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.203.182:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.192.94:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.198.202:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.200.17:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.205.239:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.194.215:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.200.138:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.195.69:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.192.177:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.201.64:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.205.121:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.201.114:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.192.11:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.206.200:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.199.234:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.195.189:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.207.222:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.199.103:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.197.3:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.223.107:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.213.44:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.221.33:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.220.58:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.218.103:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.212.135:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.211.246:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.217.126:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.212.18:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.219.82:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.219.113:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.215.30:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.209.42:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.216.53:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.212.140:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.215.254:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.221.183:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.211.102:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.217.246:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.213.129:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.222.188:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.216.106:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.210.1:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.209.140:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.218.68:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.216.147:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.222.133:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.213.255:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.211.114:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.215.101:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.223.9:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.221.24:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.217.162:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.220.207:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.222.138:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.221.166:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.219.45:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.217.172:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.223.220:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.215.54:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.220.5:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.214.6:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.221.23:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.221.105:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.218.63:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.222.201:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.212.73:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.219.187:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.214.181:1338"
-"http://cao_nAEfN2:g2Bawi4kkDZyztX@156.239.217.223:1338"
+# Danh sách SOCKS5: "ip:port:user:pass" (đã chuyển sang port 1339)
+PROXIES=(
+"156.239.204.25:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.201.49:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.202.151:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.201.0:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.196.11:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.203.251:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.205.107:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.198.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.195.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.197.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.199.213:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.199.167:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.204.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.202.70:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.205.75:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.204.206:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.200.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.193.62:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.197.99:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.198.0:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.203.195:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.197.224:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.199.24:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.193.140:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.194.142:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.207.106:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.207.0:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.203.225:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.205.187:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.200.202:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.194.91:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.203.182:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.192.94:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.198.202:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.200.17:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.205.239:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.194.215:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.200.138:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.195.69:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.192.177:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.201.64:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.205.121:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.201.114:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.192.11:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.206.200:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.199.234:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.195.189:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.207.222:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.199.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.197.3:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.223.107:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.213.44:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.221.33:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.220.58:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.218.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.212.135:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.211.246:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.217.126:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.212.18:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.219.82:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.219.113:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.215.30:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.209.42:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.216.53:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.212.140:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.215.254:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.221.183:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.211.102:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.217.246:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.213.129:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.222.188:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.216.106:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.210.1:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.209.140:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.218.68:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.216.147:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.222.133:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.213.255:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.211.114:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.215.101:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.223.9:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.221.24:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.217.162:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.220.207:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.222.138:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.221.166:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.219.45:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.217.172:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.223.220:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.215.54:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.220.5:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.214.6:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.221.23:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.221.105:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.218.63:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.222.201:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.212.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.219.187:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.214.181:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+"156.239.217.223:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 )
 
-
-
-
-
-# Cổng SOCKS5 lắng nghe trên host cho từng tuyến (tuyến i dùng START_SOCKS+i)
-START_SOCKS=1080
-
-# Tên base cho container theo tuyến
-GLIDER_NAME_BASE="glider"
-TUN_NAME_BASE="tun"
-DOH_NAME_BASE="doh"
-
-# Phiên bản image
-IMG_GLIDER="nadoo/glider:latest"
-IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
+# Image
+IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
 IMG_DOH="cloudflare/cloudflared:latest"
 
-# Log level cho tun2socks
-TUN_LOGLEVEL="info"   # debug|info|warn|error
+# Tên container base
+SBOX_BASE="sbox"
+DOH_BASE="doh"
 
-# MTU tuỳ tuyến (để trống để mặc định). Ví dụ 1400 nếu gặp timeouts:
-TUN_MTU=""            # ví dụ: "1400"
+# Tham số TUN
+MTU="1400"                  # giảm fragment/timeouts
+ENABLE_BBR=true             # bật BBR nhẹ
+ENABLE_TFO=true             # bật TCP Fast Open
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
-
-# Linux cần /dev/net/tun
 if [[ ! -e /dev/net/tun ]]; then
   echo "[INFO] Tạo /dev/net/tun..."
   sudo mkdir -p /dev/net || true
   sudo mknod /dev/net/tun c 10 200 || true
-  sudo chmod 600 /dev/net/tun || true
+  sudo chmod 666 /dev/net/tun || true
 fi
 
-# ===================== FUNCTIONS =====================
-cleanup_route() {
-  local idx="$1"
-  local g="${GLIDER_NAME_BASE}${idx}"
-  local t="${TUN_NAME_BASE}${idx}"
-  local d="${DOH_NAME_BASE}${idx}"
-  docker rm -f "$d" "$t" "$g" >/dev/null 2>&1 || true
+# ===================== FUNCS =====================
+mk_sbox_config() {
+  # $1: file, $2: ip, $3: port, $4: user, $5: pass
+  local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
+  cat > "$cfg" <<JSON
+{
+  "log": { "level": "warn" },
+
+  "dns": {
+    "servers": [
+      { "address": "https://1.1.1.1/dns-query", "detour": "proxy" },
+      { "address": "https://8.8.8.8/dns-query", "detour": "proxy" }
+    ],
+    "strategy": "ipv4_only"
+  },
+
+  "inbounds": [
+    {
+      "type": "tun",
+      "interface_name": "tun0",
+      "inet4_address": "172.19.0.1/30",
+      "auto_route": true,
+      "strict_route": false,
+      "sniff": true,
+      "mtu": ${MTU}
+    }
+  ],
+
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "type": "socks",
+      "server": "${ip}",
+      "server_port": ${port},
+      "version": "5",
+      "username": "${user}",
+      "password": "${pass}"
+    },
+    { "tag": "direct", "type": "direct" },
+    { "tag": "block",  "type": "block" }
+  ],
+
+  "route": {
+    "auto_detect_interface": true,
+    "final": "proxy"
+  }
+}
+JSON
 }
 
-start_route() {
-  local idx="$1"
-  local upstream="$2"
-  local socks_port=$((START_SOCKS + idx - 1))
+sysctl_optimize() {
+  if [[ "${ENABLE_BBR}" == true ]]; then
+    sudo sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1 || true
+    sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
+  fi
+  if [[ "${ENABLE_TFO}" == true ]]; then
+    sudo sysctl -w net.ipv4.tcp_fastopen=3 >/dev/null 2>&1 || true
+  fi
+}
 
-  local g="${GLIDER_NAME_BASE}${idx}"
-  local t="${TUN_NAME_BASE}${idx}"
-  local d="${DOH_NAME_BASE}${idx}"
-  local resolv_file="resolv_${idx}.conf"
+cleanup_one() {
+  local idx="$1"
+  local s="${SBOX_BASE}${idx}"
+  local d="${DOH_BASE}${idx}"
+  docker rm -f "$d" "$s" >/dev/null 2>&1 || true
+  rm -f "sbox_${idx}.json" || true
+}
+
+start_one() {
+  local idx="$1"
+  IFS=':' read -r ip port user pass <<<"$2"
+  local s="${SBOX_BASE}${idx}"
+  local d="${DOH_BASE}${idx}"
+  local cfg="sbox_${idx}.json"
 
   echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] Upstream: $upstream"
-  echo "[ROUTE $idx] SOCKS5 listen on host: ${socks_port}"
+  echo "[ROUTE $idx] SOCKS5: ${user}:${pass}@${ip}:${port}"
 
-  # 1) Cleanup cũ
-  cleanup_route "$idx"
+  cleanup_one "$idx"
+  mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
 
-  # 2) Tạo glider: chuyển mọi upstream -> SOCKS5 cục bộ
-  echo "[ROUTE $idx] Khởi chạy glider -> socks5://0.0.0.0:${socks_port}"
-  docker run -d --name "$g" --restart=always --network host "$IMG_GLIDER" \
-    -verbose \
-    -listen "socks5://0.0.0.0:${socks_port}" \
-    -forward "$upstream"
+  # sing-box (namespace riêng)
+  docker run -d --name "$s" --restart=always \
+    --cap-add=NET_ADMIN --device /dev/net/tun \
+    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
+    "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-  # 3) resolv.conf cục bộ (DNS sẽ hỏi 127.0.0.1 trong namespace tun)
-  cat > "$resolv_file" <<EOF
-options ndots:0
-nameserver 127.0.0.1
-EOF
-
-  # 4) tun2socks
-  #   PROXY trỏ tới SOCKS5 trên host qua địa chỉ bridge 172.17.0.1 (Linux Docker)
-  #   Nếu hệ khác, có thể đổi sang host.docker.internal:PORT (Docker Desktop)
-  echo "[ROUTE $idx] Khởi chạy tun2socks..."
-  docker run -d --name "$t" --restart=always \
-    --cap-add=NET_ADMIN \
-    -v /dev/net/tun:/dev/net/tun \
-    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
-    -e PROXY="socks5://172.17.0.1:${socks_port}" \
-    -e LOGLEVEL="$TUN_LOGLEVEL" \
-    -e EXTRA_COMMANDS="ip rule add iif lo ipproto udp dport 53 lookup main;" \
-    "$IMG_TUN"
-
-  # Tuỳ chọn set MTU nếu cấu hình
-  if [[ -n "${TUN_MTU}" ]]; then
-    echo "[ROUTE $idx] Set MTU=${TUN_MTU} (best-effort)"
-    docker exec -it "$t" sh -c "ip link set dev tun0 mtu ${TUN_MTU} || true"
-  fi
-
-  # 5) Cloudflared DoH trong cùng namespace với tun
-  echo "[ROUTE $idx] Khởi chạy cloudflared DoH..."
+  # DoH (cloudflared) cùng namespace
   docker run -d --name "$d" --restart=always \
-    --network=container:"$t" \
+    --network=container:"$s" \
     --user root \
-    "$IMG_DOH" \
-    proxy-dns --address 127.0.0.1 --port 53
+    "$IMG_DOH" proxy-dns --address 127.0.0.1 --port 53 >/dev/null
 
-  # 6) Kiểm tra IP qua tuyến
-  echo "[ROUTE $idx] Kiểm tra IP egress..."
-  docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
-  echo
-  echo "[ROUTE $idx] SẴN SÀNG. Gắn container vào tuyến này bằng:"
-  echo "  docker run ... --network=container:${t} <image> ..."
-}
+  # Kiểm tra nhanh độ trễ
+  printf "[ROUTE %d] latency: " "$idx"
+  docker run --rm --network=container:"$s" curlimages/curl:latest \
+    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+    https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
 
-down_all() {
-  echo "[CLEANUP] Xoá toàn bộ tuyến..."
-  local i=1
-  for _ in "${UPSTREAMS[@]}"; do
-    cleanup_route "$i"
-    rm -f "resolv_${i}.conf" || true
-    ((i++))
-  done
-  echo "[DONE] Đã xoá."
+  echo "[ROUTE $idx] RUNNING: $s + $d"
+  echo "→ Gắn app vào route này:  docker run ... --network=container:${s} <image> ..."
 }
 
 status_all() {
   local i=1
-  for _ in "${UPSTREAMS[@]}"; do
-    local t="${TUN_NAME_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$t"; then
-      printf "[STATUS] %s " "$t"
-      docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+  for _ in "${PROXIES[@]}"; do
+    local s="${SBOX_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$s"; then
+      printf "[route%02d] " "$i"
+      docker run --rm --network=container:"$s" curlimages/curl:latest \
+        -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+        https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
     else
-      echo "[STATUS] $t: not running"
+      echo "[route$(printf %02d "$i")] stopped"
     fi
     ((i++))
   done
 }
 
+down_all() {
+  echo "[CLEANUP] stopping all routes..."
+  local i=1
+  for _ in "${PROXIES[@]}"; do
+    cleanup_one "$i"
+    ((i++))
+  done
+  echo "[DONE]"
+}
+
+pull_images() {
+  docker pull "$IMG_SBOX" >/dev/null
+  docker pull "$IMG_DOH"  >/dev/null
+}
+
 # ===================== CLI =====================
-# ./script.sh          -> khởi chạy tất cả tuyến
-# ./script.sh status   -> in IP từng tuyến
-# ./script.sh down     -> xoá toàn bộ tuyến
 case "${1:-up}" in
   up)
+    sysctl_optimize
+    pull_images
     i=1
-    for up in "${UPSTREAMS[@]}"; do
-      start_route "$i" "$up"
+    for spec in "${PROXIES[@]}"; do
+      start_one "$i" "$spec"
       ((i++))
     done
     echo
-    echo "✅ ĐÃ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN."
-    echo "👉 Gắn container client vào tuyến N:  --network=container:tunN"
+    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (mỗi route: sing-box + DoH)."
+    echo "ℹ️  Host không đổi route; chỉ container nào gắn --network=container:sboxN mới đi qua proxy tương ứng."
     ;;
   status)
     status_all
