@@ -1,0 +1,134 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+# ===================== CONFIG =====================
+# Upstream SOCKS5 (có hỗ trợ DNS)
+# Định dạng: socks5h://user:pass@ip:port
+UPSTREAMS=(
+"socks5h://user20578:1759040270@103.82.26.78:20578"
+"socks5h://user28436:1757303095@103.82.26.173:28436"
+"socks5h://user11852:1758265267@103.82.25.199:11852"
+"socks5h://user28467:1757322636@103.82.26.173:28467"
+"socks5h://user20967:1758880841@103.82.25.188:20967"
+)
+
+TUN_NAME_BASE="tun"
+IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
+
+# TUN2SOCKS log level: debug | info | warn | error
+TUN_LOGLEVEL="info"
+
+# Gợi ý: nếu thấy timeout trên tuyến xa, có thể đặt MTU = 1400
+TUN_MTU=""
+
+# ===================== PRECHECK =====================
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Docker chưa cài."; exit 1; }
+
+if [[ ! -e /dev/net/tun ]]; then
+  echo "[INFO] Tạo /dev/net/tun..."
+  sudo mkdir -p /dev/net || true
+  sudo mknod /dev/net/tun c 10 200 || true
+  sudo chmod 600 /dev/net/tun || true
+fi
+
+# ===================== FUNCTIONS =====================
+validate_socks5() {
+  local u="$1"
+  [[ "$u" =~ ^socks5h://[^:@]+:[^@]+@([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+$ ]]
+}
+
+probe_socks5() {
+  local u="$1"
+  curl -sSx "$u" -I "https://www.google.com" --max-time 8 >/dev/null 2>&1
+}
+
+cleanup_route() {
+  local idx="$1"
+  docker rm -f "${TUN_NAME_BASE}${idx}" >/dev/null 2>&1 || true
+  rm -f "resolv_${idx}.conf" || true
+}
+
+start_route() {
+  local idx="$1"
+  local upstream="$2"
+  local t="${TUN_NAME_BASE}${idx}"
+  local resolv_file="resolv_${idx}.conf"
+
+  echo "------------------------------------------------------------"
+  echo "[ROUTE $idx] Upstream: $upstream"
+
+  if ! validate_socks5 "$upstream"; then
+    echo "[ROUTE $idx] ❌ Upstream SOCKS5 không hợp lệ → bỏ qua."
+    return 0
+  fi
+  if ! probe_socks5 "$upstream"; then
+    echo "[ROUTE $idx] ❌ Upstream SOCKS5 không phản hồi → bỏ qua."
+    return 0
+  fi
+
+  cleanup_route "$idx"
+
+  # DNS sẽ đi qua SOCKS5h, không cần DoH
+  cat > "$resolv_file" <<EOF
+options ndots:0
+nameserver 1.1.1.1
+EOF
+
+  echo "[ROUTE $idx] Khởi chạy tun2socks..."
+  docker run -d --name "$t" --restart=always \
+    --cap-add=NET_ADMIN \
+    -v /dev/net/tun:/dev/net/tun \
+    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
+    -e PROXY="$upstream" \
+    -e LOGLEVEL="$TUN_LOGLEVEL" \
+    -e EXTRA_COMMANDS="ip rule add iif lo ipproto udp dport 53 lookup main;" \
+    "$IMG_TUN" >/dev/null || { echo "[ROUTE $idx] ❌ Lỗi khởi chạy"; return 0; }
+
+  [[ -n "$TUN_MTU" ]] && docker exec "$t" sh -c "ip link set dev tun0 mtu $TUN_MTU || true" >/dev/null 2>&1 || true
+
+  echo "[ROUTE $idx] ✅ Sẵn sàng. Kiểm tra IP:"
+  docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+  echo
+}
+
+status_all() {
+  local i=1
+  for _ in "${UPSTREAMS[@]}"; do
+    local t="${TUN_NAME_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$t"; then
+      printf "[STATUS] %s IP: " "$t"
+      docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+    else
+      echo "[STATUS] $t: not running"
+    fi
+    ((i++))
+  done
+}
+
+down_all() {
+  echo "[CLEANUP] Xoá toàn bộ tuyến..."
+  local i=1
+  for _ in "${UPSTREAMS[@]}"; do
+    cleanup_route "$i"
+    ((i++))
+  done
+  echo "[DONE]"
+}
+
+# ===================== CLI =====================
+case "${1:-up}" in
+  up)
+    i=1
+    for up in "${UPSTREAMS[@]}"; do
+      start_route "$i" "$up"
+      ((i++))
+      sleep 0.2
+    done
+    echo
+    echo "✅ ĐÃ KHỞI TẠO (hoặc bỏ qua) ${#UPSTREAMS[@]} tuyến."
+    echo "👉 Gắn container client vào tuyến N:  --network=container:tunN"
+    ;;
+  status) status_all ;;
+  down)   down_all ;;
+  *)      echo "Usage: $0 [up|status|down]"; exit 1 ;;
+esac
