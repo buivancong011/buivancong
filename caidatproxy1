@@ -51,8 +51,8 @@ mk_sbox_config() {
 
   "dns": {
     "servers": [
-      { "address": "8.8.8.8" },
-      { "address": "1.1.1.1" }
+      { "tag": "dns1", "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
+      { "tag": "dns2", "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
     ],
     "strategy": "ipv4_only"
   },
@@ -84,6 +84,7 @@ mk_sbox_config() {
   ],
 
   "route": {
+    "default_domain_resolver": "dns1",
     "auto_detect_interface": true,
     "rules": [
       { "port": 53, "outbound": "direct" }
@@ -93,6 +94,7 @@ mk_sbox_config() {
 }
 JSON
 }
+
 
 
 sysctl_optimize() {
