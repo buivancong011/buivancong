@@ -99,11 +99,17 @@ JSON
   "log": { "level": "${SB_LOGLEVEL}" },
 
   "dns": {
-    "strategy": "prefer_ipv4",
-    "servers": [
-      { "tag": "doh", "address": "${DOH_ADDR}", "detour": "proxy" },
-      { "tag": "local", "address": "local" }
-    ]
+  "strategy": "prefer_ipv4",
+  "servers": [
+    {
+      "tag": "doh",
+      "address": "https://1.1.1.1/dns-query",
+      "server_name": "cloudflare-dns.com",
+      "detour": "proxy"
+    },
+    { "tag": "local", "address": "local" }
+  ]
+}
   },
 
   "inbounds": [
