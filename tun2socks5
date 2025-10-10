@@ -2,11 +2,10 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách proxy SOCKS5. Khuyến nghị dùng socks5h:// để DNS đi qua proxy.
-# Hỗ trợ:
+# Khuyến nghị dùng socks5h:// để chắc chắn DNS qua proxy
+# Có thể là:
 #  - socks5h://IP:PORT
 #  - socks5h://user:pass@IP:PORT
-#  - (được) socks5://... nhưng nên dùng socks5h để chắc DNS qua proxy
 UPSTREAMS=(
 "socks5h://156.239.215.254:1339"
 "socks5h://156.239.204.25:1339"
@@ -122,16 +121,16 @@ IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
 # Log level: debug | info | warn | error
 TUN_LOGLEVEL="info"
 
-# MTU tùy chọn (để trống = mặc định). Nếu hay timeout, thử 1400.
+# MTU (để trống = mặc định). Nếu hay timeout, thử 1400.
 TUN_MTU=""
 
-# Resolver trong namespace của tun (truy vấn DNS sẽ đi QUa proxy nếu dùng socks5h
-# hoặc nếu tất cả traffic của namespace đi ra qua tun2socks).
-TUN_RESOLVER="1.1.1.1"   # có thể đổi 8.8.8.8 / 9.9.9.9
+# DNS resolver bên trong namespace của tun.
+# Do đã ép TCP (use-vc), truy vấn DNS sẽ đi qua proxy an toàn.
+TUN_RESOLVER="1.1.1.1"     # có thể đổi 8.8.8.8 / 9.9.9.9
 
-# Probe
-PROBE_MAX_RETRY=1    # số lần thử lại probe (tổng 1+ lần)
-PROBE_TIMEOUT=8      # giây
+# Probe để lọc proxy chết trước khi khởi chạy tuyến
+PROBE_MAX_RETRY=1          # số lần thử lại (tổng 1+ lần)
+PROBE_TIMEOUT=8            # giây
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -152,7 +151,7 @@ validate_socks() {
 
 probe_proxy_once() {
   local u="$1"
-  # Dùng HEAD tới Google; với socks5h sẽ test cả DNS qua proxy
+  # Với socks5h sẽ test cả DNS qua proxy
   curl -sSx "$u" -I "https://www.google.com" --max-time "$PROBE_TIMEOUT" >/dev/null 2>&1
 }
 
@@ -168,13 +167,12 @@ probe_proxy() {
 
 wait_until_running() {
   local name="$1"
-  local timeout="${2:-25}"
+  local timeout="${2:-25}"   # giây
   local i=0 st="missing"
   while (( i < timeout )); do
     st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo "missing")"
     if [[ "$st" == "running" ]]; then return 0; fi
-    sleep 1
-    ((i++))
+    sleep 1; ((i++))
   done
   echo "[WAIT] $name chưa running (status: $st)"
   return 1
@@ -195,13 +193,13 @@ start_route() {
   echo "------------------------------------------------------------"
   echo "[ROUTE $idx] Upstream: $upstream"
 
-  # 0) Validate
+  # 0) Validate URL
   if ! validate_socks "$upstream"; then
     echo "[ROUTE $idx] ❌ URL không hợp lệ → bỏ qua."
     return 0
   fi
 
-  # 1) Probe (lọc proxy chết)
+  # 1) Probe proxy (lọc upstream chết)
   if ! probe_proxy "$upstream"; then
     echo "[ROUTE $idx] ❌ Proxy không phản hồi (probe fail) → bỏ qua."
     return 0
@@ -210,87 +208,14 @@ start_route() {
   # 2) Cleanup cũ
   cleanup_route "$idx"
 
-  # 3) resolv.conf trong namespace tun
+  # 3) resolv.conf trong namespace tun — ép DNS dùng TCP (use-vc)
   cat > "$resolv_file" <<EOF
 options ndots:0
+options use-vc
+options attempts:2
+options timeout:3
 nameserver ${TUN_RESOLVER}
 EOF
 
   # 4) Chạy tun2socks
-  # LƯU Ý: EXTRA_COMMANDS="" để KHÔNG bypass UDP/53 → DNS đi theo đường tun/proxy
-  echo "[ROUTE $idx] Khởi chạy tun2socks..."
-  docker run -d --name "$t" --restart=always \
-    --cap-add=NET_ADMIN \
-    -v /dev/net/tun:/dev/net/tun \
-    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
-    -e PROXY="$upstream" \
-    -e LOGLEVEL="$TUN_LOGLEVEL" \
-    -e EXTRA_COMMANDS="" \
-    "$IMG_TUN" >/dev/null || { echo "[ROUTE $idx] ❌ Lỗi khởi chạy"; return 0; }
-
-  # 5) Đợi container vào trạng thái running
-  if ! wait_until_running "$t" 25; then
-    echo "[ROUTE $idx] ❌ Container chưa sẵn sàng. Log gần đây:"
-    docker logs --tail 80 "$t" || true
-    return 0
-  fi
-
-  # 6) MTU (nếu cấu hình)
-  if [[ -n "$TUN_MTU" ]]; then
-    docker exec "$t" sh -c "ip link set dev tun0 mtu $TUN_MTU || true" >/dev/null 2>&1 || true
-  fi
-
-  # 7) Kiểm tra IP
-  echo "[ROUTE $idx] ✅ Sẵn sàng. IP egress:"
-  docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
-  echo
-  echo "[ROUTE $idx] Gắn container client:"
-  echo "  docker run ... --network=container:${t} <image> ..."
-}
-
-status_all() {
-  local i=1 t
-  for _ in "${UPSTREAMS[@]}"; do
-    t="${TUN_NAME_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$t"; then
-      printf "[STATUS] %s (%s) IP: " \
-        "$t" "$(docker inspect -f '{{.State.Status}}' "$t" 2>/dev/null)"
-      docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
-      echo
-    else
-      echo "[STATUS] $t: not running"
-    fi
-    ((i++))
-  done
-}
-
-down_all() {
-  echo "[CLEANUP] Xoá toàn bộ tuyến..."
-  local i=1
-  for _ in "${UPSTREAMS[@]}"; do
-    cleanup_route "$i"
-    ((i++))
-  done
-  echo "[DONE]"
-}
-
-# ===================== CLI =====================
-case "${1:-up}" in
-  up)
-    i=1
-    for up in "${UPSTREAMS[@]}"; do
-      start_route "$i" "$up"
-      ((i++))
-      sleep 0.3
-    done
-    echo
-    echo "✅ ĐÃ KHỞI TẠO (hoặc bỏ qua) ${#UPSTREAMS[@]} tuyến."
-    echo "👉 Dùng: docker run ... --network=container:tunN ..."
-    ;;
-  status) status_all ;;
-  down)   down_all ;;
-  *)
-    echo "Usage: $0 [up|status|down]"
-    exit 1
-    ;;
-esac
+  # LƯU Ý: EXTRA_COMMANDS="" để KHÔNG bypass UDP/53 → toàn bộ DNS của namespace vẫn đi qua tun (và do use-vc
