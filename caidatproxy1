@@ -104,58 +104,59 @@ start_one() {
     -v "$PWD/sbox_${idx}.json":/etc/sing-box/config.json:ro \
     "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-  # Đợi container lên (tối đa ~4s)
-  for _ in {1..8}; do
-    state="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
-    [[ "$state" == "running" ]] && break || sleep 0.5
+  # === Wait until the container is actually RUNNING and not RESTARTING ===
+  # Chờ tối đa ~10s (20 x 0.5s)
+  local ok=""
+  for _ in {1..20}; do
+    # Lấy state + restarting flag
+    local st; st="$(docker inspect -f '{{.State.Status}} {{.State.Running}} {{.State.Restarting}}' "$name" 2>/dev/null || true)"
+    # Ví dụ: "running true false"
+    if [[ "$st" =~ running\ true\ false ]]; then
+      ok="yes"
+      break
+    fi
+    sleep 0.5
   done
 
-  if [[ "${state:-}" != "running" ]]; then
-    echo "[ROUTE $idx] ❌ không chạy được. Logs:"
+  if [[ -z "$ok" ]]; then
+    echo "[ROUTE $idx] ❌ Container không ổn định (vẫn restarting). Logs:"
     docker logs "$name" || true
     return
   fi
 
-  # Đo độ trễ nhanh (DNS+TLS theo đường proxy; app thực khuyến nghị dùng socks5h)
-  local t
-  t=$(docker run --rm --network=container:"$name" curlimages/curl -s -o /dev/null \
-      -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s' \
-      https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL")
-  echo "[ROUTE $idx] latency: $t"
+  # Set MTU nếu cần (best-effort)
+  if [[ -n "${TUN_MTU}" ]]; then
+    docker exec "$name" sh -c "ip link set dev ${NAME_BASE}${idx} mtu ${TUN_MTU} || true" >/dev/null 2>&1 || true
+  fi
+
+  # === Đo độ trễ: retry nếu gặp lỗi "cannot join network namespace" ===
+  local t=""; local attempt=0
+  while :; do
+    attempt=$((attempt+1))
+    t="$(docker run --rm --network=container:"$name" curlimages/curl -s -o /dev/null \
+        -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s' \
+        https://www.cloudflare.com/cdn-cgi/trace 2>&1 || true)"
+
+    # Nếu lỗi do namespace (container restart/đổi PID), đợi rồi thử lại
+    if echo "$t" | grep -qi 'cannot join network namespace'; then
+      [[ $attempt -lt 10 ]] && { sleep 1; continue; } || true
+    fi
+    break
+  done
+
+  # Nếu curl trả lỗi non-zero, in “FAIL” kèm gợi ý xem log
+  if echo "$t" | grep -qiE 'cannot join network|error|FAIL'; then
+    echo "[ROUTE $idx] latency: FAIL"
+    echo "[ROUTE $idx] Gợi ý: docker logs $name ; docker inspect $name --format '{{json .State}}'"
+  else
+    echo "[ROUTE $idx] latency: $t"
+  fi
+
   echo "[ROUTE $idx] RUNNING: $name"
-  echo "→ App hỗ trợ SOCKS5H:   curl --socks5-hostname USER:PASS@${host}:${port} https://..."
+  echo "→ App hỗ trợ SOCKS5H:   curl --socks5-hostname USER:PASS@IP:PORT https://..."
   echo "→ App container chia sẻ: docker run ... --network=container:${name} <image> ..."
 }
 
-stop_all() {
-  echo "[CLEANUP] Xoá toàn bộ ${NAME_BASE}* ..."
-  docker ps -a --format '{{.Names}}' | grep -E "^${NAME_BASE}[0-9]+$" | xargs -r docker rm -f
-  rm -f sbox_*.json
-  echo "[DONE]"
-}
-
-status_all() {
-  local names
-  names=$(docker ps --format '{{.Names}}' | grep -E "^${NAME_BASE}[0-9]+$" || true)
-  [[ -z "${names}" ]] && { echo "Không có ${NAME_BASE} nào đang chạy."; return; }
-  for n in $names; do
-    printf "%s  " "$n"
-    docker run --rm --network=container:"$n" curlimages/curl -s https://api.ipify.org || echo "FAIL"
-  done
-  echo
-}
-
-test_all() {
-  local names
-  names=$(docker ps --format '{{.Names}}' | grep -E "^${NAME_BASE}[0-9]+$" || true)
-  [[ -z "${names}" ]] && { echo "Không có ${NAME_BASE} nào đang chạy."; return; }
-  for n in $names; do
-    printf "%-8s " "$n"
-    docker run --rm --network=container:"$n" curlimages/curl -s -o /dev/null \
-      -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-      https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
-  done
-}
 
 # ===================== CLI =====================
 case "${1:-up}" in
