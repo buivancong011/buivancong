@@ -51,8 +51,8 @@ mk_sbox_config() {
 
   "dns": {
     "servers": [
-      "8.8.8.8",
-      "1.1.1.1"
+      { "address": "8.8.8.8" },
+      { "address": "1.1.1.1" }
     ],
     "strategy": "ipv4_only"
   },
@@ -61,7 +61,7 @@ mk_sbox_config() {
     {
       "type": "tun",
       "interface_name": "tun0",
-      "inet4_address": "172.19.0.1/30",
+      "address": ["172.19.0.1/30"],
       "auto_route": true,
       "strict_route": false,
       "sniff": true,
