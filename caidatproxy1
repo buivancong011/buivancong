@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách SOCKS5: "ip:port:user:pass" (đã chuyển sang port 1339)
+# Danh sách SOCKS5 dạng "ip:1339:user:pass" (đã chuyển qua 1339)
 PROXIES=(
 "156.239.204.25:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.201.49:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
@@ -14,110 +14,23 @@ PROXIES=(
 "156.239.198.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.195.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.197.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.199.213:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.199.167:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.204.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.202.70:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.205.75:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.204.206:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.200.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.193.62:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.197.99:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.198.0:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.203.195:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.197.224:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.199.24:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.193.140:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.194.142:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.207.106:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.207.0:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.203.225:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.205.187:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.200.202:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.194.91:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.203.182:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.192.94:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.198.202:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.200.17:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.205.239:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.194.215:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.200.138:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.195.69:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.192.177:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.201.64:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.205.121:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.201.114:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.192.11:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.206.200:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.199.234:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.195.189:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.207.222:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.199.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.197.3:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.223.107:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.213.44:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.221.33:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.220.58:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.218.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.212.135:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.211.246:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.217.126:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.212.18:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.219.82:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.219.113:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.215.30:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.209.42:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.216.53:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.212.140:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.215.254:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.221.183:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.211.102:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.217.246:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.213.129:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.222.188:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.216.106:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.210.1:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.209.140:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.218.68:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.216.147:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.222.133:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.213.255:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.211.114:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.215.101:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.223.9:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.221.24:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.217.162:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.220.207:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.222.138:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.221.166:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.219.45:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.217.172:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.223.220:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.215.54:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.220.5:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.214.6:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.221.23:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.221.105:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.218.63:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.222.201:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.212.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.219.187:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.214.181:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-"156.239.217.223:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
+# ... có thể dán thêm toàn bộ list của bạn ở đây ...
 )
 
-# Image
+# Ảnh container
 IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
-IMG_DOH="cloudflare/cloudflared:latest"
 
-# Tên container base
+# Tên base cho container theo tuyến
 SBOX_BASE="sbox"
-DOH_BASE="doh"
 
-# Tham số TUN
-MTU="1400"                  # giảm fragment/timeouts
-ENABLE_BBR=true             # bật BBR nhẹ
-ENABLE_TFO=true             # bật TCP Fast Open
+# Tối ưu TUN
+MTU="1400"
+ENABLE_BBR=true
+ENABLE_TFO=true
+
+# DNS mặc định cho container sbox (không DoH, không qua SOCKS)
+# Lưu ý: khi app chạy --network=container:sboxN thì app sẽ dùng DNS của sboxN này.
+RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -138,8 +51,8 @@ mk_sbox_config() {
 
   "dns": {
     "servers": [
-      { "address": "https://1.1.1.1/dns-query", "detour": "proxy" },
-      { "address": "https://8.8.8.8/dns-query", "detour": "proxy" }
+      "8.8.8.8",
+      "1.1.1.1"
     ],
     "strategy": "ipv4_only"
   },
@@ -172,6 +85,9 @@ mk_sbox_config() {
 
   "route": {
     "auto_detect_interface": true,
+    "rules": [
+      { "port": 53, "outbound": "direct" }
+    ],
     "final": "proxy"
   }
 }
@@ -191,43 +107,44 @@ sysctl_optimize() {
 cleanup_one() {
   local idx="$1"
   local s="${SBOX_BASE}${idx}"
-  local d="${DOH_BASE}${idx}"
-  docker rm -f "$d" "$s" >/dev/null 2>&1 || true
-  rm -f "sbox_${idx}.json" || true
+  docker rm -f "$s" >/dev/null 2>&1 || true
+  rm -f "sbox_${idx}.json" "resolv_${idx}.conf" >/dev/null 2>&1 || true
 }
 
 start_one() {
   local idx="$1"
   IFS=':' read -r ip port user pass <<<"$2"
   local s="${SBOX_BASE}${idx}"
-  local d="${DOH_BASE}${idx}"
   local cfg="sbox_${idx}.json"
+  local rsv="resolv_${idx}.conf"
 
   echo "------------------------------------------------------------"
   echo "[ROUTE $idx] SOCKS5: ${user}:${pass}@${ip}:${port}"
 
   cleanup_one "$idx"
   mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
+  printf "%s\n" "$RESOLV_CONTENT" > "$rsv"
 
-  # sing-box (namespace riêng)
+  # sing-box (namespace riêng), mount resolv.conf (DNS -> direct)
   docker run -d --name "$s" --restart=always \
     --cap-add=NET_ADMIN --device /dev/net/tun \
     -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
+    -v "$PWD/$rsv":/etc/resolv.conf:ro \
     "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-  # DoH (cloudflared) cùng namespace
-  docker run -d --name "$d" --restart=always \
-    --network=container:"$s" \
-    --user root \
-    "$IMG_DOH" proxy-dns --address 127.0.0.1 --port 53 >/dev/null
+  # Kiểm tra nhanh: test IP (không phụ thuộc DNS)
+  printf "[ROUTE %d] latency(IP): " "$idx"
+  docker run --rm --network=container:"$s" curlimages/curl:latest \
+    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+    https://1.1.1.1 || echo "FAIL"
 
-  # Kiểm tra nhanh độ trễ
-  printf "[ROUTE %d] latency: " "$idx"
+  # Kiểm tra qua domain (sẽ dùng DNS direct)
+  printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
   docker run --rm --network=container:"$s" curlimages/curl:latest \
     -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
     https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
 
-  echo "[ROUTE $idx] RUNNING: $s + $d"
+  echo "[ROUTE $idx] RUNNING: $s"
   echo "→ Gắn app vào route này:  docker run ... --network=container:${s} <image> ..."
 }
 
@@ -238,8 +155,11 @@ status_all() {
     if docker ps --format '{{.Names}}' | grep -qx "$s"; then
       printf "[route%02d] " "$i"
       docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-        https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
+        -s -o /dev/null -w 'IP: connect=%{time_connect}s total=%{time_total}s  |  ' \
+        https://1.1.1.1
+      docker run --rm --network=container:"$s" curlimages/curl:latest \
+        -s -o /dev/null -w 'DNS+TLS: connect=%{time_connect}s total=%{time_total}s\n' \
+        https://www.cloudflare.com/cdn-cgi/trace
     else
       echo "[route$(printf %02d "$i")] stopped"
     fi
@@ -259,7 +179,6 @@ down_all() {
 
 pull_images() {
   docker pull "$IMG_SBOX" >/dev/null
-  docker pull "$IMG_DOH"  >/dev/null
 }
 
 # ===================== CLI =====================
@@ -273,7 +192,7 @@ case "${1:-up}" in
       ((i++))
     done
     echo
-    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (mỗi route: sing-box + DoH)."
+    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (mỗi route: sing-box TUN, KHÔNG DoH; DNS port 53 BYPASS DIRECT)."
     echo "ℹ️  Host không đổi route; chỉ container nào gắn --network=container:sboxN mới đi qua proxy tương ứng."
     ;;
   status)
