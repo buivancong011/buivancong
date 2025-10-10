@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 # ========= USER CONFIG =========
-# Dán đầy đủ list SOCKS5 của bạn (cổng 1339) theo định dạng: ip:port:user:pass
-read -r -d '' PROXY_LIST <<'EOF'
+# List SOCKS5 (port 1339) dạng ip:port:user:pass — mỗi dòng 1 proxy.
+PROXY_LIST="$(cat <<'EOF'
 156.239.204.25:1339:cao_nAEfN2:g2Bawi4kkDZyztX
 156.239.201.49:1339:cao_nAEfN2:g2Bawi4kkDZyztX
 156.239.202.151:1339:cao_nAEfN2:g2Bawi4kkDZyztX
@@ -14,10 +14,10 @@ read -r -d '' PROXY_LIST <<'EOF'
 156.239.198.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX
 156.239.195.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX
 156.239.197.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX
-# ... (bạn có thể dán tiếp các dòng còn lại ở đây) ...
 EOF
+)"
 
-# MTU của TUN (có thể để 1500, hoặc giảm 1400 nếu hay timeouts)
+# MTU của TUN (giảm 1400 nếu hay timeouts)
 TUN_MTU=1500
 
 # ========= IMAGES =========
@@ -129,7 +129,6 @@ cmd_up() {
     echo "------------------------------------------------------------"
     echo "[ROUTE $i] SOCKS5: ${user}:${pass}@${ip}:${port}"
     start_sbox "$i" "$ip" "$port" "$user" "$pass"
-    # đợi ngắn cho sbox lên
     sleep 0.5
     echo -n "[ROUTE $i] latency(IP): "
     check_latency_ip "$i"
