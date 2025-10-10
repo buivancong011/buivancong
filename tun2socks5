@@ -2,41 +2,124 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách SOCKS5 (dạng: host:port hoặc user:pass@host:port)
-PROXIES=(
-"156.239.204.25:1339"
-"156.239.201.49:1339"
-"156.239.202.151:1339"
-"156.239.201.0:1339"
-"156.239.196.11:1339"
-"156.239.203.251:1339"
-"156.239.205.107:1339"
-"156.239.198.52:1339"
-"156.239.195.73:1339"
-"156.239.197.103:1339"
-"156.239.199.213:1339"
-"156.239.199.167:1339"
-"156.239.215.254:1339"
+# Danh sách SOCKS5 upstream (không auth) — port đã đổi thành 1339
+UPSTREAMS=(
+"socks5://156.239.204.25:1339"
+"socks5://156.239.201.49:1339"
+"socks5://156.239.202.151:1339"
+"socks5://156.239.201.0:1339"
+"socks5://156.239.196.11:1339"
+"socks5://156.239.203.251:1339"
+"socks5://156.239.205.107:1339"
+"socks5://156.239.198.52:1339"
+"socks5://156.239.195.73:1339"
+"socks5://156.239.197.103:1339"
+"socks5://156.239.199.213:1339"
+"socks5://156.239.199.167:1339"
+"socks5://156.239.204.52:1339"
+"socks5://156.239.202.70:1339"
+"socks5://156.239.205.75:1339"
+"socks5://156.239.204.206:1339"
+"socks5://156.239.200.103:1339"
+"socks5://156.239.193.62:1339"
+"socks5://156.239.197.99:1339"
+"socks5://156.239.198.0:1339"
+"socks5://156.239.203.195:1339"
+"socks5://156.239.197.224:1339"
+"socks5://156.239.199.24:1339"
+"socks5://156.239.193.140:1339"
+"socks5://156.239.194.142:1339"
+"socks5://156.239.207.106:1339"
+"socks5://156.239.207.0:1339"
+"socks5://156.239.203.225:1339"
+"socks5://156.239.205.187:1339"
+"socks5://156.239.200.202:1339"
+"socks5://156.239.194.91:1339"
+"socks5://156.239.203.182:1339"
+"socks5://156.239.192.94:1339"
+"socks5://156.239.198.202:1339"
+"socks5://156.239.200.17:1339"
+"socks5://156.239.205.239:1339"
+"socks5://156.239.194.215:1339"
+"socks5://156.239.200.138:1339"
+"socks5://156.239.195.69:1339"
+"socks5://156.239.192.177:1339"
+"socks5://156.239.201.64:1339"
+"socks5://156.239.205.121:1339"
+"socks5://156.239.201.114:1339"
+"socks5://156.239.192.11:1339"
+"socks5://156.239.206.200:1339"
+"socks5://156.239.199.234:1339"
+"socks5://156.239.195.189:1339"
+"socks5://156.239.207.222:1339"
+"socks5://156.239.199.103:1339"
+"socks5://156.239.197.3:1339"
+"socks5://156.239.223.107:1339"
+"socks5://156.239.213.44:1339"
+"socks5://156.239.221.33:1339"
+"socks5://156.239.220.58:1339"
+"socks5://156.239.218.103:1339"
+"socks5://156.239.212.135:1339"
+"socks5://156.239.211.246:1339"
+"socks5://156.239.217.126:1339"
+"socks5://156.239.212.18:1339"
+"socks5://156.239.219.82:1339"
+"socks5://156.239.219.113:1339"
+"socks5://156.239.215.30:1339"
+"socks5://156.239.209.42:1339"
+"socks5://156.239.216.53:1339"
+"socks5://156.239.212.140:1339"
+"socks5://156.239.215.254:1339"
+"socks5://156.239.221.183:1339"
+"socks5://156.239.211.102:1339"
+"socks5://156.239.217.246:1339"
+"socks5://156.239.213.129:1339"
+"socks5://156.239.222.188:1339"
+"socks5://156.239.216.106:1339"
+"socks5://156.239.210.1:1339"
+"socks5://156.239.209.140:1339"
+"socks5://156.239.218.68:1339"
+"socks5://156.239.216.147:1339"
+"socks5://156.239.222.133:1339"
+"socks5://156.239.213.255:1339"
+"socks5://156.239.211.114:1339"
+"socks5://156.239.215.101:1339"
+"socks5://156.239.223.9:1339"
+"socks5://156.239.221.24:1339"
+"socks5://156.239.217.162:1339"
+"socks5://156.239.220.207:1339"
+"socks5://156.239.222.138:1339"
+"socks5://156.239.221.166:1339"
+"socks5://156.239.219.45:1339"
+"socks5://156.239.217.172:1339"
+"socks5://156.239.223.220:1339"
+"socks5://156.239.215.54:1339"
+"socks5://156.239.220.5:1339"
+"socks5://156.239.214.6:1339"
+"socks5://156.239.221.23:1339"
+"socks5://156.239.221.105:1339"
+"socks5://156.239.218.63:1339"
+"socks5://156.239.222.201:1339"
+"socks5://156.239.212.73:1339"
+"socks5://156.239.219.187:1339"
+"socks5://156.239.214.181:1339"
+"socks5://156.239.217.223:1339"
 )
 
-# Tên base container
-SB_NAME_BASE="net-proxy"        # net-proxy1, net-proxy2,...
+# Tên base cho container theo tuyến
+TUN_NAME_BASE="tun"
+DOH_NAME_BASE="doh"
 
-# Image
-IMG_SINGBOX="ghcr.io/sagernet/sing-box:latest"
+# Images
+IMG_TUN="xjasonlyu/tun2socks:v2.6.0"
+IMG_DOH="cloudflare/cloudflared:latest"
 
-# DoH server (DNS sẽ đi qua proxy nhờ "detour": "proxy")
-DOH_ADDR="https://1.1.1.1/dns-query"
-
-# Log level
-SB_LOGLEVEL="info"              # debug|info|warn|error
-
-# File xuất IP
-OUT_FILE="route_ips.csv"
+# Log level cho tun2socks
+TUN_LOGLEVEL="info"    # debug|info|warn|error
+TUN_MTU=""
 
 # ===================== PRECHECK =====================
-command -v docker >/dev/null 2>&1 || { echo "[ERR] Docker chưa cài."; exit 1; }
-
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
 if [[ ! -e /dev/net/tun ]]; then
   echo "[INFO] Tạo /dev/net/tun..."
   sudo mkdir -p /dev/net || true
@@ -45,214 +128,97 @@ if [[ ! -e /dev/net/tun ]]; then
 fi
 
 # ===================== FUNCTIONS =====================
-cleanup_one() {
+cleanup_route() {
   local idx="$1"
-  docker rm -f "${SB_NAME_BASE}${idx}" >/dev/null 2>&1 || true
-  rm -f "singbox_${idx}.json" || true
+  local t="${TUN_NAME_BASE}${idx}"
+  local d="${DOH_NAME_BASE}${idx}"
+  docker rm -f "$d" "$t" >/dev/null 2>&1 || true
 }
 
-parse_proxy() {
-  # Input: "$1" = "host:port" hoặc "user:pass@host:port"
-  local raw="$1"
-  local user="" pass="" hostport="$raw" host="" port=""
-
-  if [[ "$raw" == *"@"* ]]; then
-    local creds="${raw%%@*}"; hostport="${raw#*@}"
-    user="${creds%%:*}"; pass="${creds#*:}"
-  fi
-  host="${hostport%%:*}"
-  port="${hostport##*:}"
-
-  echo "$user|$pass|$host|$port"
-}
-
-gen_singbox_config() {
+start_route() {
   local idx="$1"
-  local raw="$2"
-  local parsed; parsed=$(parse_proxy "$raw")
-  local user="${parsed%%|*}"; parsed="${parsed#*|}"
-  local pass="${parsed%%|*}"; parsed="${parsed#*|}"
-  local host="${parsed%%|*}"; local port="${parsed#*|}"
-  local cfg="singbox_${idx}.json"
-
-  # Khối outbound socks (thêm username/password nếu có)
-  local OUT_SOCKS
-  if [[ -n "$user" || -n "$pass" ]]; then
-    OUT_SOCKS=$(cat <<JSON
-{ "tag": "proxy", "type": "socks",
-  "server": "${host}", "server_port": ${port}, "version": "5",
-  "username": "${user}", "password": "${pass}"
-}
-JSON
-)
-  else
-    OUT_SOCKS=$(cat <<JSON
-{ "tag": "proxy", "type": "socks",
-  "server": "${host}", "server_port": ${port}, "version": "5"
-}
-JSON
-)
-  fi
-
-  cat > "$cfg" <<EOF
-{
-  "log": { "level": "${SB_LOGLEVEL}" },
-
-  "dns": {
-  "strategy": "prefer_ipv4",
-  "servers": [
-    {
-      "tag": "doh",
-      "address": "https://1.1.1.1/dns-query",
-      "server_name": "cloudflare-dns.com",
-      "detour": "proxy"
-    },
-    { "tag": "local", "address": "local" }
-  ]
-}
-  },
-
-  "inbounds": [
-    {
-      "type": "tun",
-      "inet4_address": "172.19.${idx}.1/30",
-      "auto_route": true,
-      "strict_route": true,
-      "stack": "system",
-      "sniff": true,
-      "sniff_override_destination": true
-    }
-  ],
-
-  "outbounds": [
-    ${OUT_SOCKS},
-    { "tag": "direct", "type": "direct" },
-    { "tag": "block", "type": "block" }
-  ],
-
-  "route": {
-    "rules": [
-      { "outbound": "proxy", "network": "tcp,udp" }
-    ]
-  }
-}
-EOF
-}
-
-start_one() {
-  local idx="$1"
-  local raw="$2"
+  local upstream="$2"
+  local t="${TUN_NAME_BASE}${idx}"
+  local d="${DOH_NAME_BASE}${idx}"
+  local resolv_file="resolv_${idx}.conf"
 
   echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] Upstream: $raw"
-  cleanup_one "$idx"
-  gen_singbox_config "$idx" "$raw"
+  echo "[ROUTE $idx] Upstream: $upstream"
 
-  local sb="${SB_NAME_BASE}${idx}"
-  echo "[ROUTE $idx] Khởi chạy sing-box (TUN + DNS qua proxy)..."
-  docker run -d --name "$sb" --restart=always \
+  cleanup_route "$idx"
+
+  cat > "$resolv_file" <<EOF
+options ndots:0
+nameserver 127.0.0.1
+EOF
+
+  echo "[ROUTE $idx] Khởi chạy tun2socks..."
+  docker run -d --name "$t" --restart=always \
     --cap-add=NET_ADMIN \
-    --device=/dev/net/tun \
-    -v "$PWD/singbox_${idx}.json:/etc/sing-box/config.json:ro" \
-    "$IMG_SINGBOX" run -c /etc/sing-box/config.json >/dev/null
+    -v /dev/net/tun:/dev/net/tun \
+    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
+    -e PROXY="$upstream" \
+    -e LOGLEVEL="$TUN_LOGLEVEL" \
+    -e EXTRA_COMMANDS="ip rule add iif lo ipproto udp dport 53 lookup main;" \
+    "$IMG_TUN"
 
-  # Đợi tuyến sẵn sàng (tối đa ~8s)
-  for _ in 1 2 3 4; do
-    sleep 2
-    if docker run --rm --network=container:"$sb" curlimages/curl:latest -s --max-time 6 https://ifconfig.me >/dev/null 2>&1; then
-      break
-    fi
-  done
-
-  # Test & lấy IP
-  local ip=""
-  ip=$(docker run --rm --network=container:"$sb" \
-        curlimages/curl:latest -s --max-time 10 https://ifconfig.me || true)
-
-  if [[ -n "$ip" ]]; then
-    echo "[ROUTE $idx] ✅ Hoạt động. Public IP: $ip"
-  else
-    echo "[ROUTE $idx] ⚠️ Không lấy được IP (có thể DNS/proxy lỗi)."
+  if [[ -n "${TUN_MTU}" ]]; then
+    echo "[ROUTE $idx] Set MTU=${TUN_MTU} (best-effort)"
+    docker exec -it "$t" sh -c "ip link set dev tun0 mtu ${TUN_MTU} || true"
   fi
 
-  # Gợi ý dùng tuyến này cho container khác
-  echo "👉 Dùng tuyến $idx:"
-  echo "   docker run --rm --network=container:${sb} curlimages/curl:latest -s https://ifconfig.me"
+  echo "[ROUTE $idx] Khởi chạy cloudflared DoH..."
+  docker run -d --name "$d" --restart=always \
+    --network=container:"$t" \
+    --user root \
+    "$IMG_DOH" proxy-dns --address 127.0.0.1 --port 53
+
+  echo "[ROUTE $idx] Kiểm tra IP egress..."
+  docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+  echo
+  echo "[ROUTE $idx] SẴN SÀNG. Gắn container client vào tuyến này bằng:"
+  echo "  docker run ... --network=container:${t} <image> ..."
+}
+
+down_all() {
+  echo "[CLEANUP] Xoá toàn bộ tuyến..."
+  local i=1
+  for _ in "${UPSTREAMS[@]}"; do
+    cleanup_route "$i"
+    rm -f "resolv_${i}.conf" || true
+    ((i++))
+  done
+  echo "[DONE] Đã xoá."
 }
 
 status_all() {
   local i=1
-  for _ in "${PROXIES[@]}"; do
-    local sb="${SB_NAME_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$sb"; then
-      printf "[STATUS] %-12s " "$sb"
-      docker run --rm --network=container:"$sb" \
-        curlimages/curl:latest -s --max-time 6 https://ifconfig.me || true
-      docker ps --format ' - {{.Names}}: {{.Status}}' | grep -E "$sb" || true
+  for _ in "${UPSTREAMS[@]}"; do
+    local t="${TUN_NAME_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$t"; then
+      printf "[STATUS] %s " "$t"
+      docker run --rm --network=container:"$t" curlimages/curl:latest -s https://ifconfig.me || true
+      echo
     else
-      echo "[STATUS] $sb: not running"
+      echo "[STATUS] $t: not running"
     fi
     ((i++))
   done
-}
-
-write_ip_table() {
-  echo "route,proxy,public_ip" > "$OUT_FILE"
-  local i=1
-  for p in "${PROXIES[@]}"; do
-    local sb="${SB_NAME_BASE}${i}"
-    local ip=""
-    if docker ps --format '{{.Names}}' | grep -qx "$sb"; then
-      ip=$(docker run --rm --network=container:"$sb" \
-            curlimages/curl:latest -s --max-time 10 https://ifconfig.me || true)
-    fi
-    echo "${i},${p},${ip}" >> "$OUT_FILE"
-    ((i++))
-  done
-  echo "[INFO] Đã ghi bảng IP → $OUT_FILE"
-}
-
-down_all() {
-  echo "[CLEANUP] Xoá tất cả sing-box container..."
-  local i=1
-  for _ in "${PROXIES[@]}"; do
-    cleanup_one "$i"
-    ((i++))
-  done
-  echo "[DONE]"
 }
 
 # ===================== CLI =====================
 case "${1:-up}" in
   up)
     i=1
-    for p in "${PROXIES[@]}"; do
-      start_one "$i" "$p"
+    for up in "${UPSTREAMS[@]}"; do
+      start_route "$i" "$up"
       ((i++))
-      sleep 0.3
     done
-    write_ip_table
     echo
-    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} TUYẾN."
-    echo "👉 Kiểm tra nhanh: bash $0 status"
-    echo "👉 Bảng IP: $OUT_FILE"
+    echo "✅ ĐÃ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN."
+    echo "👉 Gắn container client vào tuyến N:  --network=container:tunN"
     ;;
-  status)
-    status_all
-    ;;
-  list)
-    if [[ -f "$OUT_FILE" ]]; then
-      echo "=== $OUT_FILE ==="
-      column -s, -t "$OUT_FILE" || cat "$OUT_FILE"
-    else
-      echo "[WARN] Chưa có $OUT_FILE — hãy chạy: bash $0 up"
-    fi
-    ;;
-  down)
-    down_all
-    ;;
-  *)
-    echo "Usage: $0 [up|status|list|down]"
-    exit 1
-    ;;
+  status) status_all ;;
+  down)   down_all ;;
+  *) echo "Usage: $0 [up|status|down]"; exit 1 ;;
 esac
