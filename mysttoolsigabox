@@ -1,59 +1,111 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-# Ảnh Myst
+# ================= CONFIG =================
 IMG="mysteriumnetwork/myst:latest"
 
-# Tham số bổ sung cho Myst (không bắt buộc).
-# Ví dụ:
-#   MYST_EXTRA_ARGS="--agreed-privacy-policy --openvpn --wireguard"
-# hoặc các flag cấu hình khác theo tài liệu Myst.
+# Dải UDP cho Myst (phải publish ở sboxN)
+UDP_RANGE_DEFAULT_START="${UDP_START:-56000}"
+UDP_RANGE_DEFAULT_END="${UDP_END:-56100}"
+
+# Tham số bổ sung cho Myst (tuỳ chọn)
 MYST_EXTRA_ARGS="${MYST_EXTRA_ARGS:-}"
 
-# Liệt kê tất cả container tên dạng sboxN đang RUNNING
-mapfile -t SBOXES < <(docker ps --format '{{.Names}}' | grep -E '^sbox[0-9]+$' || true)
+# ================= FUNCS =================
+have_ports_udp() {
+  # $1 = sbox name, $2 = start, $3 = end
+  local sbox="$1" s="$2" e="$3"
+  # Kiểm tra docker inspect: .HostConfig.PortBindings có key "S-E/udp"
+  local bindings
+  bindings="$(docker inspect -f '{{json .HostConfig.PortBindings}}' "$sbox" 2>/dev/null || echo '{}')"
+  grep -q "\"${s}-${e}/udp\"" <<<"$bindings"
+}
 
+have_ui_4449() {
+  # $1 = sbox name
+  local sbox="$1"
+  local bindings
+  bindings="$(docker inspect -f '{{json .HostConfig.PortBindings}}' "$sbox" 2>/dev/null || echo '{}')"
+  grep -q "\"4449/tcp\"" <<<"$bindings"
+}
+
+print_port_hint() {
+  cat <<EOF
+[HINT] Container %sbox chưa publish dải UDP ${UDP_RANGE_DEFAULT_START}-${UDP_RANGE_DEFAULT_END}/udp.
+       Hãy recreate sbox như kiểu:
+         docker run -d --name %sbox --restart=always \\
+           --cap-add NET_ADMIN --device /dev/net/tun \\
+           -p 127.0.0.1:4449:4449 \\
+           -p ${UDP_RANGE_DEFAULT_START}-${UDP_RANGE_DEFAULT_END}:${UDP_RANGE_DEFAULT_START}-${UDP_RANGE_DEFAULT_END}/udp \\
+           -v "\$PWD/sbox_${IDX}.json":/etc/sing-box/config.json:ro \\
+           -v "\$PWD/resolv_${IDX}.conf":/etc/resolv.conf:ro \\
+           ghcr.io/sagernet/sing-box:latest run -c /etc/sing-box/config.json
+EOF
+}
+
+# ================= PRECHECK =================
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
+
+mapfile -t SBOXES < <(docker ps --format '{{.Names}}' | grep -E '^sbox[0-9]+$' || true)
 if [[ ${#SBOXES[@]} -eq 0 ]]; then
   echo "[ERR] Không tìm thấy container sbox nào đang chạy."
-  echo "→ Hãy chạy các route sbox trước (ví dụ sbox1, sbox2, ...), rồi chạy lại script này."
+  echo "→ Hãy khởi tạo các sbox (sbox1, sbox2, ...) rồi chạy lại."
   exit 1
 fi
 
 echo "Tìm thấy ${#SBOXES[@]} route sbox: ${SBOXES[*]}"
 echo
 
+# ================= RUN =================
 for s in "${SBOXES[@]}"; do
-  idx="${s#sbox}"                      # lấy số N từ sboxN
-  name="myst-${s}"                     # tên container Myst
-  vol="myst-data${idx}"                # volume lưu dữ liệu Myst (identity, cấu hình)
+  IDX="${s#sbox}"
+  NAME="myst-${s}"
+  VOL="myst-data${IDX}"
 
   echo "------------------------------------------------------------"
   echo "[*] Tạo Myst cho ${s}"
-  echo "    - container: ${name}"
-  echo "    - volume:    ${vol}"
+  echo "    - container: ${NAME}"
+  echo "    - volume:    ${VOL}"
   echo "    - network:   container:${s}"
+  echo "    - UDP range: ${UDP_RANGE_DEFAULT_START}-${UDP_RANGE_DEFAULT_END}/udp"
+
+  # Cảnh báo nếu sbox chưa publish UDP range
+  if ! have_ports_udp "$s" "$UDP_RANGE_DEFAULT_START" "$UDP_RANGE_DEFAULT_END"; then
+    echo "[WARN] ${s} chưa publish ${UDP_RANGE_DEFAULT_START}-${UDP_RANGE_DEFAULT_END}/udp ra host → Monitoring có thể FAIL."
+    print_port_hint | sed "s/%sbox/${s}/g"
+  fi
+
+  # Gợi ý bind UI 4449 nội bộ (không bắt buộc, nhưng nên có để quản trị)
+  if ! have_ui_4449 "$s"; then
+    echo "[INFO] ${s} chưa bind 127.0.0.1:4449:4449. Nếu cần UI cục bộ, hãy thêm -p 127.0.0.1:4449:4449 khi tạo sbox."
+  fi
 
   # Xoá Myst cũ (nếu có)
-  docker rm -f "${name}" >/dev/null 2>&1 || true
+  docker rm -f "${NAME}" >/dev/null 2>&1 || true
 
   # Tạo volume nếu chưa có
-  docker volume create "${vol}" >/dev/null
+  docker volume create "${VOL}" >/dev/null
 
-  # CHẠY Myst trong network namespace của sboxN
+  # Chạy Myst trong netns của sboxN, ép dùng UDP range cố định
   docker run -d \
-    --name "${name}" \
+    --name "${NAME}" \
     --network="container:${s}" \
     --restart unless-stopped \
-    -v "${vol}:/var/lib/mysterium-node" \
+    -v "${VOL}:/var/lib/mysterium-node" \
     "${IMG}" \
+    --udp.ports="${UDP_RANGE_DEFAULT_START}:${UDP_RANGE_DEFAULT_END}" \
     service --agreed-terms-and-conditions ${MYST_EXTRA_ARGS}
 
-  # In trạng thái nhanh
   sleep 2
-  docker ps --format '{{.Names}}\t{{.Status}}' | grep -E "^${name}\b" || true
+  docker ps --format '{{.Names}}\t{{.Status}}' | grep -E "^${NAME}\b" || true
+
+  # Test egress nhanh (hữu ích để xác nhận route)
+  printf "    Egress IP (${s}): "
+  docker run --rm --network="container:${s}" curlimages/curl:latest -4 -s --max-time 6 https://api.ipify.org || echo "n/a"
 done
 
 echo
 echo "✅ ĐÃ KHỞI TẠO Myst cho tất cả sbox đang chạy."
 echo "→ Xem log một node:  docker logs -f myst-sbox1"
-echo "→ Kiểm tra nhanh toàn bộ: docker ps --format '{{.Names}}\t{{.Status}}' | grep '^myst-'"
+echo "→ Kiểm tra nhanh:    docker ps --format '{{.Names}}\t{{.Status}}' | grep '^myst-'"
+echo "→ Dashboard: dùng 'Test node' sau vài phút để re-check Monitoring."
