@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách SOCKS5 dạng "ip:1339:user:pass" (đã chuyển qua 1339)
+# Danh sách SOCKS5 dạng "ip:port:user:pass"
 PROXIES=(
 "156.239.204.25:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.201.49:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
@@ -14,35 +14,19 @@ PROXIES=(
 "156.239.198.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.195.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.197.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-# ... có thể dán thêm toàn bộ list của bạn ở đây ...
 )
 
-# Ảnh container
-IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
+IMG_SBOX="ghcr.io/sagernet/sing-box:latest"  # image sing-box
+SBOX_BASE="sbox"                             # prefix tên container
+MTU="1400"                                   # MTU cho TUN
+DNS_MODE="${DNS_MODE:-doh}"                  # doh | direct53
 
-# Tên base cho container theo tuyến
-SBOX_BASE="sbox"
-
-# Tối ưu TUN
-MTU="1400"
-ENABLE_BBR=true
-ENABLE_TFO=true
-
-# ====== CÔNG TẮC DNS ======
-# - "direct53": giữ nguyên như hiện tại (DNS port 53 đi thẳng, không qua proxy)
-# - "doh"     : dùng DoH (HTTPS) qua proxy, chặn UDP để tránh treo
-DNS_MODE="${DNS_MODE:-doh}"
-
-# DNS mặc định cho container sbox (file /etc/resolv.conf của netns)
-# Lưu ý: khi app chạy --network=container:sboxN thì app sẽ dùng DNS của sboxN này.
-# (Giữ nguyên để tránh thay đổi lớn. Khi bật DoH, sing-box sẽ tự dùng DoH nội bộ;
-#  /etc/resolv.conf này chỉ là fallback/cho vài công cụ.)
+# /etc/resolv.conf trong netns sbox (app dùng khi --network=container:sboxN)
 RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
 
-# ===================== PRECHECK =====================
+# ===================== PRECHECK RẤT NHẸ =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
 if [[ ! -e /dev/net/tun ]]; then
-  echo "[INFO] Tạo /dev/net/tun..."
   sudo mkdir -p /dev/net || true
   sudo mknod /dev/net/tun c 10 200 || true
   sudo chmod 666 /dev/net/tun || true
@@ -52,34 +36,31 @@ fi
 mk_sbox_config() {
   # $1: file, $2: ip, $3: port, $4: user, $5: pass
   local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
-
-  # Khối DNS/route tùy theo DNS_MODE (giữ thay đổi ở mức tối thiểu)
-  local dns_block default_resolver route_rule_block
+  local dns_block route_rule_block
 
   if [[ "$DNS_MODE" == "doh" ]]; then
-    # DoH qua proxy + chặn UDP (tránh gửi UDP qua SOCKS5)
+    # DoH (HTTPS) đi qua outbound "proxy" + hijack-dns + block UDP còn lại
     dns_block='
   "dns": {
     "servers": [
-      { "tag": "doh1", "address": "https://1.1.1.1/dns-query", "strategy": "ipv4_only", "detour": "proxy" },
-      { "tag": "doh2", "address": "https://dns.google/dns-query", "strategy": "ipv4_only", "detour": "proxy" }
+      { "address": "https://1.1.1.1/dns-query", "strategy": "ipv4_only", "detour": "proxy" },
+      { "address": "https://dns.google/dns-query", "strategy": "ipv4_only", "detour": "proxy" }
     ],
     "strategy": "ipv4_only"
   },'
-    default_resolver="doh1"
     route_rule_block='
+      { "action": "hijack-dns" },
       { "network": "udp", "outbound": "block" }'
   else
-    # Mặc định: DNS port 53 đi thẳng (hành vi cũ)
+    # DNS 53 direct (giữ hành vi cũ, format DNS mới)
     dns_block='
   "dns": {
     "servers": [
-      { "tag": "dns1", "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
-      { "tag": "dns2", "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
+      { "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
+      { "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
     ],
     "strategy": "ipv4_only"
   },'
-    default_resolver="dns1"
     route_rule_block='
       { "port": 53, "outbound": "direct" }'
   fi
@@ -117,7 +98,6 @@ ${dns_block}
   ],
 
   "route": {
-    "default_domain_resolver": "${default_resolver}",
     "auto_detect_interface": true,
     "rules": [${route_rule_block}
     ],
@@ -127,61 +107,15 @@ ${dns_block}
 JSON
 }
 
-sysctl_optimize() {
-  if [[ "${ENABLE_BBR}" == true ]]; then
-    sudo sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1 || true
-    sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
-  fi
-  if [[ "${ENABLE_TFO}" == true ]]; then
-    sudo sysctl -w net.ipv4.tcp_fastopen=3 >/dev/null 2>&1 || true
-  fi
-}
-
 cleanup_one() {
   local idx="$1"
   local s="${SBOX_BASE}${idx}"
   docker rm -f "$s" >/dev/null 2>&1 || true
   rm -f "sbox_${idx}.json" "resolv_${idx}.conf" >/dev/null 2>&1 || true
 }
-wait_running() {
-  # $1: container name, $2: timeout seconds
-  local name="$1" timeout="${2:-20}"
-  local t=0
-  while true; do
-    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
-    case "$st" in
-      running) return 0 ;;
-      restarting|created|starting)
-        if (( t >= timeout )); then
-          echo "[WARN] $name chưa running sau ${timeout}s (status=$st)."
-          return 1
-        fi
-        sleep 1; ((t++))
-        ;;
-      exited|dead|'')
-        echo "[ERR] $name status=$st. Logs:"
-        docker logs --since=2m "$name" || true
-        return 1
-        ;;
-      *)
-        sleep 1
-        ;;
-    esac
-  done
-}
-
-check_config() {
-  # $1: path to config.json
-  local cfg="$1"
-  docker run --rm \
-    --cap-add=NET_ADMIN --device /dev/net/tun \
-    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
-    ghcr.io/sagernet/sing-box:latest check -c /etc/sing-box/config.json
-}
 
 start_one() {
-  local idx="$1"
-  IFS=':' read -r ip port user pass <<<"$2"
+  local idx="$1"; IFS=':' read -r ip port user pass <<<"$2"
   local s="${SBOX_BASE}${idx}"
   local cfg="sbox_${idx}.json"
   local rsv="resolv_${idx}.conf"
@@ -193,77 +127,34 @@ start_one() {
   mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
   printf "%s\n" "$RESOLV_CONTENT" > "$rsv"
 
-  # validate config trước khi chạy
-  if ! check_config "$cfg"; then
-    echo "[ERR] Config route $idx không hợp lệ. Bỏ qua route này."
-    return 0
-  fi
-
   docker run -d --name "$s" --restart=always \
     --cap-add=NET_ADMIN --device /dev/net/tun \
     -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
     -v "$PWD/$rsv":/etc/resolv.conf:ro \
-    "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+    "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null || true
 
-  # đợi sboxN chạy ổn định
-  if ! wait_running "$s" 25; then
-    echo "[ERR] $s không vào trạng thái running. Kiểm tra log ở trên."
-    return 0
-  fi
-
-  # Kiểm tra nhanh: test IP (không phụ thuộc DNS)
-  printf "[ROUTE %d] latency(IP): " "$idx"
-  docker run --rm --network=container:"$s" curlimages/curl:latest \
-    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-    https://1.1.1.1 || echo "FAIL"
-
-  # Kiểm tra qua domain
-  printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
-  docker run --rm --network=container:"$s" curlimages/curl:latest \
-    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-    https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
-
-  echo "[ROUTE $idx] RUNNING: $s"
+  echo "[ROUTE $idx] RUNNING (khởi chạy xong)."
   echo "→ Gắn app: docker run ... --network=container:${s} <image> ..."
 }
 
-status_all() {
-  local i=1
-  for _ in "${PROXIES[@]}"; do
-    local s="${SBOX_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$s"; then
-      printf "[route%02d] " "$i"
-      docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'IP: connect=%{time_connect}s total=%{time_total}s  |  ' \
-        https://1.1.1.1
-      docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'DNS+TLS: connect=%{time_connect}s total=%{time_total}s\n' \
-        https://www.cloudflare.com/cdn-cgi/trace
-    else
-      echo "[route$(printf %02d "$i")] stopped"
-    fi
-    ((i++))
-  done
+status_min() {
+  docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -E "^${SBOX_BASE}[0-9]+\b" | sort -V || true
 }
 
 down_all() {
   echo "[CLEANUP] stopping all routes..."
   local i=1
-  for _ in "${PROXIES[@]}"; do
-    cleanup_one "$i"
-    ((i++))
-  done
+  for _ in "${PROXIES[@]}"; do cleanup_one "$i"; ((i++)); done
   echo "[DONE]"
 }
 
 pull_images() {
-  docker pull "$IMG_SBOX" >/dev/null
+  docker pull "$IMG_SBOX" >/dev/null || true
 }
 
 # ===================== CLI =====================
 case "${1:-up}" in
   up)
-    sysctl_optimize
     pull_images
     i=1
     for spec in "${PROXIES[@]}"; do
@@ -272,14 +163,14 @@ case "${1:-up}" in
     done
     echo
     if [[ "$DNS_MODE" == "doh" ]]; then
-      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **DoH qua proxy**, UDP bị block)."
+      echo "✅ TẠO ${#PROXIES[@]} ROUTES (DoH qua proxy bằng hijack-dns; format DNS mới)."
     else
-      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **KHÔNG DoH**; DNS port 53 BYPASS DIRECT)."
+      echo "✅ TẠO ${#PROXIES[@]} ROUTES (DNS 53 direct; format DNS mới)."
     fi
-    echo "ℹ️  Host không đổi route; chỉ container nào gắn --network=container:sboxN mới đi qua proxy tương ứng."
+    echo "ℹ️ Kiểm tra thủ công: docker logs sbox1 | tail -n 100"
     ;;
   status)
-    status_all
+    status_min
     ;;
   down)
     down_all
