@@ -11,9 +11,9 @@ UR_PREFIX="ur-"
 # Image theo repo techroy23
 UR_IMAGE="ghcr.io/techroy23/docker-urnetwork:latest"
 
-# Bắt buộc theo README: thông tin đăng nhập
-USER_AUTH="${USER_AUTH:-}"    # ví dụ: you@example.com
-PASSWORD="${PASSWORD:-}"      # ví dụ: YourStrongPass!
+# ĐĂNG NHẬP MẶC ĐỊNH (có thể override bằng biến môi trường bên ngoài)
+USER_AUTH="${USER_AUTH:-buivancong012@gmail.com}"
+PASSWORD="${PASSWORD:-buivancong012}"
 
 # (TUỲ CHỌN) Mount 1 proxy.txt chung cho TẤT CẢ ur-sboxN
 # Định dạng mỗi dòng: ip:port:user:pass
@@ -35,20 +35,10 @@ LOG_MAX_SIZE="10m"
 LOG_MAX_FILE="3"
 
 # Hiển thị device-name trên dashboard (giữ sboxN để dễ đối chiếu)
-DEVICE_NAME_MODE="sbox"   # "sbox" | "ur" (hiện image không nhận device-name, dùng làm nhãn log)
+DEVICE_NAME_MODE="sbox"   # "sbox" | "ur" (image không có tham số device-name; dùng để gắn nhãn log)
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
-
-if [[ -z "$USER_AUTH" || -z "$PASSWORD" ]]; then
-  cat <<'EOT'
-[ERR] Thiếu USER_AUTH hoặc PASSWORD.
-Hãy export trước khi chạy, ví dụ:
-  export USER_AUTH="buivancong012@gmail.com"
-  export PASSWORD="buivancong012"
-EOT
-  exit 1
-fi
 
 if [[ -n "$PROXY_FILE" && ! -f "$PROXY_FILE" ]]; then
   echo "[ERR] PROXY_FILE đã đặt nhưng không tồn tại: $PROXY_FILE"
