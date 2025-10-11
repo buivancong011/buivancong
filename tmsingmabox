@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # ===================== CONFIG =====================
 # Đặt TOKEN tại đây hoặc export trước khi chạy:
-TOKEN="${TOKEN:-0l+0r9mje+tN4NUPfmXkTcnnVAf/7q6iHXV9JSqotkQ=}"
+TOKEN="${TOKEN:-JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=}"
 
 # Tiền tố container sing-box và traffmonetizer
 SBOX_PREFIX="sbox"
