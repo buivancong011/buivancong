@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách SOCKS5 dạng "ip:port:user:pass"
+# Danh sách SOCKS5 dạng "ip:1339:user:pass" (đã chuyển qua 1339)
 PROXIES=(
 "156.239.204.25:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.201.49:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
@@ -14,7 +14,7 @@ PROXIES=(
 "156.239.198.52:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.195.73:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
 "156.239.197.103:1339:cao_nAEfN2:g2Bawi4kkDZyztX"
-# ... thêm nữa nếu cần ...
+# ... có thể dán thêm toàn bộ list của bạn ở đây ...
 )
 
 # Ảnh container
@@ -29,12 +29,14 @@ ENABLE_BBR=true
 ENABLE_TFO=true
 
 # ====== CÔNG TẮC DNS ======
-# - "direct53": DNS port 53 đi thẳng (như cũ)
-# - "doh"     : DNS -> DoH (HTTPS) qua proxy, chặn UDP còn lại
+# - "direct53": giữ nguyên như hiện tại (DNS port 53 đi thẳng, không qua proxy)
+# - "doh"     : dùng DoH (HTTPS) qua proxy, chặn UDP để tránh treo
 DNS_MODE="${DNS_MODE:-doh}"
 
-# /etc/resolv.conf trong netns sbox (app dùng khi --network=container:sboxN)
-# Với DoH + hijack-dns, để 8.8/1.1.1 vẫn OK vì hijack sẽ bắt UDP/53 trước khi ra ngoài.
+# DNS mặc định cho container sbox (file /etc/resolv.conf của netns)
+# Lưu ý: khi app chạy --network=container:sboxN thì app sẽ dùng DNS của sboxN này.
+# (Giữ nguyên để tránh thay đổi lớn. Khi bật DoH, sing-box sẽ tự dùng DoH nội bộ;
+#  /etc/resolv.conf này chỉ là fallback/cho vài công cụ.)
 RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
 
 # ===================== PRECHECK =====================
@@ -51,32 +53,33 @@ mk_sbox_config() {
   # $1: file, $2: ip, $3: port, $4: user, $5: pass
   local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
 
-  local dns_block route_rule_block
+  # Khối DNS/route tùy theo DNS_MODE (giữ thay đổi ở mức tối thiểu)
+  local dns_block default_resolver route_rule_block
 
   if [[ "$DNS_MODE" == "doh" ]]; then
-    # DoH qua proxy + hijack-dns + block UDP còn lại
-    # (ĐÃ MIGRATE sang format DNS mới: KHÔNG dùng "tag" trong servers)
+    # DoH qua proxy + chặn UDP (tránh gửi UDP qua SOCKS5)
     dns_block='
   "dns": {
     "servers": [
-      { "address": "https://1.1.1.1/dns-query", "strategy": "ipv4_only", "detour": "proxy" },
-      { "address": "https://dns.google/dns-query", "strategy": "ipv4_only", "detour": "proxy" }
+      { "tag": "doh1", "address": "https://1.1.1.1/dns-query", "strategy": "ipv4_only", "detour": "proxy" },
+      { "tag": "doh2", "address": "https://dns.google/dns-query", "strategy": "ipv4_only", "detour": "proxy" }
     ],
     "strategy": "ipv4_only"
   },'
+    default_resolver="doh1"
     route_rule_block='
-      { "action": "hijack-dns" },
       { "network": "udp", "outbound": "block" }'
   else
-    # DNS 53 direct (hành vi cũ) — format DNS mới (bỏ "tag")
+    # Mặc định: DNS port 53 đi thẳng (hành vi cũ)
     dns_block='
   "dns": {
     "servers": [
-      { "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
-      { "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
+      { "tag": "dns1", "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
+      { "tag": "dns2", "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
     ],
     "strategy": "ipv4_only"
   },'
+    default_resolver="dns1"
     route_rule_block='
       { "port": 53, "outbound": "direct" }'
   fi
@@ -114,6 +117,7 @@ ${dns_block}
   ],
 
   "route": {
+    "default_domain_resolver": "${default_resolver}",
     "auto_detect_interface": true,
     "rules": [${route_rule_block}
     ],
@@ -139,7 +143,6 @@ cleanup_one() {
   docker rm -f "$s" >/dev/null 2>&1 || true
   rm -f "sbox_${idx}.json" "resolv_${idx}.conf" >/dev/null 2>&1 || true
 }
-
 wait_running() {
   # $1: container name, $2: timeout seconds
   local name="$1" timeout="${2:-20}"
@@ -173,7 +176,7 @@ check_config() {
   docker run --rm \
     --cap-add=NET_ADMIN --device /dev/net/tun \
     -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
-    "$IMG_SBOX" check -c /etc/sing-box/config.json
+    ghcr.io/sagernet/sing-box:latest check -c /etc/sing-box/config.json
 }
 
 start_one() {
@@ -214,7 +217,7 @@ start_one() {
     -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
     https://1.1.1.1 || echo "FAIL"
 
-  # Kiểm tra qua domain (DNS sẽ được hijack sang DoH nếu DNS_MODE=doh)
+  # Kiểm tra qua domain
   printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
   docker run --rm --network=container:"$s" curlimages/curl:latest \
     -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
@@ -269,9 +272,9 @@ case "${1:-up}" in
     done
     echo
     if [[ "$DNS_MODE" == "doh" ]]; then
-      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **DoH qua proxy** bằng hijack-dns; format DNS mới)."
+      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **DoH qua proxy**, UDP bị block)."
     else
-      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **KHÔNG DoH**; DNS port 53 BYPASS DIRECT; format DNS mới)."
+      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **KHÔNG DoH**; DNS port 53 BYPASS DIRECT)."
     fi
     echo "ℹ️  Host không đổi route; chỉ container nào gắn --network=container:sboxN mới đi qua proxy tương ứng."
     ;;
