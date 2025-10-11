@@ -31,13 +31,15 @@ ENABLE_TFO=true
 # ====== CÔNG TẮC DNS ======
 # - "direct53": giữ nguyên như hiện tại (DNS port 53 đi thẳng, không qua proxy)
 # - "doh"     : dùng DoH (HTTPS) qua proxy, chặn UDP để tránh treo
-DNS_MODE="${DNS_MODE:-doh}"
+DNS_MODE="${DNS_MODE:-doh}"   # đổi mặc định sang DoH; muốn kiểu cũ thì đặt DNS_MODE=direct53 khi chạy
 
 # DNS mặc định cho container sbox (file /etc/resolv.conf của netns)
 # Lưu ý: khi app chạy --network=container:sboxN thì app sẽ dùng DNS của sboxN này.
-# (Giữ nguyên để tránh thay đổi lớn. Khi bật DoH, sing-box sẽ tự dùng DoH nội bộ;
-#  /etc/resolv.conf này chỉ là fallback/cho vài công cụ.)
 RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
+# Nếu bật DoH, /etc/resolv.conf trỏ về localhost để app hỏi DNS cục bộ (sing-box sẽ chuyển DoH)
+if [[ "$DNS_MODE" == "doh" ]]; then
+  RESOLV_CONTENT=$'nameserver 127.0.0.1\noptions ndots:0'
+fi
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -53,11 +55,11 @@ mk_sbox_config() {
   # $1: file, $2: ip, $3: port, $4: user, $5: pass
   local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
 
-  # Khối DNS/route tùy theo DNS_MODE (giữ thay đổi ở mức tối thiểu)
-  local dns_block default_resolver route_rule_block
+  # Khối DNS/route + inbound DNS tùy theo DNS_MODE (thay đổi tối thiểu)
+  local dns_block default_resolver route_rule_block dns_inbound_block
 
   if [[ "$DNS_MODE" == "doh" ]]; then
-    # DoH qua proxy + chặn UDP (tránh gửi UDP qua SOCKS5)
+    # DoH qua proxy + chặn UDP (tránh gửi UDP thật qua SOCKS5)
     dns_block='
   "dns": {
     "servers": [
@@ -69,8 +71,15 @@ mk_sbox_config() {
     default_resolver="doh1"
     route_rule_block='
       { "network": "udp", "outbound": "block" }'
+    # DNS inbound để app hỏi 127.0.0.1:53 (udp)
+    dns_inbound_block=',{
+      "type": "dns",
+      "tag": "dns-in",
+      "listen": "127.0.0.1:53",
+      "network": "udp"
+    }'
   else
-    # Mặc định: DNS port 53 đi thẳng (hành vi cũ)
+    # Mặc định cũ: DNS 53 direct
     dns_block='
   "dns": {
     "servers": [
@@ -82,6 +91,7 @@ mk_sbox_config() {
     default_resolver="dns1"
     route_rule_block='
       { "port": 53, "outbound": "direct" }'
+    dns_inbound_block=''
   fi
 
   cat > "$cfg" <<JSON
@@ -99,7 +109,7 @@ ${dns_block}
       "strict_route": false,
       "sniff": true,
       "mtu": ${MTU}
-    }
+    }${dns_inbound_block}
   ],
 
   "outbounds": [
@@ -217,7 +227,7 @@ start_one() {
     -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
     https://1.1.1.1 || echo "FAIL"
 
-  # Kiểm tra qua domain
+  # Kiểm tra qua domain (DNS qua 127.0.0.1 nếu DNS_MODE=doh; còn direct53 sẽ là DNS hệ thống)
   printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
   docker run --rm --network=container:"$s" curlimages/curl:latest \
     -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
@@ -272,7 +282,7 @@ case "${1:-up}" in
     done
     echo
     if [[ "$DNS_MODE" == "doh" ]]; then
-      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **DoH qua proxy**, UDP bị block)."
+      echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **DoH qua proxy**, UDP bị block; DNS apps -> 127.0.0.1:53)."
     else
       echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (sing-box TUN, **KHÔNG DoH**; DNS port 53 BYPASS DIRECT)."
     fi
