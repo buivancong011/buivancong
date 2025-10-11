@@ -31,7 +31,7 @@ ENABLE_TFO=true
 # ====== CÔNG TẮC DNS ======
 # - "direct53": giữ nguyên như hiện tại (DNS port 53 đi thẳng, không qua proxy)
 # - "doh"     : dùng DoH (HTTPS) qua proxy, chặn UDP để tránh treo
-DNS_MODE="${DNS_MODE:-direct53}"
+DNS_MODE="${DNS_MODE:-doh}"
 
 # DNS mặc định cho container sbox (file /etc/resolv.conf của netns)
 # Lưu ý: khi app chạy --network=container:sboxN thì app sẽ dùng DNS của sboxN này.
