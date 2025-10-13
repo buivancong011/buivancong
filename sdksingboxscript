@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ============== CONFIG ==============
+# prefix container sing-box
+SBOX_PREFIX="${SBOX_PREFIX:-sbox}"
+
+# image PacketSDK và tag
+PSDK_IMAGE="${PSDK_IMAGE:-packetsdk/packetsdk:latest}"
+
+# prefix container PacketSDK theo route
+PSDK_PREFIX="${PSDK_PREFIX:-psdk-}"
+
+# APP KEY cho PacketSDK (mặc định dùng key bạn cung cấp)
+APP_KEY="${APP_KEY:-cskeAhoTSh9UV8}"
+
+# Thêm args tùy chọn cho PacketSDK (nếu cần)
+# ví dụ: PACKETSDK_EXTRA_ARGS="-country=US -loglevel=info"
+PACKETSDK_EXTRA_ARGS="${PACKETSDK_EXTRA_ARGS:-}"
+
+# Có kéo image trước khi chạy không
+PULL_IMAGE="${PULL_IMAGE:-true}"
+
+# ============== FUNCS ==============
+discover_sbox() {
+  docker ps -a --format '{{.Names}}' \
+  | awk -v pfx="^${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' \
+  | sort -V
+}
+
+start_psdk_for_sbox() {
+  # $1: sbox name (vd: sbox1)
+  local sbox="$1"
+  local name="${PSDK_PREFIX}${sbox}"   # psdk-sbox1
+
+  echo "→ Start ${name} (network=${sbox})"
+
+  # xoá container cũ (nếu có)
+  docker rm -f "${name}" >/dev/null 2>&1 || true
+
+  # chạy packetsdk gắn cùng network với sboxN
+  # theo đúng cú pháp bạn yêu cầu:
+  # docker run --restart unless-stopped packetsdk/packetsdk -appkey=APPKEY
+  docker run -d --name "${name}" \
+    --network=container:"${sbox}" \
+    --restart unless-stopped \
+    "${PSDK_IMAGE}" \
+    -appkey="${APP_KEY}" ${PACKETSDK_EXTRA_ARGS} >/dev/null
+
+  echo "   ✓ ${name} started"
+}
+
+stop_psdk_for_sbox() {
+  local sbox="$1"
+  local name="${PSDK_PREFIX}${sbox}"
+  docker rm -f "${name}" >/dev/null 2>&1 && echo "✗ ${name} removed" || true
+}
+
+status_psdk_for_sbox() {
+  local sbox="$1"
+  local name="${PSDK_PREFIX}${sbox}"
+  if docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -q "^${name}\b"; then
+    docker ps -a --format '{{.Names}}\t{{.Status}}' | awk -v n="${name}" '$1==n{print}'
+  else
+    echo "${name}    (not found)"
+  fi
+}
+
+logs_psdk_for_sbox() {
+  local sbox="$1"
+  local name="${PSDK_PREFIX}${sbox}"
+  echo "===== ${name} ====="
+  docker logs --since=30m -n 200 "${name}" || true
+}
+
+cmd_up() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[ERR] Không thấy ${SBOX_PREFIX}N nào. Hãy khởi tạo các route sbox trước."
+    exit 1
+  fi
+
+  echo "[INFO] Routes:"
+  echo "${list}" | xargs -I{} echo " - {}"
+
+  if [[ "${PULL_IMAGE}" == "true" ]]; then
+    echo "[INFO] Pull image ${PSDK_IMAGE}..."
+    docker pull "${PSDK_IMAGE}" >/dev/null || true
+  fi
+
+  echo
+  echo "[INFO] Start PacketSDK theo từng route:"
+  while read -r s; do
+    local st; st="$(docker inspect -f '{{.State.Status}}' "$s" 2>/dev/null || true)"
+    if [[ "$st" == "running" ]]; then
+      start_psdk_for_sbox "$s"
+    else
+      echo "   ⚠ Bỏ qua ${s} (không running)."
+    fi
+  done <<< "${list}"
+
+  echo
+  echo "✅ Done. Dùng:  $0 status   để xem trạng thái."
+  echo "ℹ️ APP_KEY: ${APP_KEY}"
+  echo "ℹ️ Extra args: ${PACKETSDK_EXTRA_ARGS:-<none>}"
+}
+
+cmd_down() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không thấy ${SBOX_PREFIX}N nào. Vẫn xoá các ${PSDK_PREFIX}${SBOX_PREFIX}* nếu còn."
+  fi
+
+  docker ps -a --format '{{.Names}}' \
+    | awk -v pfx="^${PSDK_PREFIX}${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' \
+    | while read -r nm; do docker rm -f "$nm" >/dev/null 2>&1 && echo "✗ $nm removed" || true; done
+
+  echo "[DONE] Đã dừng toàn bộ PacketSDK gắn với sbox."
+}
+
+cmd_status() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không tìm thấy ${SBOX_PREFIX}N nào."
+    exit 0
+  fi
+
+  echo "[STATUS] sbox & ${PSDK_PREFIX}sbox:"
+  while read -r s; do
+    local st; st="$(docker inspect -f '{{.State.Status}}' "$s" 2>/dev/null || echo "unknown")"
+    printf "%-8s: %s\n" "$s" "$st"
+    status_psdk_for_sbox "$s"
+  done <<< "${list}"
+}
+
+cmd_logs() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không tìm thấy ${SBOX_PREFIX}N nào."
+    exit 0
+  fi
+  while read -r s; do
+    logs_psdk_for_sbox "$s"
+  done <<< "${list}"
+}
+
+# ============== CLI ==============
+case "${1:-up}" in
+  up)      cmd_up ;;
+  down)    cmd_down ;;
+  status)  cmd_status ;;
+  logs)    cmd_logs ;;
+  *)
+    echo "Usage: $0 [up|down|status|logs]"
+    echo "Env:   SBOX_PREFIX  PSDK_IMAGE  PSDK_PREFIX  APP_KEY  PACKETSDK_EXTRA_ARGS"
+    exit 1
+    ;;
+esac
