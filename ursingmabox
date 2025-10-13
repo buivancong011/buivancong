@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # ===================== CONFIG =====================
 # Tiền tố sing-box containers (đã có sẵn)
-SBOX_PREFIX="sbox"
+SBOX_PREFIX="csbox"
 
 # Tiền tố UR containers
 UR_PREFIX="ur-"
