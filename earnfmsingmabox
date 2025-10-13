@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # ============== CONFIG ==============
 # prefix container sing-box
-SBOX_PREFIX="${SBOX_PREFIX:-sbox}"
+SBOX_PREFIX="${SBOX_PREFIX:-csbox}"
 
 # image EarnFM
 EFM_IMAGE="${EFM_IMAGE:-earnfm/earnfm-client:latest}"
