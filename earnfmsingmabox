@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ============== CONFIG ==============
+# prefix container sing-box
+SBOX_PREFIX="${SBOX_PREFIX:-sbox}"
+
+# image EarnFM
+EFM_IMAGE="${EFM_IMAGE:-earnfm/earnfm-client:latest}"
+
+# prefix container EarnFM theo route
+EFM_PREFIX="${EFM_PREFIX:-efm-}"
+
+# Token EarnFM (bắt buộc). Có thể override khi chạy: EARNFM_TOKEN="xxxxx" ./earnfm.sh up
+EARNFM_TOKEN="${EARNFM_TOKEN:-50f04bbe-94d9-4f6a-82b9-b40016bd4bbb}"
+
+# Chính sách restart: unless-stopped | always
+RESTART_POLICY="${RESTART_POLICY:-always}"
+
+# Có muốn pull image trước không
+PULL_IMAGE="${PULL_IMAGE:-true}"
+
+# Mount dữ liệu (bật mặc định) → /opt/earnfm-data/sboxN ↔ /data
+ENABLE_DATA_MOUNT="${ENABLE_DATA_MOUNT:-true}"
+DATA_BASE="${DATA_BASE:-/opt/earnfm-data}"
+
+# Thêm tham số docker run (nếu cần, ví dụ ulimits/caps)
+EXTRA_DOCKER_FLAGS="${EXTRA_DOCKER_FLAGS:-}"
+
+# ============== FUNCS ==============
+discover_sbox() {
+  docker ps -a --format '{{.Names}}' \
+  | awk -v pfx="^${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' \
+  | sort -V
+}
+
+start_earnfm_for_sbox() {
+  # $1: sbox name (vd: sbox1)
+  local sbox="$1"
+  local name="${EFM_PREFIX}${sbox}"     # efm-sbox1
+
+  echo "→ Start ${name} (network=${sbox})"
+
+  # Xoá container cũ (nếu có)
+  docker rm -f "${name}" >/dev/null 2>&1 || true
+
+  # Chuẩn bị volume nếu bật
+  local vol_args=()
+  if [[ "${ENABLE_DATA_MOUNT}" == "true" ]]; then
+    local data_dir="${DATA_BASE}/${sbox}"
+    mkdir -p "${data_dir}"
+    vol_args+=( -v "${data_dir}:/data" )
+  fi
+
+  # Chạy earnfm-client: gắn cùng network với sboxN + set token
+  docker run -d --name "${name}" \
+    --network=container:"${sbox}" \
+    --restart "${RESTART_POLICY}" \
+    -e EARNFM_TOKEN="${EARNFM_TOKEN}" \
+    "${vol_args[@]}" \
+    ${EXTRA_DOCKER_FLAGS} \
+    "${EFM_IMAGE}" >/dev/null
+
+  echo "   ✓ ${name} started"
+}
+
+stop_earnfm_for_sbox() {
+  local sbox="$1"
+  local name="${EFM_PREFIX}${sbox}"
+  docker rm -f "${name}" >/dev/null 2>&1 && echo "✗ ${name} removed" || true
+}
+
+status_earnfm_for_sbox() {
+  local sbox="$1"
+  local name="${EFM_PREFIX}${sbox}"
+  if docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -q "^${name}\b"; then
+    docker ps -a --format '{{.Names}}\t{{.Status}}' | awk -v n="${name}" '$1==n{print}'
+  else
+    echo "${name}    (not found)"
+  fi
+}
+
+logs_earnfm_for_sbox() {
+  local sbox="$1"
+  local name="${EFM_PREFIX}${sbox}"
+  echo "===== ${name} ====="
+  docker logs --since=30m -n 200 "${name}" || true
+}
+
+cmd_up() {
+  if [[ -z "${EARNFM_TOKEN}" ]]; then
+    echo "[ERR] Thiếu EARNFM_TOKEN. Chạy:  EARNFM_TOKEN=\"your_api_key\" $0 up"
+    exit 1
+  fi
+
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[ERR] Không thấy ${SBOX_PREFIX}N nào. Hãy khởi tạo các route sbox trước."
+    exit 1
+  fi
+
+  echo "[INFO] Routes:"
+  echo "${list}" | xargs -I{} echo " - {}"
+
+  if [[ "${PULL_IMAGE}" == "true" ]]; then
+    echo "[INFO] Pull image ${EFM_IMAGE}..."
+    docker pull "${EFM_IMAGE}" >/dev/null || true
+  fi
+
+  echo
+  echo "[INFO] Start EarnFM theo từng route:"
+  while read -r s; do
+    local st; st="$(docker inspect -f '{{.State.Status}}' "$s" 2>/dev/null || true)"
+    if [[ "$st" == "running" ]]; then
+      start_earnfm_for_sbox "$s"
+    else
+      echo "   ⚠ Bỏ qua ${s} (không running)."
+    fi
+  done <<< "${list}"
+
+  echo
+  echo "✅ Done. Dùng:  $0 status   để xem trạng thái."
+  echo "ℹ️ Token dùng: (ẩn) – đã set qua EARNFM_TOKEN env"
+  echo "ℹ️ Restart policy: ${RESTART_POLICY}"
+  if [[ "${ENABLE_DATA_MOUNT}" == "true" ]]; then
+    echo "ℹ️ Dữ liệu: ${DATA_BASE}/sboxN  → /data"
+  fi
+}
+
+cmd_down() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không thấy ${SBOX_PREFIX}N nào. Vẫn xoá các ${EFM_PREFIX}${SBOX_PREFIX}* nếu còn."
+  fi
+
+  docker ps -a --format '{{.Names}}' \
+    | awk -v pfx="^${EFM_PREFIX}${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' \
+    | while read -r nm; do docker rm -f "$nm" >/dev/null 2>&1 && echo "✗ $nm removed" || true; done
+
+  echo "[DONE] Đã dừng toàn bộ EarnFM gắn với sbox."
+}
+
+cmd_status() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không tìm thấy ${SBOX_PREFIX}N nào."
+    exit 0
+  fi
+
+  echo "[STATUS] sbox & ${EFM_PREFIX}sbox:"
+  while read -r s; do
+    local st; st="$(docker inspect -f '{{.State.Status}}' "$s" 2>/dev/null || echo "unknown")"
+    printf "%-8s: %s\n" "$s" "$st"
+    status_earnfm_for_sbox "$s"
+  done <<< "${list}"
+}
+
+cmd_logs() {
+  local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không tìm thấy ${SBOX_PREFIX}N nào."
+    exit 0
+  fi
+  while read -r s; do
+    logs_earnfm_for_sbox "$s"
+  done <<< "${list}"
+}
+
+# ============== CLI ==============
+case "${1:-up}" in
+  up)      cmd_up ;;
+  down)    cmd_down ;;
+  status)  cmd_status ;;
+  logs)    cmd_logs ;;
+  *)
+    echo "Usage: $0 [up|down|status|logs]"
+    echo "Env:   EARNFM_TOKEN  SBOX_PREFIX  EFM_IMAGE  EFM_PREFIX"
+    echo "       RESTART_POLICY=unless-stopped|always"
+    echo "       ENABLE_DATA_MOUNT=true  DATA_BASE=/path/to/save"
+    echo "       EXTRA_DOCKER_FLAGS='...'"
+    exit 1
+    ;;
+esac
