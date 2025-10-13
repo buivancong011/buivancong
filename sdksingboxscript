@@ -9,10 +9,10 @@ SBOX_PREFIX="${SBOX_PREFIX:-csbox}"
 PSDK_IMAGE="${PSDK_IMAGE:-packetsdk/packetsdk:latest}"
 
 # prefix container PacketSDK theo route
-PSDK_PREFIX="${PSDK_PREFIX:-psdk-}"
+PSDK_PREFIX="${PSDK_PREFIX:-apsdk-}"
 
 # APP KEY cho PacketSDK (mặc định dùng key bạn cung cấp)
-APP_KEY="${APP_KEY:-cskeAhoTSh9UV8}"
+APP_KEY="${APP_KEY:-BFwbNdFfwgcDdRmj}"
 
 # Thêm args tùy chọn cho PacketSDK (nếu cần)
 # ví dụ: PACKETSDK_EXTRA_ARGS="-country=US -loglevel=info"
