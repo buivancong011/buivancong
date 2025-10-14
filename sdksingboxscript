@@ -9,7 +9,7 @@ SBOX_PREFIX="${SBOX_PREFIX:-sbox}"
 PSDK_IMAGE="${PSDK_IMAGE:-packetsdk/packetsdk:latest}"
 
 # prefix container PacketSDK theo route
-PSDK_PREFIX="${PSDK_PREFIX:-apsdk-}"
+PSDK_PREFIX="${PSDK_PREFIX:-psdk-}"
 
 # APP KEY cho PacketSDK (mặc định dùng key bạn cung cấp)
 APP_KEY="${APP_KEY:-BFwbNdFfwgcDdRmj}"
