@@ -2,8 +2,8 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-# Danh sách HTTP proxy dạng "ip:port:user:pass"
-PROXIES=(
+# Upstream HTTP proxy URI: http://user:pass@host:port
+UPSTREAMS=(
 "s11.pxus.live:27474:user27474:1758906804"
 "103.82.25.199:20538:user20538:1758177032"
 "s13.pxus.live:55448:user55448:1759308326"
@@ -60,23 +60,20 @@ PROXIES=(
 "103.82.27.99:20858:user20858:1757735104"
 "103.82.27.99:19045:user19045:1758072607"
 
-# ... có thể dán thêm toàn bộ list của bạn ở đây ...
 )
 
-# Ảnh container
+# Tên base
+SBOX_NAME_BASE="sbox"
+DOH_NAME_BASE="doh"
+
+# Images
 IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
+IMG_DOH="cloudflare/cloudflared:latest"
 
-# Tên base cho container theo tuyến
-SBOX_BASE="csbox"
-
-# Tối ưu TUN
-MTU="1400"
-ENABLE_BBR=true
-ENABLE_TFO=true
-
-# DNS mặc định cho container sbox (không DoH, không qua HTTP proxy)
-# Lưu ý: app chạy --network=container:sboxN sẽ dùng DNS này.
-RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
+# Tùy chọn
+SBOX_LOGLEVEL="warn"    # trace|debug|info|warn|error
+SBOX_MTU="1400"         # MTU TUN
+USE_TEST_IMAGE="${USE_TEST_IMAGE:-false}"  # true để (tùy chọn) test curl từ container (kéo thêm image)
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -88,17 +85,38 @@ if [[ ! -e /dev/net/tun ]]; then
 fi
 
 # ===================== FUNCS =====================
+cleanup_route() {
+  local idx="$1"
+  local s="${SBOX_NAME_BASE}${idx}"
+  local d="${DOH_NAME_BASE}${idx}"
+  docker rm -f "$d" "$s" >/dev/null 2>&1 || true
+  rm -f "resolv_${idx}.conf" "sbox_${idx}.json" >/dev/null 2>&1 || true
+}
+
+parse_http_uri() {
+  # In: $1 = http://user:pass@host:port
+  # Out: echo "host port user pass"
+  local uri="$1"
+  uri="${uri#http://}"                    # strip scheme
+  local creds="${uri%@*}"                  # user:pass
+  local hostport="${uri#*@}"               # host:port
+  local user="${creds%%:*}"
+  local pass="${creds#*:}"
+  local host="${hostport%%:*}"
+  local port="${hostport##*:}"
+  echo "$host $port $user $pass"
+}
+
 mk_sbox_config() {
   # $1: file, $2: ip, $3: port, $4: user, $5: pass
   local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
   cat > "$cfg" <<JSON
 {
-  "log": { "level": "warn" },
+  "log": { "level": "${SBOX_LOGLEVEL}" },
 
   "dns": {
     "servers": [
-      { "tag": "dns1", "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
-      { "tag": "dns2", "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
+      { "tag": "doh-local", "address": "udp://127.0.0.1:53", "strategy": "ipv4_only" }
     ],
     "strategy": "ipv4_only"
   },
@@ -111,7 +129,7 @@ mk_sbox_config() {
       "auto_route": true,
       "strict_route": false,
       "sniff": true,
-      "mtu": ${MTU}
+      "mtu": ${SBOX_MTU}
     }
   ],
 
@@ -124,15 +142,16 @@ mk_sbox_config() {
       "username": "${user}",
       "password": "${pass}"
     },
+    { "tag": "dns",    "type": "dns"    },
     { "tag": "direct", "type": "direct" },
-    { "tag": "block",  "type": "block" }
+    { "tag": "block",  "type": "block"  }
   ],
 
   "route": {
-    "default_domain_resolver": "dns1",
+    "default_domain_resolver": "doh-local",
     "auto_detect_interface": true,
     "rules": [
-      { "port": 53, "outbound": "direct" }
+      { "port": 53, "outbound": "dns" }
     ],
     "final": "proxy"
   }
@@ -140,160 +159,103 @@ mk_sbox_config() {
 JSON
 }
 
-sysctl_optimize() {
-  if [[ "${ENABLE_BBR}" == true ]]; then
-    sudo sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1 || true
-    sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
-  fi
-  if [[ "${ENABLE_TFO}" == true ]]; then
-    sudo sysctl -w net.ipv4.tcp_fastopen=3 >/dev/null 2>&1 || true
-  fi
+check_sbox_config() {
+  docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
+    -v "$PWD/$1":/etc/sing-box/config.json:ro \
+    "$IMG_SBOX" check -c /etc/sing-box/config.json
 }
 
-cleanup_one() {
-  local idx="$1"
-  local s="${SBOX_BASE}${idx}"
-  docker rm -f "$s" >/dev/null 2>&1 || true
-  rm -f "sbox_${idx}.json" "resolv_${idx}.conf" >/dev/null 2>&1 || true
-}
-
-wait_running() {
-  # $1: container name, $2: timeout seconds
-  local name="$1" timeout="${2:-20}"
-  local t=0 st
-  while true; do
-    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
-    case "$st" in
-      running) return 0 ;;
-      restarting|created|starting)
-        if (( t >= timeout )); then
-          echo "[WARN] $name chưa running sau ${timeout}s (status=$st)."
-          return 1
-        fi
-        sleep 1; ((t++))
-        ;;
-      exited|dead|'')
-        echo "[ERR] $name status=$st. Logs:"
-        docker logs --since=2m "$name" || true
-        return 1
-        ;;
-      *)
-        sleep 1
-        ;;
-    esac
-  done
-}
-
-check_config() {
-  # $1: path to config.json
-  local cfg="$1"
-  docker run --rm \
-    --cap-add=NET_ADMIN --device /dev/net/tun \
-    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
-    ghcr.io/sagernet/sing-box:latest check -c /etc/sing-box/config.json
-}
-
-start_one() {
-  local idx="$1"
-  IFS=':' read -r ip port user pass <<<"$2"
-  local s="${SBOX_BASE}${idx}"
+start_route() {
+  local idx="$1" uri="$2"
+  local s="${SBOX_NAME_BASE}${idx}"
+  local d="${DOH_NAME_BASE}${idx}"
   local cfg="sbox_${idx}.json"
-  local rsv="resolv_${idx}.conf"
+  local resolv_file="resolv_${idx}.conf"
 
   echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] HTTP: ${user}:${pass}@${ip}:${port}"
+  echo "[ROUTE $idx] Upstream: $uri"
 
-  cleanup_one "$idx"
+  cleanup_route "$idx"
+
+  # parse http://user:pass@host:port
+  read -r ip port user pass <<<"$(parse_http_uri "$uri")"
+
+  # resolv nội bộ → trỏ về 127.0.0.1 (DoH nội bộ sẽ lắng nghe)
+  cat > "$resolv_file" <<EOF
+options ndots:0
+nameserver 127.0.0.1
+EOF
+
   mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
-  printf "%s\n" "$RESOLV_CONTENT" > "$rsv"
-
-  # Validate config trước khi chạy
-  if ! check_config "$cfg"; then
-    echo "[ERR] Config route $idx không hợp lệ. Bỏ qua route này."
+  if ! check_sbox_config "$cfg"; then
+    echo "[ERR] Config sing-box route $idx không hợp lệ."
     return 0
   fi
 
+  # chạy sing-box
   docker run -d --name "$s" --restart=always \
     --cap-add=NET_ADMIN --device /dev/net/tun \
     -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
-    -v "$PWD/$rsv":/etc/resolv.conf:ro \
-    "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+    -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
+    "$IMG_SBOX" run -c /etc/sing-box/config.json
 
-  # Đợi sboxN chạy ổn định
-  if ! wait_running "$s" 25; then
-    echo "[ERR] $s không vào trạng thái running. Kiểm tra log ở trên."
-    return 0
+  # chạy cloudflared DoH trong cùng network namespace
+  docker run -d --name "$d" --restart=always \
+    --network=container:"$s" \
+    "$IMG_DOH" proxy-dns \
+      --address 127.0.0.1 \
+      --port 53 \
+      --upstream https://1.1.1.1/dns-query \
+      --upstream https://1.0.0.1/dns-query
+
+  if [[ "$USE_TEST_IMAGE" == "true" ]]; then
+    echo "[ROUTE $idx] (optional) test egress IP:"
+    docker run --rm --network=container:"$s" curlimages/curl:latest -s https://ifconfig.me || true
+    echo
+  else
+    echo "[ROUTE $idx] RUNNING (bỏ qua test)"
   fi
 
-  # Kiểm tra nhanh: test IP (không phụ thuộc DNS)
-  printf "[ROUTE %d] latency(IP): " "$idx"
-  docker run --rm --network=container:"$s" curlimages/curl:latest \
-    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-    https://1.1.1.1 || echo "FAIL"
-
-  # Kiểm tra qua domain (DNS DIRECT, TCP qua HTTP proxy)
-  printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
-  docker run --rm --network=container:"$s" curlimages/curl:latest \
-    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-    https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
-
-  echo "[ROUTE $idx] RUNNING: $s"
   echo "→ Gắn app: docker run ... --network=container:${s} <image> ..."
 }
 
-status_all() {
-  local i=1
-  for _ in "${PROXIES[@]}"; do
-    local s="${SBOX_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$s"; then
-      printf "[route%02d] " "$i"
-      docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'IP: connect=%{time_connect}s total=%{time_total}s  |  ' \
-        https://1.1.1.1
-      docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'DNS+TLS: connect=%{time_connect}s total=%{time_total}s\n' \
-        https://www.cloudflare.com/cdn-cgi/trace
-    else
-      echo "[route$(printf %02d "$i")] stopped"
-    fi
-    ((i++))
-  done
-}
-
 down_all() {
-  echo "[CLEANUP] stopping all routes..."
+  echo "[CLEANUP] Xoá toàn bộ tuyến..."
   local i=1
-  for _ in "${PROXIES[@]}"; do
-    cleanup_one "$i"
+  for _ in "${UPSTREAMS[@]}"; do
+    cleanup_route "$i"
     ((i++))
   done
   echo "[DONE]"
 }
 
-pull_images() {
-  docker pull "$IMG_SBOX" >/dev/null
+status_all() {
+  local i=1
+  for _ in "${UPSTREAMS[@]}"; do
+    local s="${SBOX_NAME_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$s"; then
+      echo "[STATUS] $s: running"
+    else
+      echo "[STATUS] $s: not running"
+    fi
+    ((i++))
+  done
 }
 
 # ===================== CLI =====================
 case "${1:-up}" in
   up)
-    sysctl_optimize
-    pull_images
     i=1
-    for spec in "${PROXIES[@]}"; do
-      start_one "$i" "$spec"
+    for uri in "${UPSTREAMS[@]}"; do
+      start_route "$i" "$uri"
       ((i++))
     done
     echo
-    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (mỗi route: sing-box TUN; DNS 53 bypass DIRECT; outbound HTTP CONNECT)."
-    echo "ℹ️  Host KHÔNG đổi route; chỉ container gắn --network=container:csboxN mới đi qua HTTP proxy tương ứng."
+    echo "✅ ĐÃ KHỞI TẠO ${#UPSTREAMS[@]} TUYẾN (sing-box TUN + cloudflared DoH)."
+    echo "ℹ️  Chỉ container gắn --network=container:sboxN mới đi qua tuyến tương ứng."
     ;;
-  status)
-    status_all
-    ;;
-  down)
-    down_all
-    ;;
+  status) status_all ;;
+  down)   down_all ;;
   *)
     echo "Usage: $0 [up|status|down]"
     exit 1
