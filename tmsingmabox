@@ -6,7 +6,7 @@ set -Eeuo pipefail
 TOKEN="${TOKEN:-JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=}"
 
 # Tiền tố container sing-box và traffmonetizer
-SBOX_PREFIX="sbox"
+SBOX_PREFIX="csbox"
 TM_PREFIX="tm-"
 
 # Ảnh Traffmonetizer
