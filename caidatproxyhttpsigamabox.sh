@@ -140,18 +140,18 @@ mk_sbox_config() {
   cat > "$cfg" <<JSON
 {
   "log": { "level": "${SBOX_LOGLEVEL}" },
+
   "dns": {
     "servers": [
       {
         "type": "udp",
         "tag": "doh-local",
         "server": "127.0.0.1",
-        "server_port": 53,
-        "strategy": "ipv4_only"
+        "server_port": 53
       }
-    ],
-    "strategy": "ipv4_only"
+    ]
   },
+
   "inbounds": [
     {
       "type": "tun",
@@ -163,6 +163,7 @@ mk_sbox_config() {
       "mtu": ${SBOX_MTU}
     }
   ],
+
   "outbounds": [
     {
       "tag": "proxy",
@@ -174,6 +175,7 @@ mk_sbox_config() {
     },
     { "tag": "direct", "type": "direct" }
   ],
+
   "route": {
     "default_domain_resolver": "doh-local",
     "auto_detect_interface": true,
@@ -186,6 +188,7 @@ mk_sbox_config() {
 }
 JSON
 }
+
 
 check_sbox_config() {
   docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
