@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # ============== CONFIG ==============
 # prefix container sing-box
-SBOX_PREFIX="${SBOX_PREFIX:-sbox}"
+SBOX_PREFIX="${SBOX_PREFIX:-csbox}"
 
 # image PacketSDK và tag
 PSDK_IMAGE="${PSDK_IMAGE:-packetsdk/packetsdk:latest}"
