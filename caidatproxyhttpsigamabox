@@ -1,0 +1,345 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+# ===================== CONFIG =====================
+# Danh sách HTTP proxy dạng "ip:port:user:pass"
+PROXIES=(
+"156.249.126.159:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.93:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.140:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.62:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.114:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.242:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.131:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.167:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.46:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.168:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.21:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.124:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.175:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.204:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.235:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.21:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.35:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.212:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.195:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.120:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.246:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.52:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.159:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.127.197:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.48:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.241:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.194:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.165:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.21:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.160:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.189:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.124.209:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.125.203:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.249.126.148:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.243:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.51:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.148:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.152:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.74:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.168:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.230:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.111:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.178:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.72:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.213:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.173:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.87:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.70:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.181:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.4:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.122:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.96:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.0:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.134:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.219:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.104:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.83:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.147:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.6:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.10:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.155:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.45:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.227:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.235:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.129:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.157.220:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.239.156.147:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.99:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.126:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.139:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.52:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.233:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.119:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.156:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.75:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.244:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.193:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.120:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.110:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.158:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.180:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.210:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.157:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.20:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.155:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.5:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.152:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.172:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.220:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.205:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.136:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.215:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.69:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.78:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.29:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.13:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.131:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.189:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.84:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+"156.242.51.6:1339:vinh_son_n0laSp:LCyas4OQGzg2qeP"
+# ... có thể dán thêm toàn bộ list của bạn ở đây ...
+)
+
+# Ảnh container
+IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
+
+# Tên base cho container theo tuyến
+SBOX_BASE="csbox"
+
+# Tối ưu TUN
+MTU="1400"
+ENABLE_BBR=true
+ENABLE_TFO=true
+
+# DNS mặc định cho container sbox (không DoH, không qua HTTP proxy)
+# Lưu ý: app chạy --network=container:sboxN sẽ dùng DNS này.
+RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
+
+# ===================== PRECHECK =====================
+command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
+if [[ ! -e /dev/net/tun ]]; then
+  echo "[INFO] Tạo /dev/net/tun..."
+  sudo mkdir -p /dev/net || true
+  sudo mknod /dev/net/tun c 10 200 || true
+  sudo chmod 666 /dev/net/tun || true
+fi
+
+# ===================== FUNCS =====================
+mk_sbox_config() {
+  # $1: file, $2: ip, $3: port, $4: user, $5: pass
+  local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
+  cat > "$cfg" <<JSON
+{
+  "log": { "level": "warn" },
+
+  "dns": {
+    "servers": [
+      { "tag": "dns1", "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
+      { "tag": "dns2", "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
+    ],
+    "strategy": "ipv4_only"
+  },
+
+  "inbounds": [
+    {
+      "type": "tun",
+      "interface_name": "tun0",
+      "address": ["172.19.0.1/30"],
+      "auto_route": true,
+      "strict_route": false,
+      "sniff": true,
+      "mtu": ${MTU}
+    }
+  ],
+
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "type": "http",
+      "server": "${ip}",
+      "server_port": ${port},
+      "username": "${user}",
+      "password": "${pass}"
+    },
+    { "tag": "direct", "type": "direct" },
+    { "tag": "block",  "type": "block" }
+  ],
+
+  "route": {
+    "default_domain_resolver": "dns1",
+    "auto_detect_interface": true,
+    "rules": [
+      { "port": 53, "outbound": "direct" }
+    ],
+    "final": "proxy"
+  }
+}
+JSON
+}
+
+sysctl_optimize() {
+  if [[ "${ENABLE_BBR}" == true ]]; then
+    sudo sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1 || true
+    sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
+  fi
+  if [[ "${ENABLE_TFO}" == true ]]; then
+    sudo sysctl -w net.ipv4.tcp_fastopen=3 >/dev/null 2>&1 || true
+  fi
+}
+
+cleanup_one() {
+  local idx="$1"
+  local s="${SBOX_BASE}${idx}"
+  docker rm -f "$s" >/dev/null 2>&1 || true
+  rm -f "sbox_${idx}.json" "resolv_${idx}.conf" >/dev/null 2>&1 || true
+}
+
+wait_running() {
+  # $1: container name, $2: timeout seconds
+  local name="$1" timeout="${2:-20}"
+  local t=0 st
+  while true; do
+    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
+    case "$st" in
+      running) return 0 ;;
+      restarting|created|starting)
+        if (( t >= timeout )); then
+          echo "[WARN] $name chưa running sau ${timeout}s (status=$st)."
+          return 1
+        fi
+        sleep 1; ((t++))
+        ;;
+      exited|dead|'')
+        echo "[ERR] $name status=$st. Logs:"
+        docker logs --since=2m "$name" || true
+        return 1
+        ;;
+      *)
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+check_config() {
+  # $1: path to config.json
+  local cfg="$1"
+  docker run --rm \
+    --cap-add=NET_ADMIN --device /dev/net/tun \
+    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
+    ghcr.io/sagernet/sing-box:latest check -c /etc/sing-box/config.json
+}
+
+start_one() {
+  local idx="$1"
+  IFS=':' read -r ip port user pass <<<"$2"
+  local s="${SBOX_BASE}${idx}"
+  local cfg="sbox_${idx}.json"
+  local rsv="resolv_${idx}.conf"
+
+  echo "------------------------------------------------------------"
+  echo "[ROUTE $idx] HTTP: ${user}:${pass}@${ip}:${port}"
+
+  cleanup_one "$idx"
+  mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
+  printf "%s\n" "$RESOLV_CONTENT" > "$rsv"
+
+  # Validate config trước khi chạy
+  if ! check_config "$cfg"; then
+    echo "[ERR] Config route $idx không hợp lệ. Bỏ qua route này."
+    return 0
+  fi
+
+  docker run -d --name "$s" --restart=always \
+    --cap-add=NET_ADMIN --device /dev/net/tun \
+    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
+    -v "$PWD/$rsv":/etc/resolv.conf:ro \
+    "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+
+  # Đợi sboxN chạy ổn định
+  if ! wait_running "$s" 25; then
+    echo "[ERR] $s không vào trạng thái running. Kiểm tra log ở trên."
+    return 0
+  fi
+
+  # Kiểm tra nhanh: test IP (không phụ thuộc DNS)
+  printf "[ROUTE %d] latency(IP): " "$idx"
+  docker run --rm --network=container:"$s" curlimages/curl:latest \
+    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+    https://1.1.1.1 || echo "FAIL"
+
+  # Kiểm tra qua domain (DNS DIRECT, TCP qua HTTP proxy)
+  printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
+  docker run --rm --network=container:"$s" curlimages/curl:latest \
+    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+    https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
+
+  echo "[ROUTE $idx] RUNNING: $s"
+  echo "→ Gắn app: docker run ... --network=container:${s} <image> ..."
+}
+
+status_all() {
+  local i=1
+  for _ in "${PROXIES[@]}"; do
+    local s="${SBOX_BASE}${i}"
+    if docker ps --format '{{.Names}}' | grep -qx "$s"; then
+      printf "[route%02d] " "$i"
+      docker run --rm --network=container:"$s" curlimages/curl:latest \
+        -s -o /dev/null -w 'IP: connect=%{time_connect}s total=%{time_total}s  |  ' \
+        https://1.1.1.1
+      docker run --rm --network=container:"$s" curlimages/curl:latest \
+        -s -o /dev/null -w 'DNS+TLS: connect=%{time_connect}s total=%{time_total}s\n' \
+        https://www.cloudflare.com/cdn-cgi/trace
+    else
+      echo "[route$(printf %02d "$i")] stopped"
+    fi
+    ((i++))
+  done
+}
+
+down_all() {
+  echo "[CLEANUP] stopping all routes..."
+  local i=1
+  for _ in "${PROXIES[@]}"; do
+    cleanup_one "$i"
+    ((i++))
+  done
+  echo "[DONE]"
+}
+
+pull_images() {
+  docker pull "$IMG_SBOX" >/dev/null
+}
+
+# ===================== CLI =====================
+case "${1:-up}" in
+  up)
+    sysctl_optimize
+    pull_images
+    i=1
+    for spec in "${PROXIES[@]}"; do
+      start_one "$i" "$spec"
+      ((i++))
+    done
+    echo
+    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (mỗi route: sing-box TUN; DNS 53 bypass DIRECT; outbound HTTP CONNECT)."
+    echo "ℹ️  Host KHÔNG đổi route; chỉ container gắn --network=container:csboxN mới đi qua HTTP proxy tương ứng."
+    ;;
+  status)
+    status_all
+    ;;
+  down)
+    down_all
+    ;;
+  *)
+    echo "Usage: $0 [up|status|down]"
+    exit 1
+    ;;
+esac
