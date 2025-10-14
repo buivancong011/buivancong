@@ -1,6 +1,12 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+# ======== GUARD: bắt buộc chạy bằng bash =========
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "[ERR] Script này yêu cầu bash. Hãy chạy bằng: bash $0 [up|status|down]"
+  exit 1
+fi
+
 # ===================== CONFIG =====================
 # Upstream HTTP proxy mỗi tuyến. Hỗ trợ 2 định dạng:
 #  1) http://user:pass@host:port
@@ -64,22 +70,18 @@ UPSTREAMS=(
 
 )
 
-# Tên base container cho sing-box và cloudflared
 SBOX_NAME_BASE="sbox"
 DOH_NAME_BASE="doh"
 
-# Images
 IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
 IMG_DOH="cloudflare/cloudflared:latest"
 
-# Tuỳ chọn
 SBOX_LOGLEVEL="${SBOX_LOGLEVEL:-warn}"   # trace|debug|info|warn|error
-SBOX_MTU="${SBOX_MTU:-1400}"             # MTU cho TUN
-USE_TEST_IMAGE="${USE_TEST_IMAGE:-false}"# true => test egress (kéo thêm curlimages/curl)
+SBOX_MTU="${SBOX_MTU:-1400}"
+USE_TEST_IMAGE="${USE_TEST_IMAGE:-false}"
 
-# Bật tối ưu TCP (không bắt buộc)
-ENABLE_BBR="${ENABLE_BBR:-true}"         # true/false
-ENABLE_TFO="${ENABLE_TFO:-true}"         # true/false
+ENABLE_BBR="${ENABLE_BBR:-true}"
+ENABLE_TFO="${ENABLE_TFO:-true}"
 
 # ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
@@ -103,24 +105,21 @@ optimize_sysctl() {
 
 # ===================== FUNCS =====================
 
-# Hỗ trợ cả 2 format upstream:
-# - http://user:pass@host:port
-# - host:port:user:pass
-# Trả về: "host port user pass"
+# Trả "host port user pass" từ:
+#  - http://user:pass@host:port
+#  - host:port:user:pass
 parse_upstream_any() {
   local u="$1"
   if [[ "$u" =~ ^https?:// ]]; then
-    # http(s)://user:pass@host:port
     local tmp="${u#http://}"; tmp="${tmp#https://}"
-    local creds="${tmp%@*}"        # user:pass
-    local hostport="${tmp#*@}"     # host:port
+    local creds="${tmp%@*}"
+    local hostport="${tmp#*@}"
     local user="${creds%%:*}"
     local pass="${creds#*:}"
     local host="${hostport%%:*}"
     local port="${hostport##*:}"
     echo "$host" "$port" "$user" "$pass"
   else
-    # host:port:user:pass
     local host port user pass
     IFS=':' read -r host port user pass <<<"$u"
     echo "$host" "$port" "$user" "$pass"
@@ -135,17 +134,12 @@ cleanup_route() {
   rm -f "resolv_${idx}.conf" "sbox_${idx}.json" >/dev/null 2>&1 || true
 }
 
-# Cấu hình sing-box theo chuẩn >= 1.12 (KHÔNG dùng legacy)
-# - DNS servers dạng mới (type/server/server_port)
-# - Không dùng special outbounds "dns"/"block"
-# - Route rules dùng action: "hijack-dns" (bắt DNS), có thể thêm "reject" nếu muốn chặn 53 thuần
 mk_sbox_config() {
   # $1: file, $2: ip, $3: port, $4: user, $5: pass
   local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
   cat > "$cfg" <<JSON
 {
   "log": { "level": "${SBOX_LOGLEVEL}" },
-
   "dns": {
     "servers": [
       {
@@ -158,7 +152,6 @@ mk_sbox_config() {
     ],
     "strategy": "ipv4_only"
   },
-
   "inbounds": [
     {
       "type": "tun",
@@ -170,7 +163,6 @@ mk_sbox_config() {
       "mtu": ${SBOX_MTU}
     }
   ],
-
   "outbounds": [
     {
       "tag": "proxy",
@@ -182,15 +174,12 @@ mk_sbox_config() {
     },
     { "tag": "direct", "type": "direct" }
   ],
-
   "route": {
     "default_domain_resolver": "doh-local",
     "auto_detect_interface": true,
     "rules": [
       { "action": "sniff" },
       { "protocol": "dns", "action": "hijack-dns" }
-      /* Nếu muốn chặn hẳn DNS thuần, thêm:
-         { "port": 53, "action": "reject" } */
     ],
     "final": "proxy"
   }
@@ -216,18 +205,13 @@ start_route() {
 
   cleanup_route "$idx"
 
-  # parse upstream (cả 2 format)
   read -r ip port user pass <<<"$(parse_upstream_any "$upstream")"
   if [[ -z "$ip" || -z "$port" || -z "$user" || -z "$pass" ]]; then
     echo "[ERR] Upstream không hợp lệ: $upstream"
     return 0
   fi
 
-  # resolv nội bộ → trỏ 127.0.0.1 (DoH nội bộ lắng nghe)
-  cat > "$resolv_file" <<EOF
-options ndots:0
-nameserver 127.0.0.1
-EOF
+  printf "options ndots:0\nnameserver 127.0.0.1\n" > "$resolv_file"
 
   mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
   if ! check_sbox_config "$cfg"; then
@@ -235,14 +219,12 @@ EOF
     return 0
   fi
 
-  # chạy sing-box (TUN + HTTP CONNECT outbound)
   docker run -d --name "$s" --restart=always \
     --cap-add=NET_ADMIN --device /dev/net/tun \
     -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
     -v "$PWD/$resolv_file":/etc/resolv.conf:ro \
     "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-  # chạy cloudflared DoH trong CÙNG namespace với sing-box
   docker run -d --name "$d" --restart=always \
     --network=container:"$s" \
     "$IMG_DOH" proxy-dns \
@@ -252,7 +234,6 @@ EOF
       --upstream https://1.0.0.1/dns-query >/dev/null
 
   if [[ "$USE_TEST_IMAGE" == "true" ]]; then
-    echo "[ROUTE $idx] (optional) test egress IP:"
     docker run --rm --network=container:"$s" curlimages/curl:latest -s https://ifconfig.me || true
     echo
   else
