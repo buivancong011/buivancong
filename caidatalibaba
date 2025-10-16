@@ -8,7 +8,7 @@ UR_USER='nguyenvinhcao123@gmail.com'                         # URNetwork
 UR_PASS='CAOcao123CAO@'
 
 # SOCKS5 proxy (serjs/go-socks5-proxy)
-S5_PORT=1080
+S5_PORT=2511
 S5_USER='caook123'
 S5_PASS='CAOcao123@'
 
