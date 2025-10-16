@@ -1,45 +1,120 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "=== [SETUP] Khởi chạy Docker containers ==="
+# ========= CONFIG CỨNG (Alibaba 1 IP, 1 mạng, 1 container/mỗi dịch vụ) =========
+TOKEN='/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno='         # Traffmonetizer
+EARNFM_TOKEN='50f04bbe-94d9-4f6a-82b9-b40016bd4bbb'          # EarnFM
+UR_USER='nguyenvinhcao123@gmail.com'                         # URNetwork
+UR_PASS='CAOcao123CAO@'
 
-# ==== Cài Docker nếu chưa có ====
-if ! command -v docker &> /dev/null; then
-  echo "[INFO] Docker chưa có -> Cài đặt..."
-  sudo yum update -y || true
-  sudo yum install -y docker -y
-  sudo systemctl enable docker
-  sudo systemctl start docker
+# SOCKS5 proxy (serjs/go-socks5-proxy)
+S5_PORT=1080
+S5_USER='caook123'
+S5_PASS='CAOcao123@'
+
+# Tuỳ chọn dọn sạch Docker trước khi khởi tạo
+PURGE_CONTAINERS=true
+PURGE_IMAGES=false   # để false cho nhanh; bật true nếu muốn xoá sạch images
+
+need_cmd(){ command -v "$1" >/dev/null 2>&1; }
+
+# ========= Chọn image Traffmonetizer theo kiến trúc =========
+arch="$(uname -m)"
+case "$arch" in
+  aarch64|arm64) TM_IMAGE="traffmonetizer/cli_v2:arm64v8" ;;
+  x86_64|amd64)  TM_IMAGE="traffmonetizer/cli_v2:latest"  ;;
+  *)             TM_IMAGE="traffmonetizer/cli_v2:latest"  ;;
+esac
+
+# UR image theo kiến trúc
+UR_IMAGE_AMD64="ghcr.io/techroy23/docker-urnetwork:latest"
+UR_IMAGE_ARM64="techroy23/docker-urnetwork:latest"
+if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+  UR_PLATFORM="--platform linux/arm64"
+  UR_IMAGE="$UR_IMAGE_ARM64"
+else
+  UR_PLATFORM="--platform linux/amd64"
+  UR_IMAGE="$UR_IMAGE_AMD64"
 fi
 
-# ==== Xóa container cũ nếu có ====
-docker rm -f tm repocket earnfm packetsdk1 ur 2>/dev/null || true
+# ========= Cài Docker nếu thiếu =========
+install_pkgs(){
+  if need_cmd yum; then sudo yum -y update || true; sudo yum -y install "$@" || true
+  elif need_cmd dnf; then sudo dnf -y update || true; sudo dnf -y install "$@" || true
+  elif need_cmd apt-get; then sudo apt-get update -y || true; sudo apt-get install -y "$@" || true
+  else return 1; fi
+}
 
-# ==== Traffmonetizer ====
-docker pull traffmonetizer/cli_v2:latest
-docker run -d --restart always --name tm traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
+if ! need_cmd docker; then
+  echo "[INFO] Cài Docker..."
+  install_pkgs docker docker.io || true
+  sudo systemctl enable docker
+  sudo systemctl start docker
+  echo "[INFO] Docker đã sẵn sàng. Chạy lại script."
+  exit 0
+fi
 
-# ==== Repocket ====
-docker pull repocket/repocket:latest
-docker run -d --restart=always --name repocket -e RP_EMAIL="nguyenvinhson000@gmail.com" -e RP_API_KEY="cad6dcce-d038-4727-969b-d996ed80d3ef" repocket/repocket:latest
+# ========= Dọn Docker (tuỳ chọn) =========
+if [[ "$PURGE_CONTAINERS" == "true" ]] && [[ "$(docker ps -aq | wc -l)" -gt 0 ]]; then
+  echo "[WARN] Xoá toàn bộ containers..."
+  docker rm -f $(docker ps -aq) || true
+fi
+if [[ "$PURGE_IMAGES" == "true" ]] && [[ "$(docker images -q | wc -l)" -gt 0 ]]; then
+  echo "[WARN] Xoá toàn bộ images..."
+  docker rmi -f $(docker images -q) || true
+fi
 
-# ==== EarnFM ====
-docker pull earnfm/earnfm-client:latest
-docker run -d --restart=always --name earnfm -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" earnfm/earnfm-client:latest
+# ========= Lấy IP/interface (log cho tiện) =========
+DEV="$(ip route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}' || true)"
+IP="$(ip -4 addr show dev "$DEV" 2>/dev/null | awk '/inet /{print $2}' | head -n1 | cut -d/ -f1 || true)"
+echo "[INFO] Interface: ${DEV:-n/a} | IP: ${IP:-n/a}"
 
-# ==== PacketSDK ====
-docker run -d --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
+# ========= Pull images =========
+echo "[INFO] Pull images..."
+docker pull "${TM_IMAGE}" || true
+docker pull earnfm/earnfm-client:latest || true
+docker pull "$UR_IMAGE" || true
+docker pull serjs/go-socks5-proxy:latest || true
 
-# ==== URNetwork ====
-docker run -d --restart=always --platform linux/amd64 --cap-add NET_ADMIN --name ur -e USER_AUTH="nguyenvinhcao123@gmail.com" -e PASSWORD="CAOcao123CAO@" ghcr.io/techroy23/docker-urnetwork:latest
-# Tạo container watchtower
-docker run -d \
-  --name watchtower \
-  --restart=always \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  --cleanup \
-  --interval 3600
+# ========= Run Traffmonetizer (1 container) =========
+echo "[INFO] Run Traffmonetizer..."
+docker run -d --restart always --name tm1 "${TM_IMAGE}" start accept --token "${TOKEN}"
 
-echo "=== [DONE] Containers đã chạy xong ==="
-docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+# ========= Run EarnFM (1 container) =========
+echo "[INFO] Run EarnFM..."
+docker run -d --restart=always -e EARNFM_TOKEN="${EARNFM_TOKEN}" --name earnfm1 earnfm/earnfm-client:latest
+
+# ========= Run URNetwork (1 container, KHÔNG map port) =========
+echo "[INFO] Run URNetwork..."
+UR_VOL="vnstat_data_ur"
+docker volume create "$UR_VOL" >/dev/null 2>&1 || true
+docker run -d $UR_PLATFORM \
+  --name "ur1" \
+  --restart "always" \
+  --pull "always" \
+  --privileged \
+  --log-driver json-file \
+  --log-opt max-size=5m \
+  --log-opt max-file=3 \
+  -e USER_AUTH="${UR_USER}" \
+  -e PASSWORD="${UR_PASS}" \
+  -e ENABLE_IP_CHECKER="false" \
+  -v "${UR_VOL}:/var/lib/vnstat" \
+  "$UR_IMAGE"
+
+# ========= Run SOCKS5 proxy (1 container) =========
+echo "[INFO] Run SOCKS5 proxy on 0.0.0.0:${S5_PORT}..."
+docker run -d --restart=always \
+  -p ${S5_PORT}:1080 \
+  --name socks5 \
+  -e USERS="${S5_USER}:${S5_PASS}" \
+  serjs/go-socks5-proxy:latest
+
+# ========= Summary =========
+echo ""
+echo "================= DONE (1 IP, 1 network, 1 container/service) ================="
+echo "IP: ${IP:-n/a} | IF: ${DEV:-n/a}"
+echo "SOCKS5: ${IP:-<your_ip>}:${S5_PORT}  (user=${S5_USER})"
+echo ""
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+echo "==============================================================================="
