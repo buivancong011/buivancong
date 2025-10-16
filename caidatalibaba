@@ -1,26 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-# ========= CONFIG CỨNG (1 IP, 1 mạng, 1 container / dịch vụ) =========
-# Tokens/creds bạn đã cung cấp
-TOKEN='/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno='          # Traffmonetizer
-EARNFM_TOKEN='50f04bbe-94d9-4f6a-82b9-b40016bd4bbb'           # EarnFM
-UR_USER='nguyenvinhcao123@gmail.com'                          # URNetwork
+# ========= CONFIG CỨNG =========
+TOKEN='/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno='         # Traffmonetizer
+EARNFM_TOKEN='50f04bbe-94d9-4f6a-82b9-b40016bd4bbb'          # EarnFM
+UR_USER='nguyenvinhcao123@gmail.com'                         # URNetwork
 UR_PASS='CAOcao123CAO@'
 
-# Bitping – điền email/pass nếu muốn auto-login không tương tác
-BITPING_EMAIL='nguyenvinhcao123@gmail.com'    # ví dụ: 'you@example.com'
-BITPING_PASSWORD='nguyenvinhcao123@gmail.com' # ví dụ: 'your_password'
-BITPING_MFA=''      # nếu có 2FA (tùy chọn, có thể để trống)
-BITPING_VOL="bitpingd-volume"
-
-# Tuỳ chọn dọn sạch Docker trước khi khởi tạo
+# Tuỳ chọn dọn sạch Docker
 PURGE_CONTAINERS=true
-PURGE_IMAGES=false   # để false cho nhanh; bật true nếu muốn xoá sạch images
+PURGE_IMAGES=false   # để false cho nhanh; true nếu muốn xoá sạch images
 
 need_cmd(){ command -v "$1" >/dev/null 2>&1; }
 
-# ========= Chọn image Traffmonetizer theo kiến trúc =========
+# ========= Chọn image theo kiến trúc =========
 arch="$(uname -m)"
 case "$arch" in
   aarch64|arm64) TM_IMAGE="traffmonetizer/cli_v2:arm64v8" ;;
@@ -76,7 +69,6 @@ echo "[INFO] Pull images..."
 docker pull "${TM_IMAGE}" || true
 docker pull earnfm/earnfm-client:latest || true
 docker pull "$UR_IMAGE" || true
-docker pull bitping/bitpingd:latest || true   # Bitping node (official)  :contentReference[oaicite:1]{index=1}
 
 # ========= Run Traffmonetizer (1 container) =========
 echo "[INFO] Run Traffmonetizer..."
@@ -104,44 +96,9 @@ docker run -d $UR_PLATFORM \
   -v "${UR_VOL}:/var/lib/vnstat" \
   "$UR_IMAGE"
 
-# ========= Run Bitping (1 container) =========
-# Tạo volume để lưu cred/state của bitpingd
-docker volume create "${BITPING_VOL}" >/dev/null 2>&1 || true
-
-if [[ -n "${BITPING_EMAIL}" && -n "${BITPING_PASSWORD}" ]]; then
-  echo "[INFO] Bitping: login non-interactive bằng ENV..."
-  # Cách 1: Login qua ENV, mount volume, sau đó chạy node (theo docs)  :contentReference[oaicite:2]{index=2}
-  docker run --rm -it \
-    -e BITPING_EMAIL="${BITPING_EMAIL}" \
-    -e BITPING_PASSWORD="${BITPING_PASSWORD}" \
-    -e BITPING_MFA="${BITPING_MFA}" \
-    --mount type=volume,source="${BITPING_VOL}",target=/root/.bitpingd \
-    bitping/bitpingd:latest true >/dev/null 2>&1 || true
-
-  echo "[INFO] Run Bitping node (detached)..."
-  docker run -d \
-    --name bitping \
-    --restart=always \
-    --mount type=volume,source="${BITPING_VOL}",target=/root/.bitpingd \
-    bitping/bitpingd:latest
-else
-  echo "[WARN] Chưa cấu hình BITPING_EMAIL/BITPING_PASSWORD -> bỏ qua auto-login."
-  echo "       Bạn có thể login thủ công bằng (1 trong 2 cách sau):"
-  echo "   a) Tương tác:"
-  echo "      docker run -it --mount type=volume,source=${BITPING_VOL},target=/root/.bitpingd bitping/bitpingd:latest"
-  echo "      # trong shell bitpingd, chạy:  bitpingd login   (rồi exit)"
-  echo "   b) Không tương tác (CLI login):"
-  echo "      docker run --rm -it --mount type=volume,source=${BITPING_VOL},target=/root/.bitpingd \\"
-  echo "        --entrypoint /app/bitpingd bitping/bitpingd:latest login --email \"you@example.com\" --password \"your_pass\""
-  echo "   Sau đó start node:"
-  echo "      docker run -d --name bitping --restart=always --mount type=volume,source=${BITPING_VOL},target=/root/.bitpingd bitping/bitpingd:latest"
-  # Không tự chạy khi thiếu cred để tránh container loop
-fi
-
 # ========= Summary =========
 echo ""
-echo "================= DONE (1 IP, 1 network, no SOCKS5, + Bitping) ================="
+echo "================= DONE (1 IP, 1 network, TM + EarnFM + UR) ================="
 echo "IP: ${IP:-n/a} | IF: ${DEV:-n/a}"
-echo ""
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-echo "==============================================================================="
+echo "========================================================================="
