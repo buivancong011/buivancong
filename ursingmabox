@@ -9,7 +9,7 @@ SBOX_PREFIX="csbox"
 UR_PREFIX="ur-"
 
 # Image theo repo techroy23
-UR_IMAGE="ghcr.io/techroy23/docker-urnetwork:latest"
+UR_IMAGE="ghcr.io/buivancong011/docker-urnetwork:latest"
 
 # ĐĂNG NHẬP MẶC ĐỊNH (có thể override bằng biến môi trường bên ngoài)
 USER_AUTH="${USER_AUTH:-buivancong012@gmail.com}"
