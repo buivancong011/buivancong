@@ -2,23 +2,40 @@
 set -Eeuo pipefail
 
 # ===================== CONFIG =====================
-SBOX_PREFIX="${SBOX_PREFIX:-csbox}"
-UR_PREFIX="${UR_PREFIX:-ur-}"
+# Tiền tố sing-box containers (đã có sẵn)
+SBOX_PREFIX="csbox"
 
-# GHIM ẢNH CỤ THỂ (sẽ không tự thay đổi)
-UR_IMAGE="ghcr.io/techroy23/docker-urnetwork@sha256:a1e97597b06904594b8977d493f9d07866714cd423685f5cea370467c5dcf547"
+# Tiền tố UR containers
+UR_PREFIX="ur-"
 
+# Image theo repo techroy23
+UR_IMAGE="ghcr.io/techroy23/docker-urnetwork:2025.10.28-768893230@sha256:a1e97597b06904594b8977d493f9d07866714cd423685f5cea370467c5dcf547"
+
+# ĐĂNG NHẬP MẶC ĐỊNH (có thể override bằng biến môi trường bên ngoài)
 USER_AUTH="${USER_AUTH:-buivancong012@gmail.com}"
 PASSWORD="${PASSWORD:-buivancong012}"
 
-PROXY_FILE="${PROXY_FILE:-}"  # ví dụ: /root/proxy.txt
-PULL_ON_START=false            # ❌ không tự pull
-RECREATE_MODE="none"           # ❌ không recreate
+# (TUỲ CHỌN) Mount 1 proxy.txt chung cho TẤT CẢ ur-sboxN
+# Định dạng mỗi dòng: ip:port:user:pass
+PROXY_FILE="${PROXY_FILE:-}"  # ví dụ: /root/proxy.txt hoặc để rỗng
+
+# Kéo image trước khi chạy?  (TẮT để không tự cập nhật)
+PULL_ON_START=false
+
+# Recreate container (bỏ cơ chế recreate theo image mới)
+RECREATE_MODE="none"
+
+# Thời gian chờ sbox lên running (giây)
 WAIT_TIMEOUT=25
+
+# Health/Logs
 LOG_MAX_SIZE="10m"
 LOG_MAX_FILE="3"
-DEVICE_NAME_MODE="sbox"
 
+# Hiển thị device-name trên dashboard (giữ sboxN để dễ đối chiếu)
+DEVICE_NAME_MODE="sbox"   # "sbox" | "ur"
+
+# ===================== PRECHECK =====================
 command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
 
 if [[ -n "$PROXY_FILE" && ! -f "$PROXY_FILE" ]]; then
@@ -26,6 +43,7 @@ if [[ -n "$PROXY_FILE" && ! -f "$PROXY_FILE" ]]; then
   exit 1
 fi
 
+# ===================== FUNCS =====================
 discover_sbox() {
   docker ps -a --format '{{.Names}}' | awk -v pfx="^${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' | sort -V
 }
@@ -35,9 +53,21 @@ wait_running_sbox() {
   while :; do
     local st
     st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
-    [[ "$st" == "running" ]] && return 0
-    ((t++ >= timeout)) && { echo "[WARN] $name chưa running sau ${timeout}s."; return 1; }
-    sleep 1
+    case "$st" in
+      running) return 0 ;;
+      restarting|created|starting)
+        if (( t >= timeout )); then
+          echo "[WARN] $name chưa running sau ${timeout}s (status=$st)."
+          return 1
+        fi
+        sleep 1; ((t++))
+        ;;
+      exited|dead|'')
+        echo "[ERR] $name status=$st. Không thể gắn UR vào."
+        return 1
+        ;;
+      *) sleep 1 ;;
+    esac
   done
 }
 
@@ -45,96 +75,183 @@ mk_device_name() {
   local sbox="$1"
   case "$DEVICE_NAME_MODE" in
     sbox) echo "$sbox" ;;
-    ur) echo "ur${sbox#${SBOX_PREFIX}}" ;;
+    ur)   echo "ur${sbox#${SBOX_PREFIX}}" ;;
+    *)    echo "$sbox" ;;
   esac
 }
 
 probe_network() {
   local s="$1"
-  docker run --rm --network=container:"$s" curlimages/curl:latest -s --connect-timeout 5 https://1.1.1.1 >/dev/null 2>&1 || {
-    echo "⚠ ${s} không ra Internet."; return 1; }
+  # Probe TCP (không cần DNS)
+  if ! docker run --rm --network=container:"$s" \
+       curlimages/curl:latest -s --connect-timeout 6 https://1.1.1.1 >/dev/null; then
+    echo "   ⚠ ${s} chưa ra Internet (TCP)."
+    return 1
+  fi
+  # Probe qua domain (có DNS)
+  if ! docker run --rm --network=container:"$s" \
+       curlimages/curl:latest -s --connect-timeout 6 https://www.cloudflare.com/cdn-cgi/trace >/dev/null; then
+    echo "   ⚠ ${s} DNS/TLS chưa OK."
+    return 1
+  fi
+  return 0
+}
+
+ensure_image() {
+  # KHÔNG pull để tránh cập nhật ngoài ý muốn
+  if [[ "${PULL_ON_START}" == true ]]; then
+    echo "[IMG] Pull ${UR_IMAGE} ..."
+    docker pull "${UR_IMAGE}" >/dev/null || true
+  fi
+}
+
+# ⛔ Chỉ tạo nếu CHƯA có container; KHÔNG recreate khi image đổi
+need_recreate() {
+  local ur="$1"
+  if ! docker ps -a --format '{{.Names}}' | grep -qx "$ur"; then
+    return 0   # chưa có → tạo mới
+  fi
+  return 1     # đã có → giữ nguyên, không recreate
 }
 
 start_ur_for_sbox() {
-  local sbox="$1" ur_name="${UR_PREFIX}${sbox}"
+  local sbox="$1"
+  local ur_name="${UR_PREFIX}${sbox}"
   local device_name; device_name="$(mk_device_name "$sbox")"
-  echo "→ Chuẩn bị ${ur_name} (net=${sbox})"
 
-  probe_network "$sbox" || { echo "⚠ Bỏ qua ${ur_name} vì mạng ${sbox} chưa thông."; return; }
+  echo "→ Chuẩn bị ${ur_name} (net=container:${sbox}, device=${device_name})"
 
-  if docker ps -a --format '{{.Names}}' | grep -qx "$ur_name"; then
-    echo "   ✓ ${ur_name} đã tồn tại, giữ nguyên (không recreate)"
-    return
+  # Probe mạng trước
+  if ! probe_network "$sbox"; then
+    echo "   ⚠ Bỏ qua ${ur_name} vì route ${sbox} chưa thông."
+    return 0
   fi
 
+  # Volume vnStat riêng cho mỗi route (auto-create nếu chưa có)
   local vnstat_vol="vnstat_${sbox}"
   docker volume create "${vnstat_vol}" >/dev/null 2>&1 || true
 
-  docker run -d --name "${ur_name}" \
-    --network="container:${sbox}" \
-    --restart=unless-stopped \
-    --log-opt "max-size=${LOG_MAX_SIZE}" --log-opt "max-file=${LOG_MAX_FILE}" \
-    -e USER_AUTH="${USER_AUTH}" \
-    -e PASSWORD="${PASSWORD}" \
-    -e ENABLE_IP_CHECKER=false \
-    -e TZ=Asia/Ho_Chi_Minh \
-    -e DEVICE_NAME="${device_name}" \
-    -v "${vnstat_vol}:/var/lib/vnstat" \
-    ${PROXY_FILE:+-v "$PROXY_FILE:/app/proxy.txt:ro"} \
-    "${UR_IMAGE}" >/dev/null
+  if need_recreate "${ur_name}"; then
+    echo "   ↻ Tạo mới ${ur_name} (không auto-update)"
+    docker rm -f "${ur_name}" >/dev/null 2>&1 || true
 
-  echo "   ✓ ${ur_name} đã tạo mới (image cố định, không auto update)"
+    # Chuẩn bị args
+    local run_args=(
+      -d --name "${ur_name}"
+      --network="container:${sbox}"
+      --restart=always
+      --log-opt "max-size=${LOG_MAX_SIZE}" --log-opt "max-file=${LOG_MAX_FILE}"
+      -e USER_AUTH="${USER_AUTH}"
+      -e PASSWORD="${PASSWORD}"
+      -e ENABLE_IP_CHECKER=false
+      -e TZ=Asia/Ho_Chi_Minh
+      --health-cmd='wget -qO- --timeout=5 https://1.1.1.1 || exit 1'
+      --health-interval=30s --health-retries=3 --health-timeout=8s
+      -v "${vnstat_vol}:/var/lib/vnstat"
+    )
+    # Mount proxy.txt nếu có
+    if [[ -n "$PROXY_FILE" ]]; then
+      run_args+=(-v "${PROXY_FILE}:/app/proxy.txt:ro")
+    fi
+
+    docker run "${run_args[@]}" "${UR_IMAGE}" >/dev/null
+    echo "   ✓ ${ur_name} đã tạo mới  |  volume=${vnstat_vol}"
+  else
+    echo "   ✓ ${ur_name} đã tồn tại — giữ nguyên (không recreate)"
+  fi
 }
 
 stop_ur_for_sbox() {
   local sbox="$1"
-  docker rm -f "${UR_PREFIX}${sbox}" >/dev/null 2>&1 && echo "✗ ${UR_PREFIX}${sbox} đã xoá"
+  local ur_name="${UR_PREFIX}${sbox}"
+  docker rm -f "${ur_name}" >/dev/null 2>&1 && echo "✗ ${ur_name} đã xoá" || true
+}
+
+status_ur_for_sbox() {
+  local sbox="$1"
+  local ur_name="${UR_PREFIX}${sbox}"
+  if docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -q "^${ur_name}\b"; then
+    docker ps -a --format '{{.Names}}\t{{.Status}}' | awk -v n="${ur_name}" '$1==n{print}'
+  else
+    echo "${ur_name}    (not found)"
+  fi
+}
+
+logs_ur_for_sbox() {
+  local sbox="$1"
+  local ur_name="${UR_PREFIX}${sbox}"
+  echo "===== ${ur_name} ====="
+  docker logs --since=30m -n 200 "${ur_name}" || true
 }
 
 cmd_up() {
+  ensure_image
   local list; list="$(discover_sbox)"
-  [[ -z "$list" ]] && { echo "[ERR] Không thấy ${SBOX_PREFIX}N nào."; exit 1; }
+  if [[ -z "${list}" ]]; then
+    echo "[ERR] Không tìm thấy ${SBOX_PREFIX}N nào. Hãy tạo sbox trước."
+    exit 1
+  fi
 
   echo "[INFO] Phát hiện routes:"
-  echo "$list" | xargs -I{} echo " - {}"
+  echo "${list}" | xargs -I{} echo " - {}"
 
-  echo "[INFO] Chạy UR cố định cho từng route:"
+  echo
+  echo "[INFO] Kiểm tra trạng thái sbox..."
   while read -r s; do
-    [[ "$(docker inspect -f '{{.State.Status}}' "$s" 2>/dev/null || true)" == "running" ]] && start_ur_for_sbox "$s"
-  done <<< "$list"
+    wait_running_sbox "$s" "$WAIT_TIMEOUT" || echo "   ⚠ Bỏ qua ${s} (chưa running)."
+  done <<< "${list}"
 
-  echo "✅ Hoàn tất."
+  echo
+  echo "[INFO] Khởi chạy UR cho từng route:"
+  while read -r s; do
+    if docker inspect -f '{{.State.Status}}' "$s" >/dev/null 2>&1 && \
+       [[ "$(docker inspect -f '{{.State.Status}}' "$s")" == "running" ]]; then
+      start_ur_for_sbox "$s"
+    else
+      echo "   ⚠ Bỏ qua ${s} (không running)."
+    fi
+  done <<< "${list}"
+
+  echo
+  echo "✅ Hoàn tất. Dùng:  $0 status   để xem trạng thái."
 }
 
 cmd_down() {
-  docker ps -a --format '{{.Names}}' | awk -v pfx="^${UR_PREFIX}${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' |
-  while read -r ur; do docker rm -f "$ur" >/dev/null 2>&1 && echo "✗ $ur đã xoá"; done
+  docker ps -a --format '{{.Names}}' | awk -v pfx="^${UR_PREFIX}${SBOX_PREFIX}[0-9]+$" '$0 ~ pfx' \
+    | while read -r ur; do docker rm -f "$ur" >/dev/null 2>&1 && echo "✗ $ur đã xoá" || true; done
+  echo "[DONE] Đã dừng toàn bộ UR gắn với sbox."
 }
 
 cmd_status() {
   local list; list="$(discover_sbox)"
-  [[ -z "$list" ]] && { echo "[INFO] Không thấy ${SBOX_PREFIX}N nào."; exit 0; }
-
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không thấy ${SBOX_PREFIX}N nào."
+    exit 0
+  fi
   echo "[STATUS] sbox & ur-sbox:"
   while read -r s; do
     local st; st="$(docker inspect -f '{{.State.Status}}' "$s" 2>/dev/null || echo "unknown")"
     printf "%-8s: %s\n" "$s" "$st"
-    docker ps -a --format '{{.Names}}\t{{.Status}}' | grep "^${UR_PREFIX}${s}\b" || echo "  (chưa có UR)"
-  done <<< "$list"
+    status_ur_for_sbox "$s"
+  done <<< "${list}"
 }
 
 cmd_logs() {
   local list; list="$(discover_sbox)"
+  if [[ -z "${list}" ]]; then
+    echo "[INFO] Không thấy ${SBOX_PREFIX}N nào."
+    exit 0
+  fi
   while read -r s; do
-    echo "===== ${UR_PREFIX}${s} ====="
-    docker logs --tail 100 "${UR_PREFIX}${s}" 2>/dev/null || echo "(no logs)"
-  done <<< "$list"
+    logs_ur_for_sbox "$s"
+  done <<< "${list}"
 }
 
+# ===================== CLI =====================
 case "${1:-up}" in
-  up) cmd_up ;;
-  down) cmd_down ;;
-  status) cmd_status ;;
-  logs) cmd_logs ;;
-  *) echo "Usage: $0 [up|down|status|logs]" ;;
+  up)      cmd_up ;;
+  down)    cmd_down ;;
+  status)  cmd_status ;;
+  logs)    cmd_logs ;;
+  *) echo "Usage: $0 [up|down|status|logs]"; exit 1 ;;
 esac
