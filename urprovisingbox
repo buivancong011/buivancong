@@ -94,20 +94,20 @@ api_post_auth(){ # body từ stdin
 }
 
 # ===================== ADMIN JWT =====================
-admin_jwt_from_cache(){ [[ -s "$ADMIN_JWT_FILE" ]] && cat "$ADMIN_JWT_FILE"; }
+admin_jwt_from_cache(){ [[ -s "$ADMIN_JWT_FILE" ]] && tr -d '\r\n' < "$ADMIN_JWT_FILE"; }
 save_admin_jwt(){ printf '%s' "$1" >"$ADMIN_JWT_FILE"; chmod 600 "$ADMIN_JWT_FILE" || true; }
 
 fetch_admin_jwt_with_auth_code(){
   local out by
-  out="$(printf '{"auth_code":"%s"}' "$AUTH_CODE" | api_post "/auth/code-login" || true)"
+  out="$(jq -nc --arg c "$AUTH_CODE" '{auth_code:$c}' | api_post "/auth/code-login" || true)"
   by="$(echo "$out" | jq -r '.by_jwt // empty')"
   [[ -n "$by" ]] || die "Đổi AUTH_CODE thất bại: $out"
   printf '%s' "$by"
 }
 fetch_admin_jwt_with_password(){
   local out by
-  out="$(printf '{"user_auth":"%s","password":"%s"}' "$USER_AUTH" "$PASSWORD" \
-        | api_post "/auth/login-with-password" || true)"
+  out="$(jq -nc --arg u "$USER_AUTH" --arg p "$PASSWORD" \
+        '{user_auth:$u, password:$p}' | api_post "/auth/login-with-password" || true)"
   by="$(echo "$out" | jq -r '.by_jwt // .network.by_jwt // empty')"
   [[ -n "$by" ]] || die "login-with-password chưa ra JWT (có thể cần verify 2FA): $out"
   printf '%s' "$by"
@@ -134,7 +134,7 @@ container_name_for_sbox(){ echo "${UR_PREFIX}$1"; }
 
 issue_client_jwt(){
   local desc="$1" spec="${2:-docker-ur:g4}" admin="$3" payload out
-  payload="$(jq -c --arg d "$desc" --arg s "$spec" '{description:$d, device_spec:$s}')"
+  payload="$(jq -nc --arg d "$desc" --arg s "$spec" '{description:$d, device_spec:$s}')"
   out="$(printf '%s' "$payload" | api_post_auth "/network/auth-client" "$admin" || true)"
   echo "$out" | jq -r '.by_client_jwt // empty'
 }
@@ -145,7 +145,7 @@ ensure_client_jwt_valid(){
   mkdir -p "$dir"
 
   if [[ -s "$jwt_file" ]]; then
-    jwt="$(cat "$jwt_file")"
+    jwt="$(tr -d '\r\n' < "$jwt_file")"
     if ! jwt_about_to_expire "$jwt" "$CLIENT_JWT_RENEW_BEFORE"; then
       echo "OK"; return 0
     fi
@@ -222,7 +222,7 @@ cmd_status(){
     local st; st="$(docker inspect -f '{{.State.Status}}' "$cname" 2>/dev/null || echo '-')"
     local status="MISSING"
     if [[ -s "$jwt_file" ]]; then
-      local jwt; jwt="$(cat "$jwt_file")"
+      local jwt; jwt="$(tr -d '\r\n' < "$jwt_file")"
       local exp; exp="$(jwt_exp_ts "$jwt")"
       if [[ -n "$exp" ]]; then
         local now; now="$(now_ts)"
@@ -263,7 +263,7 @@ cmd_renew(){
     if [[ "$force" == "--force" ]]; then
       need=true
     elif [[ -s "$jwt_file" ]]; then
-      jwt_about_to_expire "$(cat "$jwt_file")" "$CLIENT_JWT_RENEW_BEFORE" && need=true
+      jwt_about_to_expire "$(tr -d '\r\n' < "$jwt_file")" "$CLIENT_JWT_RENEW_BEFORE" && need=true
     else
       need=true
     fi
@@ -300,26 +300,26 @@ usage(){
   cat <<'EOF'
 Usage:
   # Đăng nhập (lấy/làm mới ADMIN_JWT, có cache):
-  ./ur-auto.sh auth
+  ./urprovisingbox auth
 
   # Khởi chạy hoặc cập nhật containers (mỗi csboxN 1 JWT riêng):
-  ./ur-auto.sh up
+  ./urprovisingbox up
 
   # Dừng & xoá toàn bộ ur-csboxN (không xoá JWT trên đĩa):
-  ./ur-auto.sh down
+  ./urprovisingbox down
 
   # Trạng thái + JWT còn hạn hay vĩnh viễn:
-  ./ur-auto.sh status
+  ./urprovisingbox status
 
   # Xem logs 30 phút gần nhất:
-  ./ur-auto.sh logs
+  ./urprovisingbox logs
 
   # Gia hạn JWT khi gần hết hạn (hoặc ép gia hạn toàn bộ):
-  ./ur-auto.sh renew
-  ./ur-auto.sh renew --force
+  ./urprovisingbox renew
+  ./urprovisingbox renew --force
 
   # Cập nhật image thủ công:
-  ./ur-auto.sh update
+  ./urprovisingbox update
 
 Env tuỳ chọn:
   UR_API, IMAGE, SBOX_PREFIX, UR_PREFIX, JWT_DIR_BASE
@@ -328,7 +328,7 @@ Env tuỳ chọn:
   ADMIN_JWT_RENEW_BEFORE, CLIENT_JWT_RENEW_BEFORE
   # Đăng nhập:
   AUTH_CODE="XXXX-XXXX"
-  hoặc: USER_AUTH="email" PASSWORD="pass"
+  hoặc: USER_AUTH="email" PASSWORD="pass" (mặc định đã là tài khoản của bạn)
 EOF
 }
 
