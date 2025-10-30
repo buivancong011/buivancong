@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ===================== CONFIG =====================
+SBOX_PREFIX="${SBOX_PREFIX:-csbox}"  # tiền tố sing-box: csbox1..N
+UR_IMAGE="${UR_IMAGE:-ghcr.io/techroy23/docker-urnetwork:latest}"
+UR_USER="${UR_USER:-buivancong012@gmail.com}"
+UR_PASS="${UR_PASS:-buivancong012}"
+UR_ENABLE_IP_CHECKER="${UR_ENABLE_IP_CHECKER:-true}"
+UR_PLATFORM="--platform linux/amd64"        # ép dùng image kiến trúc amd64
+UR_PROXY_FILE="${UR_PROXY_FILE:-}"          # proxy.txt nếu có
+
+RESTART_POLICY="${RESTART_POLICY:-always}"
+PULL_BEHAVIOR="${PULL_BEHAVIOR:-always}"
+
+# ===================== MAIN =====================
+echo "[INFO] Quét các container ${SBOX_PREFIX}* đang RUNNING..."
+mapfile -t SBOX_LIST < <(docker ps --format '{{.Names}}' | grep -E "^${SBOX_PREFIX}[0-9]+$" || true)
+
+if [[ ${#SBOX_LIST[@]} -eq 0 ]]; then
+  echo "[WARN] Không tìm thấy ${SBOX_PREFIX} nào đang chạy."
+  exit 0
+fi
+
+echo "[INFO] Tìm thấy: ${SBOX_LIST[*]}"
+
+for sbox in "${SBOX_LIST[@]}"; do
+  ur_name="ur-${sbox}"
+  vnstat_vol="vnstat_data_${ur_name}"
+
+  # Nếu UR đã RUNNING -> bỏ qua
+  if docker ps --format '{{.Names}}' | grep -Fxq "$ur_name"; then
+    echo "[OK] $ur_name đã chạy (gắn vào $sbox) -> bỏ qua."
+    continue
+  fi
+
+  # Nếu UR đã tồn tại nhưng dừng -> xoá để tạo lại cho sạch
+  if docker ps -a --format '{{.Names}}' | grep -Fxq "$ur_name"; then
+    echo "[INFO] $ur_name tồn tại nhưng không chạy -> xoá để tạo lại."
+    docker rm -f "$ur_name" >/dev/null 2>&1 || true
+  fi
+
+  # Tạo volume vnstat (nếu chưa có)
+  docker volume create "$vnstat_vol" >/dev/null 2>&1 || true
+
+  echo "[INFO] Khởi chạy $ur_name dùng chung network của $sbox ..."
+  docker run -d $UR_PLATFORM \
+    --name "$ur_name" \
+    --network "container:${sbox}" \
+    --restart "$RESTART_POLICY" \
+    --pull "$PULL_BEHAVIOR" \
+    --privileged \
+    --log-driver none \
+    -e "USER_AUTH=${UR_USER}" \
+    -e "PASSWORD=${UR_PASS}" \
+    -e "ENABLE_IP_CHECKER=${UR_ENABLE_IP_CHECKER}" \
+    -v "${vnstat_vol}:/var/lib/vnstat" \
+    ${UR_PROXY_FILE:+-v "$UR_PROXY_FILE:/app/proxy.txt"} \
+    "$UR_IMAGE"
+done
+
+echo "[DONE] Hoàn tất gắn UR vào các ${SBOX_PREFIX} đang chạy."
