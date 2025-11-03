@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # ===================== CONFIG =====================
 SBOX_PREFIX="${SBOX_PREFIX:-csbox}"  # tiền tố sing-box: csbox1..N
-UR_IMAGE="${UR_IMAGE:-nguyenvinhcao123/docker-urnetwork:latest}"
+UR_IMAGE="${UR_IMAGE:-ghcr.io/techroy23/docker-urnetwork:2025.11.1-772578020}"
 UR_USER="${UR_USER:-buivancong012@gmail.com}"
 UR_PASS="${UR_PASS:-buivancong012}"
 UR_ENABLE_IP_CHECKER="${UR_ENABLE_IP_CHECKER:-true}"
