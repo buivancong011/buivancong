@@ -90,4 +90,10 @@ docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449
 # packetsdk
 docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
 docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
+# wizardgain
+docker run -d --network my_network_1 --name=wizardgain1 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
+docker run -d --network my_network_2 --name=wizardgain2 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
+# urnetwork
+docker run -d --network my_network_1 --platform linux/arm64 --name='urnetwork1' --restart='always' --pull='always' --privileged --log-driver=json-file --log-opt max-size=5m --log-opt max-file=3 -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' techroy23/docker-urnetwork:latest
+docker run -d --network my_network_2 --platform linux/arm64 --name='urnetwork2' --restart='always' --pull='always' --privileged --log-driver=json-file --log-opt max-size=5m --log-opt max-file=3 -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' techroy23/docker-urnetwork:latest
 
