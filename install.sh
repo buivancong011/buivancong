@@ -91,7 +91,7 @@ docker run -d --network my_network_1 --name=wizardgain1 --restart=always -e EMAI
 docker run -d --network my_network_2 --name=wizardgain2 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
 
 # urnetwork
-docker run -d --network my_network_1  --name urnetwork1 --restart always  --privileged -v ur_data1:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
-docker run -d --network my_network_2  --name urnetwork2 --restart always  --privileged -v ur_data2:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
+docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN -v ur_data1:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
+docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN -v ur_data2:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
 
 
