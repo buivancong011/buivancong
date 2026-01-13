@@ -85,9 +85,7 @@ timeout 300 docker pull mysteriumnetwork/myst:latest
 sleep 2
 docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
-# packetsdk
-docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
-docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
+
 # wizardgain
 docker run -d --network my_network_1 --name=wizardgain1 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
 docker run -d --network my_network_2 --name=wizardgain2 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
@@ -96,7 +94,4 @@ docker run -d --network my_network_2 --name=wizardgain2 --restart=always -e EMAI
 docker run -d --network my_network_1  --name urnetwork1 --restart always --pull always --privileged -v ur_data1:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
 docker run -d --network my_network_2  --name urnetwork2 --restart always --pull always --privileged -v ur_data2:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
 
-# earnfm
-docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest
-docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest
 
