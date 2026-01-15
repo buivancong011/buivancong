@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # ===================== Load .env nếu có =====================
@@ -9,7 +9,6 @@ fi
 
 # ===================== CONFIG =====================
 TOKEN="${TOKEN:-}"                # Traffmonetizer (bắt buộc)
-EARNFM_TOKEN="${EARNFM_TOKEN:-}"  # EarnFM (bắt buộc)
 UR_USER="${UR_USER:-}"            # URNetwork (bắt buộc)
 UR_PASS="${UR_PASS:-}"            # URNetwork (bắt buộc)
 
@@ -18,7 +17,7 @@ UR_PROXY_FILE="${UR_PROXY_FILE:-}"   # Đường dẫn proxy.txt (nếu dùng)
 
 # ===================== CONFIG CỨNG =====================
 TOKEN='/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno='
-EARNFM_TOKEN='50f04bbe-94d9-4f6a-82b9-b40016bd4bbb'
+# Đã xóa EARNFM_TOKEN
 UR_USER='nguyenvinhcao123@gmail.com'
 UR_PASS='CAOcao123CAO@'
 
@@ -41,8 +40,14 @@ PURGE_NETWORKS=true
 NET1_NAME="my_network_1"
 NET2_NAME="my_network_2"
 NET1_CIDR="192.168.33.0/24"
-@@ -39,7 +33,7 @@ case "$arch" in
-  *)             TM_IMAGE="traffmonetizer/cli_v2:latest"  ;;
+NET2_CIDR="192.168.34.0/24"
+
+# ===================== Phát hiện kiến trúc =====================
+arch=$(uname -m)
+case "$arch" in
+  x86_64)          TM_IMAGE="traffmonetizer/cli_v2:latest" ;;
+  aarch64|arm64)   TM_IMAGE="traffmonetizer/cli_v2:arm64v8" ;;
+  *)               TM_IMAGE="traffmonetizer/cli_v2:latest"  ;;
 esac
 
 # UR image + platform
@@ -50,7 +55,21 @@ esac
 UR_IMAGE_AMD64="ghcr.io/techroy23/docker-urnetwork:latest"
 UR_IMAGE_ARM64="techroy23/docker-urnetwork:latest"
 if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-@@ -68,50 +62,24 @@ install_pkgs() {
+  UR_IMAGE="$UR_IMAGE_ARM64"
+  UR_PLATFORM="--platform linux/arm64"
+else
+  UR_IMAGE="$UR_IMAGE_AMD64"
+  UR_PLATFORM="--platform linux/amd64"
+fi
+
+# ===================== Hàm cài đặt gói =====================
+install_pkgs() {
+  if need_cmd apt-get; then sudo apt-get update && sudo apt-get install -y "$@";
+  elif need_cmd yum; then sudo yum install -y "$@";
+  else echo "[WARN] Không thể tự cài đặt gói $*. Vui lòng cài thủ công."; fi
+}
+
+need_cmd() { command -v "$1" &>/dev/null; }
 
 if ! need_cmd docker; then
   echo "[INFO] Docker chưa có -> cài đặt..."
@@ -68,18 +87,13 @@ if ! need_cmd docker; then
 fi
 
 # ===================== Kiểm tra biến bắt buộc =====================
-if [[ -z "$TOKEN" || -z "$EARNFM_TOKEN" || -z "$UR_USER" || -z "$UR_PASS" ]]; then
+if [[ -z "$TOKEN" || -z "$UR_USER" || -z "$UR_PASS" ]]; then
   cat <<EOF
 [ERROR] Thiếu biến môi trường bắt buộc.
 Cần đặt ít nhất:
   TOKEN
-  EARNFM_TOKEN
   UR_USER
   UR_PASS
-
-Gợi ý:
-  echo "TOKEN='...'; EARNFM_TOKEN='...'; UR_USER='...'; UR_PASS='...'" > .env
-  bash deploy_all.sh
 EOF
   exit 1
 fi
@@ -90,31 +104,26 @@ if [[ "${PURGE_CONTAINERS}" == "true" ]]; then
     echo "[WARN] Xoá toàn bộ containers..."
     docker rm -f $(docker ps -aq) || true
   fi
-# ===================== Dọn Docker =====================
-if [[ "$PURGE_CONTAINERS" == "true" ]] && [[ "$(docker ps -aq | wc -l)" -gt 0 ]]; then
-  echo "[WARN] Xoá toàn bộ containers..."
-  docker rm -f $(docker ps -aq) || true
 fi
+
 if [[ "${PURGE_IMAGES}" == "true" ]]; then
   if [[ "$(docker images -q | wc -l)" -gt 0 ]]; then
     echo "[WARN] Xoá toàn bộ images..."
     docker rmi -f $(docker images -q) || true
   fi
-if [[ "$PURGE_IMAGES" == "true" ]] && [[ "$(docker images -q | wc -l)" -gt 0 ]]; then
-  echo "[WARN] Xoá toàn bộ images..."
-  docker rmi -f $(docker images -q) || true
 fi
+
 if [[ "${PURGE_NETWORKS}" == "true" ]]; then
   echo "[INFO] Xoá networks cũ (trừ mặc định)..."
-if [[ "$PURGE_NETWORKS" == "true" ]]; then
-  echo "[INFO] Xoá networks cũ..."
   while read -r net; do
     [[ -n "$net" ]] && docker network rm "$net" || true
   done < <(docker network ls --format '{{.Name}}' | grep -vE '^(bridge|host|none)$' || true)
-@@ -122,34 +90,21 @@ docker network create "${NET1_NAME}" --driver bridge --subnet "${NET1_CIDR}" >/d
+fi
+
+docker network create "${NET1_NAME}" --driver bridge --subnet "${NET1_CIDR}" >/dev/null 2>&1 || true
 docker network create "${NET2_NAME}" --driver bridge --subnet "${NET2_CIDR}" >/dev/null 2>&1 || true
 
-# ===================== Phát hiện interface & IP =====================
+# ===================== Phát hiện interface & IP (THAY ĐỔI: Bắt chữ) =====================
 for bin in ip awk cut; do
   need_cmd "$bin" || { echo "[ERROR] Thiếu lệnh $bin"; exit 1; }
 done
@@ -125,12 +134,23 @@ if [[ -z "${DEV:-}" ]]; then
   exit 1
 fi
 
-IP1="$(ip -4 addr show dev "$DEV" | awk '/inet /{print $2}' | head -n1 | cut -d/ -f1)"
-IP2="$(ip -4 addr show dev "$DEV" | awk '/inet /{print $2}' | sed -n '2p' | cut -d/ -f1)"
-[[ -z "${IP1:-}" ]] && { echo "[ERROR] Không lấy được IPv4 trên ${DEV}."; exit 1; }
-[[ -z "${IP2:-}" ]] && IP2="$IP1"
+echo "[INFO] Đang quét IP trên $DEV (chế độ AWS/Cloud)..."
+
+# --- BẮT ĐẦU LOGIC MỚI ---
+IP_STATIC=$(ip -4 -o addr show dev "$DEV" | grep "noprefixroute" | awk '{print $4}' | cut -d/ -f1 | head -n1)
+IP_DYNAMIC=$(ip -4 -o addr show dev "$DEV" | grep "dynamic" | awk '{print $4}' | cut -d/ -f1 | head -n1)
+
+if [[ -n "$IP_STATIC" ]] && [[ -n "$IP_DYNAMIC" ]]; then
+  IP1="$IP_STATIC"
+  IP2="$IP_DYNAMIC"
+else
+  echo "[FATAL ERROR] Không tìm thấy đủ 2 IP chuẩn (noprefixroute & dynamic)."
+  echo "Script dừng lại để đảm bảo an toàn."
+  exit 1
+fi
+# --- KẾT THÚC LOGIC MỚI ---
+
 echo "[INFO] DEV=${DEV} | IP1=${IP1} | IP2=${IP2}"
-echo "[INFO] DEV=$DEV | IP1=$IP1 | IP2=$IP2"
 
 # ===================== Bật IP forward (runtime + persist) =====================
 need_cmd sysctl || install_pkgs procps || true
@@ -148,7 +168,16 @@ need_cmd iptables || { echo "[ERROR] Thiếu iptables sau khi cài đặt."; exi
 
 del_snat() {
   local CIDR="$1"
-@@ -171,27 +126,19 @@ del_snat "$NET1_CIDR"; del_snat "$NET2_CIDR"
+  sudo iptables -t nat -D POSTROUTING -s "$CIDR" -o "$DEV" -j SNAT --to-source "$IP1" 2>/dev/null || true
+  sudo iptables -t nat -D POSTROUTING -s "$CIDR" -o "$DEV" -j SNAT --to-source "$IP2" 2>/dev/null || true
+}
+add_snat() {
+  local CIDR="$1"
+  local SRC="$2"
+  sudo iptables -t nat -A POSTROUTING -s "$CIDR" -o "$DEV" -j SNAT --to-source "$SRC"
+}
+
+del_snat "$NET1_CIDR"; del_snat "$NET2_CIDR"
 add_snat "$NET1_CIDR" "$IP1"
 add_snat "$NET2_CIDR" "$IP2"
 
@@ -163,12 +192,11 @@ echo "[INFO] Pull images..."
 set +e
 timeout 300 docker pull "${TM_IMAGE}"
 timeout 300 docker pull mysteriumnetwork/myst:latest
-timeout 300 docker pull earnfm/earnfm-client:latest
+# Đã xóa pull earnfm
 timeout 300 docker pull "$UR_IMAGE"
 set -e
 docker pull "${TM_IMAGE}" || true
 docker pull mysteriumnetwork/myst:latest || true
-docker pull earnfm/earnfm-client:latest || true
 docker pull "$UR_IMAGE" || true
 
 # ===================== Run Traffmonetizer =====================
@@ -181,9 +209,13 @@ docker run -d --network "${NET2_NAME}" --restart always --name tm2 "${TM_IMAGE}"
 echo "[INFO] Run Myst..."
 docker run -d --network "${NET1_NAME}" --cap-add NET_ADMIN \
   -p "${IP1}:${MYST_PORT}:${MYST_PORT}" \
-@@ -208,9 +155,8 @@ echo "[INFO] Run EarnFM..."
-docker run -d --network "${NET1_NAME}" --restart=always -e EARNFM_TOKEN="${EARNFM_TOKEN}" --name earnfm1 earnfm/earnfm-client:latest
-docker run -d --network "${NET2_NAME}" --restart=always -e EARNFM_TOKEN="${EARNFM_TOKEN}" --name earnfm2 earnfm/earnfm-client:latest
+  -v myst-data-1:/var/lib/mysterium-node \
+  --restart always --name myst1 mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
+
+docker run -d --network "${NET2_NAME}" --cap-add NET_ADMIN \
+  -p "${IP2}:${MYST_PORT}:${MYST_PORT}" \
+  -v myst-data-2:/var/lib/mysterium-node \
+  --restart always --name myst2 mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
 # ===================== Run URNetwork (2 container, KHÔNG map port) =====================
 echo "[INFO] Run URNetwork (no port mapping)..."
@@ -193,7 +225,8 @@ echo "[INFO] Run URNetwork..."
 UR_VOL1="vnstat_data_ur1"
 UR_VOL2="vnstat_data_ur2"
 docker volume create "$UR_VOL1" >/dev/null 2>&1 || true
-@@ -219,12 +165,9 @@ docker volume create "$UR_VOL2" >/dev/null 2>&1 || true
+docker volume create "$UR_VOL2" >/dev/null 2>&1 || true
+
 UR_PROXY_MOUNT=()
 if [[ -n "$UR_PROXY_FILE" && -f "$UR_PROXY_FILE" ]]; then
   UR_PROXY_MOUNT=( -v "$UR_PROXY_FILE:/app/proxy.txt" )
@@ -207,7 +240,11 @@ fi
 docker run -d $UR_PLATFORM \
   --name "ur1" \
   --network "${NET1_NAME}" \
-@@ -241,7 +184,7 @@ docker run -d $UR_PLATFORM \
+  --restart always \
+  -e UPROCK_USER="$UR_USER" \
+  -e UPROCK_PASS="$UR_PASS" \
+  -e ENABLE_IP_CHECKER="$UR_ENABLE_IP_CHECKER" \
+  -v "$UR_VOL1:/var/lib/vnstat" \
   "${UR_PROXY_MOUNT[@]}" \
   "$UR_IMAGE"
 
@@ -216,14 +253,19 @@ docker run -d $UR_PLATFORM \
 docker run -d $UR_PLATFORM \
   --name "ur2" \
   --network "${NET2_NAME}" \
-@@ -262,8 +205,8 @@ docker run -d $UR_PLATFORM \
+  --restart always \
+  -e UPROCK_USER="$UR_USER" \
+  -e UPROCK_PASS="$UR_PASS" \
+  -e ENABLE_IP_CHECKER="$UR_ENABLE_IP_CHECKER" \
+  -v "$UR_VOL2:/var/lib/vnstat" \
+  "${UR_PROXY_MOUNT[@]}" \
+  "$UR_IMAGE"
+
 echo ""
 echo "================= DONE ================="
 echo "Interface: $DEV"
 echo "IP1: $IP1  (SNAT ${NET1_CIDR}, Myst:${MYST_PORT})"
 echo "IP2: $IP2  (SNAT ${NET2_CIDR}, Myst:${MYST_PORT})"
-echo "IP1: $IP1 (SNAT ${NET1_CIDR}, Myst:${MYST_PORT})"
-echo "IP2: $IP2 (SNAT ${NET2_CIDR}, Myst:${MYST_PORT})"
 echo "Containers:"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo "========================================"
