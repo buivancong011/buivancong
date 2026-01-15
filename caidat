@@ -168,12 +168,12 @@ docker run -d --network "${NET2_NAME}" --restart always --name tm2 "${TM_IMAGE}"
 echo "[INFO] Run Myst..."
 docker run -d --network "${NET1_NAME}" --cap-add NET_ADMIN \
   -p "${IP1}:${MYST_PORT}:${MYST_PORT}" \
-  -v myst-data-1:/var/lib/mysterium-node \
+  -v myst-data1:/var/lib/mysterium-node \
   --restart always --name myst1 mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
 docker run -d --network "${NET2_NAME}" --cap-add NET_ADMIN \
   -p "${IP2}:${MYST_PORT}:${MYST_PORT}" \
-  -v myst-data-2:/var/lib/mysterium-node \
+  -v myst-data2:/var/lib/mysterium-node \
   --restart always --name myst2 mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
 # --- URNetwork ---
