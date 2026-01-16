@@ -1,6 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
+# ==============================================================================
+# 🔴 CẤU HÌNH (CHỈ CẦN SỬA ĐÚNG 1 DÒNG NÀY)
+# ==============================================================================
+
+# Dán "Authentication Code" (Mã dài hạn dùng 100 lần) vào giữa 2 dấu ngoặc ""
+# Ví dụ: UR_AUTH_CODE="RJvonPyBdtMwy3..."
+UR_AUTH_CODE="RJvonPyBdtmWy30JRHcwgeM57RLuEz3vs9Fp-UEZoEO3YZyzNirsWZmNlwCZQ1U5CdNUTS3qptztEivGrN-IJkR-CEvB0G0I4KX0fR4Bk_DkDFzkuJ6wpiSKKBJmi0sPcCMxMerATEoCseeoWJTqkEBm7yR2lhQakyqlcJkEK1DuqsTRz_ERa07oTntyxe2EdWvD4irQfXz_gKizoHdRoJ4nlQlDl7gZ_8mNVPUfO1tlCzBzH9PlPqgT4s0jo8Txwut3CDTgH3wX2eDNlbqBzXYW7JEK_0AR0Y0gQrN-vmIrcBJqeg93ysBs4vKbUd0U-QUMJGOzVxYqX7iNK0DHdbJ9IfMNlLiwBTRxiI3TEktCg6aD12VMep9RtTXUgG1rZIscH1LWPbREDfb6b8k6Allqgucv_pbtACeqSJKrDLfFXGvGv3x0JbxzzArYQX_VNqjy4rrvp8VbK09b-GGaambElhnSOcpbyGwpiEeIQVZQ9m9hCTKnlo9eNck1CxgiPBX9HNd__1PldgyC-UbMDwxbm2NmB7LgU3ryc01bisnyCSfAd8iNhOhjCWKiyK97pChyY84rUrYUHcLeyvO1YOHo9AVov2MGoC03gxrDlii-EfFRyhdK-CfMNyjDRk1KMY-LMM_KZh_b-aOvc02275_HHRt2_BFpaVIHXWFea1s="
+
+# ==============================================================================
+# ⛔ KHÔNG CẦN SỬA GÌ BÊN DƯỚI DÒNG NÀY
+# ==============================================================================
+
 IMAGE="bringyour/community-provider:g4-latest"
 NODE1_DIR="$HOME/.urnetwork-node1"
 NODE2_DIR="$HOME/.urnetwork-node2"
@@ -9,47 +21,50 @@ NODE2_NAME="ur-provider2"
 NETWORK1="my_network_1"
 NETWORK2="my_network_2"
 
-echo "=== [CHECK] Kiểm tra mạng $NETWORK1 và $NETWORK2 ==="
-# SỬA ĐỔI 1: Chỉ kiểm tra, không tự tạo mới (để tránh mất IP Dual)
+# 1. KIỂM TRA MẠNG DUAL-IP
 if ! docker network inspect $NETWORK1 >/dev/null 2>&1 || ! docker network inspect $NETWORK2 >/dev/null 2>&1; then
-  echo "[ERROR] Không tìm thấy mạng $NETWORK1 hoặc $NETWORK2."
-  echo "Hãy chạy script cấu hình IP trước!"
+  echo "❌ [LỖI] Chưa có mạng $NETWORK1 hoặc $NETWORK2. Chạy script tạo IP trước!"
   exit 1
 fi
 
-echo "=== [CLEANUP] Xoá container ur1, ur2 và image cũ nếu có ==="
+# 2. DỌN DẸP
+echo "=== [CLEANUP] Dọn dẹp container cũ..."
 docker rm -f ur1 ur2 $NODE1_NAME $NODE2_NAME >/dev/null 2>&1 || true
 docker rmi -f ghcr.io/techroy23/docker-urnetwork:latest >/dev/null 2>&1 || true
-
-echo "[INFO] Bắt đầu setup URnetwork providers..."
 mkdir -p "$NODE1_DIR" "$NODE2_DIR"
 
-# NODE 1
-echo "[INFO] Auth cho Node1 (paste Auth Code):"
-docker run --rm -it --network $NETWORK1 -v "$NODE1_DIR:/root/.urnetwork" $IMAGE auth
+# 3. CHẠY NODE 1
+echo "🚀 [NODE 1] Đang xác thực..."
+
+# CHỈ BẮN AUTH CODE VÀO (Không cần Email)
+printf "${UR_AUTH_CODE}\n" | docker run --rm -i --network $NETWORK1 \
+  -v "$NODE1_DIR:/root/.urnetwork" \
+  $IMAGE auth
+
 if [ ! -s "$NODE1_DIR/jwt" ]; then
-  echo "[ERROR] Node1 chưa có JWT -> dừng setup"
+  echo "❌ [LỖI] Node 1 đăng nhập thất bại."
   exit 1
 fi
-echo "[INFO] Chạy Node1..."
-docker rm -f $NODE1_NAME >/dev/null 2>&1 || true
 
-# SỬA ĐỔI 2: Thêm --cap-add NET_ADMIN
+echo "✅ Node 1 OK! Đang chạy..."
 docker run -d --restart=always --network $NETWORK1 --cap-add NET_ADMIN \
   -v "$NODE1_DIR:/root/.urnetwork" --name $NODE1_NAME $IMAGE provide
 
-# NODE 2
-echo "[INFO] Auth cho Node2 (paste Auth Code):"
-docker run --rm -it --network $NETWORK2 -v "$NODE2_DIR:/root/.urnetwork" $IMAGE auth
+# 4. CHẠY NODE 2
+echo "🚀 [NODE 2] Đang xác thực..."
+
+# CHỈ BẮN AUTH CODE VÀO
+printf "${UR_AUTH_CODE}\n" | docker run --rm -i --network $NETWORK2 \
+  -v "$NODE2_DIR:/root/.urnetwork" \
+  $IMAGE auth
+
 if [ ! -s "$NODE2_DIR/jwt" ]; then
-  echo "[ERROR] Node2 chưa có JWT -> dừng setup"
+  echo "❌ [LỖI] Node 2 đăng nhập thất bại."
   exit 1
 fi
-echo "[INFO] Chạy Node2..."
-docker rm -f $NODE2_NAME >/dev/null 2>&1 || true
 
-# SỬA ĐỔI 2: Thêm --cap-add NET_ADMIN
+echo "✅ Node 2 OK! Đang chạy..."
 docker run -d --restart=always --network $NETWORK2 --cap-add NET_ADMIN \
   -v "$NODE2_DIR:/root/.urnetwork" --name $NODE2_NAME $IMAGE provide
 
-echo "[OK] Hoàn tất setup Node1 + Node2!"
+echo "🎉 HOÀN TẤT!"
