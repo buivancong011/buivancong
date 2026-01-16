@@ -9,38 +9,47 @@ NODE2_NAME="ur-provider2"
 NETWORK1="my_network_1"
 NETWORK2="my_network_2"
 
+echo "=== [CHECK] Kiểm tra mạng $NETWORK1 và $NETWORK2 ==="
+# SỬA ĐỔI 1: Chỉ kiểm tra, không tự tạo mới (để tránh mất IP Dual)
+if ! docker network inspect $NETWORK1 >/dev/null 2>&1 || ! docker network inspect $NETWORK2 >/dev/null 2>&1; then
+  echo "[ERROR] Không tìm thấy mạng $NETWORK1 hoặc $NETWORK2."
+  echo "Hãy chạy script cấu hình IP trước!"
+  exit 1
+fi
+
 echo "=== [CLEANUP] Xoá container ur1, ur2 và image cũ nếu có ==="
-docker rm -f ur1 ur2 >/dev/null 2>&1 || true
+docker rm -f ur1 ur2 $NODE1_NAME $NODE2_NAME >/dev/null 2>&1 || true
 docker rmi -f ghcr.io/techroy23/docker-urnetwork:latest >/dev/null 2>&1 || true
 
 echo "[INFO] Bắt đầu setup URnetwork providers..."
 mkdir -p "$NODE1_DIR" "$NODE2_DIR"
 
-docker network inspect $NETWORK1 >/dev/null 2>&1 || docker network create $NETWORK1
-docker network inspect $NETWORK2 >/dev/null 2>&1 || docker network create $NETWORK2
-
 # NODE 1
 echo "[INFO] Auth cho Node1 (paste Auth Code):"
-docker run --rm -it -v "$NODE1_DIR:/root/.urnetwork" $IMAGE auth
+docker run --rm -it --network $NETWORK1 -v "$NODE1_DIR:/root/.urnetwork" $IMAGE auth
 if [ ! -s "$NODE1_DIR/jwt" ]; then
   echo "[ERROR] Node1 chưa có JWT -> dừng setup"
   exit 1
 fi
 echo "[INFO] Chạy Node1..."
 docker rm -f $NODE1_NAME >/dev/null 2>&1 || true
-docker run -d --restart=always --network $NETWORK1 \
+
+# SỬA ĐỔI 2: Thêm --cap-add NET_ADMIN
+docker run -d --restart=always --network $NETWORK1 --cap-add NET_ADMIN \
   -v "$NODE1_DIR:/root/.urnetwork" --name $NODE1_NAME $IMAGE provide
 
 # NODE 2
 echo "[INFO] Auth cho Node2 (paste Auth Code):"
-docker run --rm -it -v "$NODE2_DIR:/root/.urnetwork" $IMAGE auth
+docker run --rm -it --network $NETWORK2 -v "$NODE2_DIR:/root/.urnetwork" $IMAGE auth
 if [ ! -s "$NODE2_DIR/jwt" ]; then
   echo "[ERROR] Node2 chưa có JWT -> dừng setup"
   exit 1
 fi
 echo "[INFO] Chạy Node2..."
 docker rm -f $NODE2_NAME >/dev/null 2>&1 || true
-docker run -d --restart=always --network $NETWORK2 \
+
+# SỬA ĐỔI 2: Thêm --cap-add NET_ADMIN
+docker run -d --restart=always --network $NETWORK2 --cap-add NET_ADMIN \
   -v "$NODE2_DIR:/root/.urnetwork" --name $NODE2_NAME $IMAGE provide
 
 echo "[OK] Hoàn tất setup Node1 + Node2!"
