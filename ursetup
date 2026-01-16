@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Dán "Authentication Code" (Mã dài hạn dùng 100 lần) vào giữa 2 dấu ngoặc ""
 # Ví dụ: UR_AUTH_CODE="RJvonPyBdtMwy3..."
-UR_AUTH_CODE="RJvonPyBdtmWy30JRHcwgeM57RLuEz3vs9Fp-UEZoEO3YZyzNirsWZmNlwCZQ1U5CdNUTS3qptztEivGrN-IJkR-CEvB0G0I4KX0fR4Bk_DkDFzkuJ6wpiSKKBJmi0sPcCMxMerATEoCseeoWJTqkEBm7yR2lhQakyqlcJkEK1DuqsTRz_ERa07oTntyxe2EdWvD4irQfXz_gKizoHdRoJ4nlQlDl7gZ_8mNVPUfO1tlCzBzH9PlPqgT4s0jo8Txwut3CDTgH3wX2eDNlbqBzXYW7JEK_0AR0Y0gQrN-vmIrcBJqeg93ysBs4vKbUd0U-QUMJGOzVxYqX7iNK0DHdbJ9IfMNlLiwBTRxiI3TEktCg6aD12VMep9RtTXUgG1rZIscH1LWPbREDfb6b8k6Allqgucv_pbtACeqSJKrDLfFXGvGv3x0JbxzzArYQX_VNqjy4rrvp8VbK09b-GGaambElhnSOcpbyGwpiEeIQVZQ9m9hCTKnlo9eNck1CxgiPBX9HNd__1PldgyC-UbMDwxbm2NmB7LgU3ryc01bisnyCSfAd8iNhOhjCWKiyK97pChyY84rUrYUHcLeyvO1YOHo9AVov2MGoC03gxrDlii-EfFRyhdK-CfMNyjDRk1KMY-LMM_KZh_b-aOvc02275_HHRt2_BFpaVIHXWFea1s="
+UR_AUTH_CODE="gmwTThkwmzHeEiFSwe-u7RHYEhso819SwDlUpRoZQpon-STF6Q6qs0yVb4izpVdMkPhDZhXB80VTd_3ECyPfQx8pi9xWir5MoOW-hwSOT6mZ1Zo0gLh4H_VbVB7HhI80B_3cwa85akdfOeJ8fhfatsi_1GT063ApKL3_jrq_M-IYpUhzEotzDu76Gu8dNqigWcsurY7eRbSZD2UYPKIBOLQbLIqlrw1WAHD2Pbusx0m2zdJyw0kTiSkjuQt6WHkXskR-wS7vbYS82nGeTZkWkqNeyJyLT70VquCi0NJcqs1BLG54PWZMYIz9vp32q0tMDx2X0VmWf6EVNM-LSi-C58p9ZZpkciQjaFtQf1dn8YI4-5IXidchA2oKyl1FG9P9prFcRl-tD94bxYsswkSH9Jy1DMmpoP7yRB_pq7XFKLh4NeEMf__g0osLSQI47sRcOL3o8yq51lz13s9vC32J4Zxsm60bvk2C184KTPAgW_w_a_TVcWo0qtXeC3sN77yTrXWJ95d2JCCNJIhMBjuiZYywYFZXr3ZBjiA3cmoxCGmsDdZEBqWaokhRNR006uwyTP1nKFuuojMmIwadZYnfYzT9xhorxELMeJc0RYeCFwk4lnfeMuhuqmebzto-Awpxjf2ID3GhaZcnoRi3pB8T9aVhHgAqDGjWu91DFU99xpM="
 
 # ==============================================================================
 # ⛔ KHÔNG CẦN SỬA GÌ BÊN DƯỚI DÒNG NÀY
