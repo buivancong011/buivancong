@@ -86,12 +86,8 @@ sleep 2
 docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
-# wizardgain
-docker run -d --network my_network_1 --name=wizardgain1 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
-docker run -d --network my_network_2 --name=wizardgain2 --restart=always -e EMAIL=nguyenvinhson000@gmail.com wizardgain/worker:latest
-
 # urnetwork
-docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN -v ur_data1:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
-docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN -v ur_data2:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' nguyenvinhcao123/docker-urnetwork:latest
+docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN -v ur_data1:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' techroy23/docker-urnetwork:2026.1.16-838132770
+docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN -v ur_data2:/var/lib/vnstat -e USER_AUTH='nguyenvinhcao123@gmail.com' -e PASSWORD='CAOcao123CAO@' techroy23/docker-urnetwork:2026.1.16-838132770
 
 
