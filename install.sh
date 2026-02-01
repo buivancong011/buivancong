@@ -90,4 +90,7 @@ docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449
 docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN -v ur_data1:/var/lib/vnstat -e USER_AUTH='buivancong012@gmail.com' -e PASSWORD='buivancong012' techroy23/docker-urnetwork:2026.1.16-838132770
 docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN -v ur_data2:/var/lib/vnstat -e USER_AUTH='buivancong012@gmail.com' -e PASSWORD='buivancong012' techroy23/docker-urnetwork:2026.1.16-838132770
 
+docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest 
+docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest 
+
 
