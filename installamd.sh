@@ -77,8 +77,8 @@ set +e
 # traffmonetizer
 timeout 300 docker pull traffmonetizer/cli_v2:latest
 sleep 2
-docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
-docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
+docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:latest start accept --token /PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno=
+docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:latest start accept --token /PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno=
 
 # repocket
 timeout 300 docker pull repocket/repocket:latest
