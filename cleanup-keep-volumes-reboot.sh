@@ -1,96 +1,44 @@
 #!/bin/bash
-set -euo pipefail
+set -u # Cho phép script tiếp tục chạy dù gặp lỗi nhỏ
 
-echo "=== [CLEANUP] Dọn dẹp Docker + auto-spawn (chặn tm1 tái tạo) ==="
+echo "=== [UPDATE MODE] Dọn dẹp để Cập nhật phiên bản mới ==="
 
-# 0. Khởi động Docker
-echo "[INFO] Khởi động Docker..."
-systemctl start docker || true
-sleep 10
-systemctl enable docker || true
-echo "[OK] Docker đã sẵn sàng."
-sleep 2
-
-# 1. Tắt restart policy container
-echo "[INFO] Tắt restart policy container..."
-for c in $(docker ps -aq 2>/dev/null || true); do
-  docker update --restart=no "$c" || true
-done
-sleep 2
-
-# 2. Stop & remove toàn bộ container
+# 1. Dừng và Xóa toàn bộ Container
+echo "[1/5] Dừng và xóa Container..."
 if [ "$(docker ps -aq | wc -l)" -gt 0 ]; then
-  echo "[INFO] Xóa toàn bộ container..."
-  docker rm -f $(docker ps -aq) || true
-else
-  echo "[INFO] Không có container nào."
+    docker update --restart=no $(docker ps -aq) 2>/dev/null || true
+    docker stop $(docker ps -aq) 2>/dev/null || true
+    docker rm -f $(docker ps -aq)
 fi
-sleep 2
 
-# 3. Xóa toàn bộ images
+# 2. Xóa Image (BẮT BUỘC ĐỂ CẬP NHẬT MỚI)
+# Lệnh này sẽ xóa tất cả images, buộc lần cài đặt sau phải tải bản mới nhất
+echo "[2/5] Xóa toàn bộ Images cũ..."
 if [ "$(docker images -q | wc -l)" -gt 0 ]; then
-  echo "[INFO] Xóa toàn bộ images..."
-  docker rmi -f $(docker images -q) || true
+    docker rmi -f $(docker images -q)
+    echo "  -> Đã xóa sạch Images."
 else
-  echo "[INFO] Không có images nào."
+    echo "  -> Không có Images nào."
 fi
-sleep 2
 
-# 4. Xóa toàn bộ volumes TRỪ myst-data1 và myst-data2
-echo "[INFO] Đang xoá volumes (trừ myst-data1, myst-data2)..."
-for vol in $(docker volume ls -q 2>/dev/null || true); do
-  if [[ "$vol" != "myst-data1" && "$vol" != "myst-data2" ]]; then
-    docker volume rm -f "$vol" || true
-  fi
-done
-sleep 2
-
-# 5. Xóa toàn bộ networks trừ mặc định
-echo "[INFO] Xóa toàn bộ networks..."
+# 3. Dọn dẹp Network (BẢO VỆ MẶC ĐỊNH)
+echo "[3/5] Xóa Network thừa (Giữ lại bridge/host/none)..."
+docker network prune -f > /dev/null 2>&1
+# Chỉ xóa network có tên cụ thể, không đụng vào network hệ thống
 for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
-  docker network rm "$net" || true
-done
-sleep 2
-
-# 6. Xóa cronjobs nghi ngờ
-echo "[INFO] Xóa cronjobs liên quan docker/install.sh..."
-grep -rl "docker\|install.sh\|redeploy" /etc/cron.d/ 2>/dev/null | xargs -r rm -f
-sleep 2
-
-# 7. Xóa systemd services/timers đáng ngờ
-echo "[INFO] Tắt & xóa systemd services/timers đáng ngờ..."
-for svc in \
-  docker-apps.service \
-  al2023-docker-setup.service \
-  docker-boot-reset.service \
-  docker-weekly-reset.service \
-  auto-redeploy.service \
-  iptables-fix.service; do
-  systemctl disable --now "$svc" 2>/dev/null || true
-  rm -f /etc/systemd/system/$svc || true
+    docker network rm "$net" || true
+    echo "  -> Đã xóa network: $net"
 done
 
-for tmr in \
-  docker-apps-boot.timer \
-  al2023-docker-setup.timer \
-  docker-boot-reset.timer \
-  docker-weekly-reset.timer; do
-  systemctl disable --now "$tmr" 2>/dev/null || true
-  rm -f /etc/systemd/system/$tmr || true
-done
-sleep 2
+# 4. Xóa rác hệ thống (Cronjob & IPTables)
+echo "[4/5] Dọn dẹp Cronjob và Rules mạng cũ..."
+iptables -t nat -F POSTROUTING # Xóa rule SNAT cũ
+crontab -r 2>/dev/null || true # Xóa cronjob user root
+find /etc/cron.d/ -type f -exec grep -lE "docker|install.sh|watchdog" {} + 2>/dev/null | xargs -r rm -f
 
-# 8. Reload systemd
-systemctl daemon-reload
-systemctl reset-failed
+# 5. GIỮ NGUYÊN VOLUME (Không có lệnh docker volume rm ở đây)
+echo "[INFO] VOLUME DỮ LIỆU ĐƯỢC GIỮ NGUYÊN."
 
-# 9. Xóa script .sh nghi ngờ
-echo "[INFO] Xóa script .sh nghi ngờ..."
-find /root -maxdepth 1 -type f -name "*.sh" -not -name "cleanup.sh" -exec rm -f {} \; || true
-find /usr/local/bin -type f -name "*.sh" -exec rm -f {} \; || true
-sleep 2
-
-# 10. Hoàn tất
-echo "=== [CLEANUP] Hoàn tất. Reboot sau 5 giây... ==="
+echo "=== [DONE] Hệ thống sẽ Reboot sau 5 giây để áp dụng thay đổi ==="
 sleep 5
 reboot
