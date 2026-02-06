@@ -79,14 +79,14 @@ set +e
 # traffmonetizer
 timeout 300 docker pull traffmonetizer/cli_v2:latest
 sleep 2
-docker run -d --network my_network_1 --restart always --name tm1 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
-docker run -d --network my_network_2 --restart always --name tm2 traffmonetizer/cli_v2:latest start accept --token JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM=
+docker run -d --network my_network_1 --restart always --dns 8.8.8.8 --dns 1.1.1.1 --name tm1 traffmonetizer/cli_v2:latest start accept --token /PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno=
+docker run -d --network my_network_2 --restart always --dns 8.8.8.8 --dns 1.1.1.1 --name tm2 traffmonetizer/cli_v2:latest start accept --token /PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno=
 
 # repocket
 timeout 300 docker pull repocket/repocket:latest
 sleep 2
-docker run --network my_network_1 --name repocket1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
-docker run --network my_network_2 --name repocket2 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
+docker run -d --network my_network_1 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest 
+docker run -d --network my_network_2 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest 
 
 # myst
 timeout 300 docker pull mysteriumnetwork/myst:latest
@@ -97,20 +97,13 @@ docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449
 # earnfm
 timeout 300 docker pull earnfm/earnfm-client:latest
 sleep 2
-docker run -d --network my_network_1 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest
-docker run -d --network my_network_2 --restart=always -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest
+docker run -d --network my_network_1 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest 
+docker run -d --network my_network_2 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest 
+# urnetwork
+docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data1:/var/lib/vnstat -e USER_AUTH='buivancong012@gmail.com' -e PASSWORD='buivancong012' techroy23/docker-urnetwork:latest
+docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data2:/var/lib/vnstat -e USER_AUTH='buivancong012@gmail.com' -e PASSWORD='buivancong012' techroy23/docker-urnetwork:latest
 
-# packetsdk
-docker run -d --network my_network_1 --restart unless-stopped --name packetsdk1 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
-docker run -d --network my_network_2 --restart unless-stopped --name packetsdk2 packetsdk/packetsdk -appkey=BFwbNdFfwgcDdRmj
+docker run -d --network my_network_1 --name antgain1 --restart always --dns 8.8.8.8 --dns 1.1.1.1 -e ANTGAIN_API_KEY=ud0F9rj2KgAXWgJ20Dw6sogFOjJvytLyVSGtQUrfo4QJq3LAAvdh8XF5jUERcIeU pinors/antgain-cli:latest
+docker run -d --network my_network_2 --name antgain2 --restart always --dns 8.8.8.8 --dns 1.1.1.1 -e ANTGAIN_API_KEY=ud0F9rj2KgAXWgJ20Dw6sogFOjJvytLyVSGtQUrfo4QJq3LAAvdh8XF5jUERcIeU pinors/antgain-cli:latest
 
-
-# Tạo container watchtower
-docker run -d \
-  --name watchtower \
-  --restart=always \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  --cleanup \
-  --interval 3600
 set -e
