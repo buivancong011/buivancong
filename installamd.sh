@@ -87,8 +87,8 @@ docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449
 docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
 
 # urnetwork
-docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data1:/var/lib/vnstat -e USER_AUTH='buivancong012@gmail.com' -e PASSWORD='buivancong012' techroy23/docker-urnetwork:latest
-docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data2:/var/lib/vnstat -e USER_AUTH='buivancong012@gmail.com' -e PASSWORD='buivancong012' techroy23/docker-urnetwork:latest
+docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data1:/var/lib/vnstat -e USER_AUTH='testphuong123@gmail.com' -e PASSWORD='CAOcao123456789' techroy23/docker-urnetwork:latest
+docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data2:/var/lib/vnstat -e USER_AUTH='testphuong123@gmail.com' -e PASSWORD='CAOcao123456789' techroy23/docker-urnetwork:latest
 
 docker run -d --network my_network_1 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest 
 docker run -d --network my_network_2 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest 
