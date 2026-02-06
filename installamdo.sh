@@ -85,9 +85,8 @@ docker run -d --network my_network_2 --restart always --dns 8.8.8.8 --dns 1.1.1.
 # repocket
 timeout 300 docker pull repocket/repocket:latest
 sleep 2
-docker run -d --network my_network_1 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest 
-docker run -d --network my_network_2 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest 
-
+docker run --network my_network_1 --name repocket1 --dns 8.8.8.8 --dns 1.1.1.1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
+docker run --network my_network_2 --name repocket2 --dns 8.8.8.8 --dns 1.1.1.1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
 # myst
 timeout 300 docker pull mysteriumnetwork/myst:latest
 sleep 2
