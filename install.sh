@@ -64,13 +64,35 @@ docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 >/de
 
 # ==== 5. CẤU HÌNH IPTABLES (SNAT) ====
 log "Thiết lập IPTables SNAT..."
-# Xóa rule cũ trước để tránh duplicate
+
+# Xóa rule cũ và thêm rule mới (như cũ)
 sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} 2>/dev/null || true
 sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB} 2>/dev/null || true
-
-# Thêm rule mới
 sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
 sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
+
+# 👉 [THÊM MỚI] CƠ CHẾ CHỜ VÀ KIỂM TRA MẠNG 👈
+log "⏳ Đợi 10 giây để Network Stack và Iptables ổn định..."
+sleep 10
+
+log "🔍 Kiểm tra kết nối thực tế qua IP nguồn..."
+
+# Hàm check IP ra internet (Curl qua interface cụ thể)
+check_connection() {
+  local CHECK_IP=$1
+  # Thử curl đến google hoặc ifconfig.me qua interface IP đó
+  # --interface: bắt buộc curl đi qua IP này
+  # --max-time 5: nếu 5s không được thì báo lỗi
+  if curl -s --interface "$CHECK_IP" --max-time 5 https://ifconfig.me > /dev/null; then
+      log "✅ IP $CHECK_IP: Kết nối Internet OK."
+  else
+      err "❌ IP $CHECK_IP: Không thể kết nối Internet! Kiểm tra lại iptables hoặc Interface."
+  fi
+}
+
+# Kiểm tra cả 2 IP trước khi chạy container
+check_connection "$IP_ALLA"
+check_connection "$IP_ALLB"
 
 # ==== 6. PULL IMAGES (CHẠY SONG SONG) ====
 log "Pulling images..."
