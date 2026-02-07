@@ -1,104 +1,91 @@
 #!/bin/bash
-set -euo pipefail
+set -e  # Dừng ngay nếu lỗi
 
-# ========= CONFIG CỨNG =========
-TOKEN='/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno='         # Traffmonetizer
-EARNFM_TOKEN='50f04bbe-94d9-4f6a-82b9-b40016bd4bbb'          # EarnFM
-UR_USER='nguyenvinhcao123@gmail.com'                         # URNetwork
-UR_PASS='CAOcao123CAO@'
+# ==========================================
+# 1. CẤU HÌNH TOKEN & TÀI KHOẢN
+# ==========================================
+TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
+TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
+# Repocket
+RP_EMAIL="nguyenvinhson000@gmail.com"
+RP_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
+# UrNetwork
+UR_USER="buivancong012@gmail.com"
+UR_PASS="buivancong012"
+# AntGain
+ANT_KEY="ud0F9rj2KgAXWgJ20Dw6sogFOjJvytLyVSGtQUrfo4QJq3LAAvdh8XF5jUERcIeU"
 
-# Tuỳ chọn dọn sạch Docker
-PURGE_CONTAINERS=true
-PURGE_IMAGES=false   # để false cho nhanh; true nếu muốn xoá sạch images
+# ==========================================
+# 2. HÀM LOG
+# ==========================================
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
 
-need_cmd(){ command -v "$1" >/dev/null 2>&1; }
+# ==========================================
+# 3. CÀI ĐẶT DOCKER (ALIBABA/CENTOS)
+# ==========================================
+log "Dọn dẹp hệ thống..."
+timeout 60 sudo yum remove -y squid httpd-tools >/dev/null 2>&1 || true
 
-# ========= Chọn image theo kiến trúc =========
-arch="$(uname -m)"
-case "$arch" in
-  aarch64|arm64) TM_IMAGE="traffmonetizer/cli_v2:arm64v8" ;;
-  x86_64|amd64)  TM_IMAGE="traffmonetizer/cli_v2:latest"  ;;
-  *)             TM_IMAGE="traffmonetizer/cli_v2:latest"  ;;
-esac
-
-# UR image theo kiến trúc
-UR_IMAGE_AMD64="ghcr.io/techroy23/docker-urnetwork:latest"
-UR_IMAGE_ARM64="techroy23/docker-urnetwork:latest"
-if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-  UR_PLATFORM="--platform linux/arm64"
-  UR_IMAGE="$UR_IMAGE_ARM64"
-else
-  UR_PLATFORM="--platform linux/amd64"
-  UR_IMAGE="$UR_IMAGE_AMD64"
+if ! command -v docker &> /dev/null; then
+  log "Đang cài đặt Docker..."
+  sudo yum update -y -q
+  sudo yum install -y -q docker
+  sudo systemctl enable --now docker
+  log "Docker đã khởi động."
 fi
 
-# ========= Cài Docker nếu thiếu =========
-install_pkgs(){
-  if need_cmd yum; then sudo yum -y update || true; sudo yum -y install "$@" || true
-  elif need_cmd dnf; then sudo dnf -y update || true; sudo dnf -y install "$@" || true
-  elif need_cmd apt-get; then sudo apt-get update -y || true; sudo apt-get install -y "$@" || true
-  else return 1; fi
-}
+# ==========================================
+# 4. DỌN DẸP CONTAINER CŨ
+# ==========================================
+log "Xóa container cũ (nếu có)..."
+# Xóa các container trùng tên để tránh lỗi khi chạy lại
+docker rm -f tm urnetwork antgain earnfm repocket >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1
 
-if ! need_cmd docker; then
-  echo "[INFO] Cài Docker..."
-  install_pkgs docker docker.io || true
-  sudo systemctl enable docker
-  sudo systemctl start docker
-  echo "[INFO] Docker đã sẵn sàng. Chạy lại script."
-  exit 0
-fi
+# ==========================================
+# 5. KÉO IMAGE (SONG SONG CHO NHANH)
+# ==========================================
+log "Đang tải Images..."
+docker pull traffmonetizer/cli_v2:latest >/dev/null 2>&1 &
+docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
+docker pull pinors/antgain-cli:latest >/dev/null 2>&1 &
+docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
+docker pull repocket/repocket:latest >/dev/null 2>&1 &
 
-# ========= Dọn Docker (tuỳ chọn) =========
-if [[ "$PURGE_CONTAINERS" == "true" ]] && [[ "$(docker ps -aq | wc -l)" -gt 0 ]]; then
-  echo "[WARN] Xoá toàn bộ containers..."
-  docker rm -f $(docker ps -aq) || true
-fi
-if [[ "$PURGE_IMAGES" == "true" ]] && [[ "$(docker images -q | wc -l)" -gt 0 ]]; then
-  echo "[WARN] Xoá toàn bộ images..."
-  docker rmi -f $(docker images -q) || true
-fi
+wait # Đợi tải xong hết mới chạy tiếp
+log "Tải ảnh hoàn tất."
 
-# ========= Lấy IP/interface (log cho tiện) =========
-DEV="$(ip route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}' || true)"
-IP="$(ip -4 addr show dev "$DEV" 2>/dev/null | awk '/inet /{print $2}' | head -n1 | cut -d/ -f1 || true)"
-echo "[INFO] Interface: ${DEV:-n/a} | IP: ${IP:-n/a}"
+# ==========================================
+# 6. CHẠY CONTAINER (KHÔNG DNS)
+# ==========================================
+log "🚀 Khởi chạy các ứng dụng..."
 
-# ========= Pull images =========
-echo "[INFO] Pull images..."
-docker pull "${TM_IMAGE}" || true
-docker pull earnfm/earnfm-client:latest || true
-docker pull "$UR_IMAGE" || true
+# 1. Traffmonetizer
+docker run -d --restart always --name tm traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM"
 
-# ========= Run Traffmonetizer (1 container) =========
-echo "[INFO] Run Traffmonetizer..."
-docker run -d --restart always --name tm1 "${TM_IMAGE}" start accept --token "${TOKEN}"
+# 2. UrNetwork
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN \
+  -v ur_data:/var/lib/vnstat \
+  -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" \
+  techroy23/docker-urnetwork:latest
 
-# ========= Run EarnFM (1 container) =========
-echo "[INFO] Run EarnFM..."
-docker run -d --restart=always -e EARNFM_TOKEN="${EARNFM_TOKEN}" --name earnfm1 earnfm/earnfm-client:latest
+# 3. AntGain
+docker run -d --name antgain --restart always \
+  -e ANTGAIN_API_KEY="$ANT_KEY" \
+  pinors/antgain-cli:latest
 
-# ========= Run URNetwork (1 container, KHÔNG map port) =========
-echo "[INFO] Run URNetwork..."
-UR_VOL="vnstat_data_ur"
-docker volume create "$UR_VOL" >/dev/null 2>&1 || true
-docker run -d $UR_PLATFORM \
-  --name "ur1" \
-  --restart "always" \
-  --pull "always" \
-  --privileged \
-  --log-driver json-file \
-  --log-opt max-size=5m \
-  --log-opt max-file=3 \
-  -e USER_AUTH="${UR_USER}" \
-  -e PASSWORD="${UR_PASS}" \
-  -e ENABLE_IP_CHECKER="false" \
-  -v "${UR_VOL}:/var/lib/vnstat" \
-  "$UR_IMAGE"
+# 4. EarnFM
+docker run -d --name earnfm --restart always \
+  -e EARNFM_TOKEN="$TOKEN_EARNFM" \
+  earnfm/earnfm-client:latest
 
-# ========= Summary =========
-echo ""
-echo "================= DONE (1 IP, 1 network, TM + EarnFM + UR) ================="
-echo "IP: ${IP:-n/a} | IF: ${DEV:-n/a}"
+# 5. Repocket
+docker run -d --name repocket --restart always \
+  -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
+  repocket/repocket:latest
+
+# ==========================================
+# 7. HOÀN TẤT
+# ==========================================
+log "==== CÀI ĐẶT XONG ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-echo "========================================================================="
