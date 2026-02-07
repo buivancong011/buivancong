@@ -1,8 +1,8 @@
 #!/bin/bash
-set -e  # Dừng ngay nếu lỗi
+set -e  # Dừng ngay nếu có lỗi
 
 # ==========================================
-# 1. CẤU HÌNH TOKEN & TÀI KHOẢN
+# 1. CẤU HÌNH TÀI KHOẢN (SỬA 1 LẦN DÙNG CHUNG)
 # ==========================================
 TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
 TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
@@ -15,13 +15,17 @@ UR_PASS="buivancong012"
 # AntGain
 ANT_KEY="ud0F9rj2KgAXWgJ20Dw6sogFOjJvytLyVSGtQUrfo4QJq3LAAvdh8XF5jUERcIeU"
 
+# ==== CẤU HÌNH DNS CHUNG ====
+# Thêm biến này để code gọn hơn, không phải gõ lại nhiều lần
+DNS_OPTS="--dns 8.8.8.8 --dns 1.1.1.1"
+
 # ==========================================
 # 2. HÀM LOG
 # ==========================================
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
 
 # ==========================================
-# 3. CÀI ĐẶT DOCKER (ALIBABA/CENTOS)
+# 3. CÀI ĐẶT DOCKER
 # ==========================================
 log "Dọn dẹp hệ thống..."
 timeout 60 sudo yum remove -y squid httpd-tools >/dev/null 2>&1 || true
@@ -37,13 +41,12 @@ fi
 # ==========================================
 # 4. DỌN DẸP CONTAINER CŨ
 # ==========================================
-log "Xóa container cũ (nếu có)..."
-# Xóa các container trùng tên để tránh lỗi khi chạy lại
+log "Xóa container cũ để tránh trùng lặp..."
 docker rm -f tm urnetwork antgain earnfm repocket >/dev/null 2>&1 || true
 docker image prune -f >/dev/null 2>&1
 
 # ==========================================
-# 5. KÉO IMAGE (SONG SONG CHO NHANH)
+# 5. KÉO IMAGE (SONG SONG)
 # ==========================================
 log "Đang tải Images..."
 docker pull traffmonetizer/cli_v2:latest >/dev/null 2>&1 &
@@ -52,40 +55,41 @@ docker pull pinors/antgain-cli:latest >/dev/null 2>&1 &
 docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
 docker pull repocket/repocket:latest >/dev/null 2>&1 &
 
-wait # Đợi tải xong hết mới chạy tiếp
+wait # Đợi tải xong
 log "Tải ảnh hoàn tất."
 
 # ==========================================
-# 6. CHẠY CONTAINER (KHÔNG DNS)
+# 6. CHẠY CONTAINER (CÓ DNS)
 # ==========================================
 log "🚀 Khởi chạy các ứng dụng..."
 
 # 1. Traffmonetizer
-docker run -d --restart always --name tm traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM"
+docker run -d --restart always --name tm $DNS_OPTS \
+  traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM"
 
 # 2. UrNetwork
-docker run -d --name urnetwork --restart always --cap-add NET_ADMIN \
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS \
   -v ur_data:/var/lib/vnstat \
   -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" \
   techroy23/docker-urnetwork:latest
 
 # 3. AntGain
-docker run -d --name antgain --restart always \
+docker run -d --name antgain --restart always $DNS_OPTS \
   -e ANTGAIN_API_KEY="$ANT_KEY" \
   pinors/antgain-cli:latest
 
 # 4. EarnFM
-docker run -d --name earnfm --restart always \
+docker run -d --name earnfm --restart always $DNS_OPTS \
   -e EARNFM_TOKEN="$TOKEN_EARNFM" \
   earnfm/earnfm-client:latest
 
 # 5. Repocket
-docker run -d --name repocket --restart always \
+docker run -d --name repocket --restart always $DNS_OPTS \
   -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
   repocket/repocket:latest
 
 # ==========================================
 # 7. HOÀN TẤT
 # ==========================================
-log "==== CÀI ĐẶT XONG ===="
+log "==== CÀI ĐẶT THÀNH CÔNG ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
