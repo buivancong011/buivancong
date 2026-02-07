@@ -53,5 +53,5 @@ else
 fi
 
 echo "=== [DONE] Hệ thống sẽ Reboot sau 5 giây... ==="
-sleep 5
+
 reboot
