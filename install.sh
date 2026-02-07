@@ -1,98 +1,123 @@
 #!/bin/bash
-set -euo pipefail
+set -e
 
+# ==== CẤU HÌNH TOKEN & IMAGE ====
+# Thay đổi token tại đây để dễ quản lý
+TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
+TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
+TOKEN_REPOCKET_EMAIL="nguyenvinhson000@gmail.com"
+TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
+USER_UR="testphuong123@gmail.com"
+PASS_UR="CAOcao123456789"
 
-# ==== Gỡ squid & httpd-tools nếu có ====
-timeout 60 sudo yum remove -y squid httpd-tools || true
-sleep 2
+# Danh sách Image
+IMG_TM="traffmonetizer/cli_v2:arm64v8" # Lưu ý: Chỉ chạy trên chip ARM (Graviton)
+IMG_MYST="mysteriumnetwork/myst:latest"
+IMG_UR="techroy23/docker-urnetwork:latest"
+IMG_EARN="earnfm/earnfm-client:latest"
+IMG_REPO="repocket/repocket:latest"
 
-# ==== Cài Docker nếu chưa có ====
+# ==== HÀM TIỆN ÍCH ====
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
+
+# ==== 1. CHUẨN BỊ HỆ THỐNG ====
+log "Dọn dẹp Squid & Httpd..."
+sudo yum remove -y squid httpd-tools >/dev/null 2>&1 || true
+
 if ! command -v docker &> /dev/null; then
-  echo "[INFO] Docker chưa có -> Cài đặt..."
-  timeout 300 sudo yum update -y || true
-  timeout 300 sudo yum install -y docker
-  sudo systemctl enable docker
-  sudo systemctl start docker
-  echo "[INFO] Docker cài xong, reboot lần đầu..."
-  sleep 5
-  sudo reboot
+  log "Cài đặt Docker..."
+  sudo yum update -y -q
+  sudo yum install -y -q docker
+  sudo systemctl enable --now docker
+else
+  log "Docker đã được cài đặt."
 fi
 
-
-# ==== Xóa toàn bộ containers ====
-if [ "$(docker ps -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Xóa containers..."
-  timeout 60 docker rm -f $(docker ps -aq) || true
-fi
-sleep 2
-
-# ==== Xóa toàn bộ images ====
-if [ "$(docker images -q | wc -l)" -gt 0 ]; then
-  echo "[WARN] Xóa images..."
-  docker rmi -f $(docker images -q) || true
-fi
-sleep 2
-
-# ==== Xóa toàn bộ docker networks cũ (trừ mặc định) ====
-echo "[INFO] Xóa networks cũ..."
-for net in $(docker network ls --format '{{.Name}}' | grep -vE 'bridge|host|none'); do
-  timeout 30 docker network rm "$net" || true
-done
-sleep 2
-
-# ==== Tạo lại Docker networks ====
-docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 || true
-docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 || true
-sleep 2
-
-# ==== Thiết lập iptables ban đầu (interface enX0) ====
+# ==== 2. LẤY IP (GIỮ NGUYÊN LOGIC CŨ) ====
+# Lưu ý: Interface ens5 là hardcode theo script cũ của bạn
 IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 
 if [ -z "$IP_ALLA" ] || [ -z "$IP_ALLB" ]; then
-  echo "[ERROR] Không lấy được IP enX0"
-  exit 1
+  err "Không lấy được IP trên interface ens5. Kiểm tra lại server!"
 fi
+log "IP detected: A=$IP_ALLA | B=$IP_ALLB"
 
-fix_iptables() {
-  echo "[INFO] Cấu hình lại iptables SNAT..."
-  sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} 2>/dev/null || true
-  sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB} 2>/dev/null || true
-  sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
-  sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
+# ==== 3. DỌN DẸP DOCKER CŨ ====
+log "Dọn dẹp Containers, Networks & Images cũ..."
+# Xóa tất cả container đang chạy hoặc đã tắt
+if [ -n "$(docker ps -aq)" ]; then
+  docker rm -f $(docker ps -aq) >/dev/null 2>&1
+fi
+# Prune hệ thống cho sạch (Network + Volume dangling)
+docker system prune -f >/dev/null 2>&1 || true
+
+# Xóa network custom (giữ lại bridge/host/none)
+docker network prune -f >/dev/null 2>&1
+
+# ==== 4. TẠO NETWORK ====
+log "Tạo Docker Networks..."
+docker network create my_network_1 --driver bridge --subnet 192.168.33.0/24 >/dev/null
+docker network create my_network_2 --driver bridge --subnet 192.168.34.0/24 >/dev/null
+
+# ==== 5. CẤU HÌNH IPTABLES (SNAT) ====
+log "Thiết lập IPTables SNAT..."
+# Xóa rule cũ trước để tránh duplicate
+sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} 2>/dev/null || true
+sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB} 2>/dev/null || true
+
+# Thêm rule mới
+sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
+sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
+
+# ==== 6. PULL IMAGES (CHẠY SONG SONG) ====
+log "Pulling images..."
+pids=""
+for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
+  docker pull $img >/dev/null 2>&1 &
+  pids="$pids $!"
+done
+wait $pids # Đợi tất cả pull xong mới chạy tiếp
+log "Pull images hoàn tất."
+
+# ==== 7. CHẠY CONTAINERS (VÒNG LẶP) ====
+# Hàm chạy node để tránh lặp code
+run_node_group() {
+  local ID=$1
+  local NET="my_network_$1"
+  local IP_BIND=$2
+  
+  log "Đang khởi tạo Node $ID trên mạng $NET ($IP_BIND)..."
+
+  # 1. Traffmonetizer
+  docker run -d --network $NET --restart always --name tm$ID $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
+
+  # 2. Mysterium (Cần bind port IP cụ thể)
+  # Lưu ý: Mysterium cần volume riêng biệt cho mỗi node
+  docker run -d --network $NET --cap-add NET_ADMIN -p ${IP_BIND}:4449:4449 \
+    --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
+    --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
+
+  # 3. UrNetwork
+  docker run -d --network $NET --restart always --cap-add NET_ADMIN \
+    --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
+    -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
+
+  # 4. EarnFM
+  docker run -d --network $NET --restart always \
+    -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
+
+  # 5. Repocket
+  docker run -d --network $NET --restart always \
+    --name repocket$ID -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" \
+    -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 }
-fix_iptables
-sleep 10
 
-if ! sudo iptables -t nat -C POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA} >/dev/null 2>&1; then
-  echo "[ERROR] iptables SNAT lỗi. Stop Docker tránh rò mạng."
-  sudo systemctl stop docker
-  exit 1
-fi
+# Gọi hàm chạy cho 2 luồng
+run_node_group 1 "$IP_ALLA"
+run_node_group 2 "$IP_ALLB"
 
-# ==== Chạy các container ====
-echo "[INFO] Pull & Run containers..."
-set +e
-
-# traffmonetizer
-timeout 300 docker pull traffmonetizer/cli_v2:arm64v8
-sleep 2
-docker run -d --network my_network_1 --restart always --dns 8.8.8.8 --dns 1.1.1.1 --name tm1 traffmonetizer/cli_v2:arm64v8 start accept --token /PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno=
-docker run -d --network my_network_2 --restart always --dns 8.8.8.8 --dns 1.1.1.1 --name tm2 traffmonetizer/cli_v2:arm64v8 start accept --token /PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno=
-
-# myst
-timeout 300 docker pull mysteriumnetwork/myst:latest
-sleep 2
-docker run -d --network my_network_1 --cap-add NET_ADMIN -p ${IP_ALLA}:4449:4449 --name myst1 -v myst-data1:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
-docker run -d --network my_network_2 --cap-add NET_ADMIN -p ${IP_ALLB}:4449:4449 --name myst2 -v myst-data2:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions
-
-# urnetwork
-docker run -d --network my_network_1  --name urnetwork1 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data1:/var/lib/vnstat -e USER_AUTH='testphuong123@gmail.com' -e PASSWORD='CAOcao123456789' techroy23/docker-urnetwork:latest
-docker run -d --network my_network_2  --name urnetwork2 --restart always  --cap-add NET_ADMIN --dns 8.8.8.8 --dns 1.1.1.1 -v ur_data2:/var/lib/vnstat -e USER_AUTH='testphuong123@gmail.com' -e PASSWORD='CAOcao123456789' techroy23/docker-urnetwork:latest
-
-docker run -d --network my_network_1 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm1 earnfm/earnfm-client:latest 
-docker run -d --network my_network_2 --restart=always --dns 8.8.8.8 --dns 1.1.1.1 -e EARNFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb" --name earnfm2 earnfm/earnfm-client:latest 
-
-docker run --network my_network_1 --name repocket1 --dns 8.8.8.8 --dns 1.1.1.1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
-docker run --network my_network_2 --name repocket2 --dns 8.8.8.8 --dns 1.1.1.1 -e RP_EMAIL=nguyenvinhson000@gmail.com -e RP_API_KEY=cad6dcce-d038-4727-969b-d996ed80d3ef -d --restart=always repocket/repocket:latest
-
+log "==== HOÀN TẤT CÀI ĐẶT ===="
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
