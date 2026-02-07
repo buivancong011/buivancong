@@ -1,0 +1,5 @@
+mkdir -p ~/.ssh && \
+chmod 700 ~/.ssh && \
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDUn0r7IeMQstMi6dVJABiByEB97LffDi6aP/pRiMoPkUmXDf91F6dk3XkXGV1zdKs5aB4T3MqTYSP7VHa+sk5Au7gq7fbkmho+LU1qR8m4Wa5jiStgnGV3yJx4Uu4PMQ0+iq3Pqs/BxxWnArRMbC4zbZjASGSZ5AKzNfGD8H8NlsHczF50Zcdy+kcLMYRXC1C+6qEmZekacTMaNvlKDjpBky8sdEJFIct/gbOlFFvwhgHd2ffzmyDgdlpYa37bMZugtLb4/FVnqoyFwkeKUV1IRHb2LINl3Ue2x/jp3Eupbdv7BrhoT2t6vtdpEJr0dUgLwiq7Erqz+Ee4AVAlusM9" >> ~/.ssh/authorized_keys && \
+chmod 600 ~/.ssh/authorized_keys && \
+echo "✅ Đã thêm SSH Key thành công!"
