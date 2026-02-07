@@ -8,8 +8,8 @@ TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
 TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
 TOKEN_REPOCKET_EMAIL="nguyenvinhson000@gmail.com"
 TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
-USER_UR="nguyenvinhcao123@gmail.com"
-PASS_UR="CAOcao123CAO@"
+USER_UR="buivancong012@gmail.com"
+PASS_UR="buivancong012"
 
 # ==========================================
 # 2. CHỌN IMAGE & PHÂN TÁCH KIẾN TRÚC (CPU)
