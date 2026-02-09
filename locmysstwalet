@@ -1,87 +1,71 @@
 #!/bin/bash
 
 # =================================================================
-# CẤU HÌNH (SỬA 3 DÒNG NÀY)
+# CẤU HÌNH (ĐIỀN THÔNG TIN CỦA BẠN)
 # =================================================================
 # 1. API Key (Lấy tại my.mystnodes.com/me)
 MYST_API_KEY="nX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT" 
 
-# 2. Ví nhận tiền (Polygon/Metamask)
-MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f" 
-
-# 3. Mật khẩu Web Local (Để đăng nhập IP:4449)
-NODE_PASSWORD="MatKhauManh123@"
+# 2. Ví nhận tiền lãi (Ví chính của bạn)
+MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"
 # =================================================================
 
 echo "========================================================"
-echo "   MYSTERIUM CLI SETUP (STRICT FLOW)"
+echo "   MYSTERIUM AUTO SETUP & GET CHANNEL ADDRESS"
 echo "========================================================"
 
 NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then echo "❌ Không tìm thấy node."; exit 1; fi
 
+# Tạo file tạm để lưu danh sách nạp tiền
+> myst_topup_list.txt
+
+printf "%-10s | %-42s | %-42s\n" "NODE" "IDENTITY (ProviderID)" "CHANNEL ADDRESS (Nạp tiền vào đây)"
+echo "--------------------------------------------------------------------------------------------------------"
+
 for node in $NODES; do
-    echo "--------------------------------------------------"
-    echo "⚙️  Xử lý Node: $node"
-
-    # 1. CHẤP NHẬN ĐIỀU KHOẢN (Luôn là bước đầu tiên)
-    docker exec "$node" myst cli --agreed-terms-and-conditions >/dev/null 2>&1
-
-    # 2. LẤY IDENTITY & UNLOCK (BẮT BUỘC THEO DOCS)
-    echo "   🔑 Đang lấy và Unlock Identity..."
-    
-    # Lấy list identity
+    # 1. LẤY IDENTITY
     RAW_LIST=$(docker exec "$node" myst cli identities list)
-    # Lọc lấy địa chỉ ví (0x...)
-    ID_ADDR=$(echo "$RAW_LIST" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
+    ID=$(echo "$RAW_LIST" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
 
-    # Nếu chưa có identity thì tạo mới
-    if [ -z "$ID_ADDR" ]; then
-        echo "      -> Chưa có ID, đang tạo mới..."
+    # Nếu chưa có thì tạo mới
+    if [ -z "$ID" ]; then
         docker exec "$node" myst cli identities new >/dev/null 2>&1
-        ID_ADDR=$(docker exec "$node" myst cli identities list | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
+        ID=$(docker exec "$node" myst cli identities list | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
     fi
 
-    # *** BƯỚC QUAN TRỌNG: UNLOCK ***
-    # Tài liệu: identities unlock <address>
-    if [ -n "$ID_ADDR" ]; then
-        docker exec "$node" myst cli identities unlock "$ID_ADDR" >/dev/null 2>&1
-        echo "      -> Đã Unlock ID: $ID_ADDR"
-    fi
+    # 2. UNLOCK (Bước bắt buộc thủ công bạn đã làm)
+    docker exec "$node" myst cli identities unlock "$ID" >/dev/null 2>&1
 
-    # 3. ĐĂNG KÝ VÍ (REGISTER)
-    # Tài liệu: identities register [beneficiary]
-    echo "   💰 Đang đăng ký ví nhận tiền..."
-    docker exec "$node" myst cli identities register "$MY_WALLET" >/dev/null 2>&1
+    # 3. KẾT NỐI DASHBOARD (MMN)
+    docker exec "$node" myst cli mmn "$MYST_API_KEY" >/dev/null 2>&1
 
-    # 4. KẾT NỐI DASHBOARD (MMN)
-    # Tài liệu: mmn [api-key]
-    echo "   ☁️  Kết nối mystnodes.com (MMN)..."
-    MMN_LOG=$(docker exec "$node" myst cli mmn "$MYST_API_KEY" 2>&1)
+    # 4. ĐĂNG KÝ (REGISTER) - Kèm ví nhận tiền
+    # Lệnh này sẽ set luôn ví MY_WALLET làm beneficiary
+    docker exec "$node" myst cli identities register "$ID" "$MY_WALLET" >/dev/null 2>&1
+
+    # 5. START WIREGUARD
+    docker exec "$node" myst cli service start "$ID" wireguard >/dev/null 2>&1
+
+    # 6. LẤY CHANNEL ADDRESS (Phần quan trọng nhất bạn cần)
+    # Chạy lệnh 'identities get' và lọc dòng 'Channel address'
+    INFO=$(docker exec "$node" myst cli identities get "$ID")
+    CHANNEL_ADDR=$(echo "$INFO" | grep "Channel address" | awk '{print $NF}')
+
+    # In ra màn hình
+    printf "%-10s | %-42s | %-42s\n" "$node" "$ID" "$CHANNEL_ADDR"
     
-    if echo "$MMN_LOG" | grep -q "Error"; then
-        echo "      ⚠️  MMN Info: $MMN_LOG"
-    else
-        echo "      ✅ Kết nối Dashboard thành công!"
-    fi
+    # Lưu vào file để copy cho dễ
+    echo "$CHANNEL_ADDR" >> myst_topup_list.txt
 
-    # 5. CÀI MẬT KHẨU LOCAL (Để bạn vào được IP:4449)
-    # Bước này không nằm trong CLI docs nhưng nằm trong phần Config của Node
-    echo "   🔒 Cài mật khẩu Web Local..."
-    docker exec "$node" myst config set tequilapi.pass "$NODE_PASSWORD"
-
-    # 6. KHỞI ĐỘNG LẠI (Để áp dụng Password)
-    echo "   🔄 Restarting..."
-    docker restart "$node" >/dev/null
-    
-    # Lưu ý: Sau khi restart, Identity sẽ bị Lock lại (theo docs). 
-    # Nhưng vì Node tự chạy service nên nó sẽ tự unlock nội bộ để đào.
-    
-    echo "   ✅ Xong $node"
 done
 
-echo "--------------------------------------------------"
-echo "🎉 HOÀN TẤT!"
-echo "👉 Kiểm tra Dashboard: https://my.mystnodes.com/nodes"
-echo "👉 Web Local: http://IP:4449 (Pass: $NODE_PASSWORD)"
+echo "--------------------------------------------------------------------------------------------------------"
+echo "🎉 HOÀN TẤT QUY TRÌNH!"
+echo ""
+echo "👉 BƯỚC TIẾP THEO (QUAN TRỌNG):"
+echo "   Bạn cần nạp khoảng 0.1 - 0.2 MYST (Mạng Polygon) vào cột 'CHANNEL ADDRESS' ở trên."
+echo "   (Danh sách địa chỉ nạp tiền đã được lưu vào file: myst_topup_list.txt)"
+echo ""
+echo "   Sau khi Channel Address nhận được tiền, Node sẽ tự động chuyển sang trạng thái Registered."
