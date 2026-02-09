@@ -1,15 +1,20 @@
 #!/bin/bash
 
-# ==== CẤU HÌNH MÀU SẮC ====
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+# =================================================================
+# CẤU HÌNH (BẠN PHẢI SỬA 2 DÒNG NÀY)
+# =================================================================
+# 1. API Key lấy tại: https://my.mystnodes.com/me
+MYST_API_KEY="nX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT" 
 
-echo "=========================================================="
-echo "   KIỂM TRA TRẠNG THÁI NODE MYSTERIUM (AUTO-CHECK)"
-echo "=========================================================="
+# 2. Mật khẩu bạn muốn đặt cho Node (Thay cho việc nhập trên web)
+NODE_PASSWORD="MnX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT"
+# =================================================================
 
-# Lấy danh sách container
+echo "========================================================"
+echo "   MYSTERIUM AUTO ONBOARDING (CLI BASED)"
+echo "========================================================"
+
+# Lấy danh sách các container myst đang chạy
 NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then
@@ -17,42 +22,37 @@ if [ -z "$NODES" ]; then
     exit 1
 fi
 
-printf "%-10s | %-42s | %-15s\n" "NODE" "IDENTITY ADDRESS" "TRẠNG THÁI"
-echo "------------------------------------------------------------------------"
-
 for node in $NODES; do
-    # 1. Lấy toàn bộ thông tin Identity
-    RAW_DATA=$(docker exec "$node" myst cli identities list 2>&1)
-    
-    # 2. Lấy địa chỉ ví (Identity) - Lấy chuỗi 0x đầu tiên tìm thấy
-    IDENTITY=$(echo "$RAW_DATA" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
+    echo "Processing Node: $node..."
 
-    if [ -z "$IDENTITY" ]; then
-        IDENTITY="Không tìm thấy ID"
-        STATUS_TEXT="${RED}Lỗi Node${NC}"
+    # BƯỚC 1: CHẤP NHẬN ĐIỀU KHOẢN (Bắt buộc theo Docs)
+    # Lệnh: --agreed-terms-and-conditions
+    docker exec "$node" sh -c "myst cli --agreed-terms-and-conditions >/dev/null 2>&1"
+    echo "   ✅ Đã chấp nhận điều khoản."
+
+    # BƯỚC 2: CÀI ĐẶT MẬT KHẨU CHO UI (Bỏ qua bước Create Password trên màn hình)
+    # Chúng ta can thiệp vào file config.toml thông qua lệnh config set
+    docker exec "$node" sh -c "myst config set 'tequilapi.pass'='$NODE_PASSWORD' >/dev/null 2>&1"
+    echo "   ✅ Đã set mật khẩu quản trị."
+
+    # BƯỚC 3: CLAIM NODE (Liên kết với my.mystnodes.com)
+    # Lệnh: claims create [API_KEY]
+    # Bước này sẽ bỏ qua ô nhập API Key trên màn hình
+    CLAIM_OUT=$(docker exec "$node" myst cli claims create "$MYST_API_KEY" 2>&1)
+    
+    if echo "$CLAIM_OUT" | grep -q "Error"; then
+        # Nếu đã claim rồi thì nó sẽ báo lỗi, không sao cả
+        echo "   ⚠️  Thông báo Claim: $CLAIM_OUT"
     else
-        # 3. Kiểm tra trạng thái dựa trên từ khóa trong log
-        # Dùng grep -i để không phân biệt hoa thường
-        if echo "$RAW_DATA" | grep -iq "Unregistered"; then
-            STATUS_TEXT="${RED}❌ Chưa Active${NC}"
-            CMD_HINT="(Cần nạp phí)"
-        elif echo "$RAW_DATA" | grep -iq "Registered"; then
-            STATUS_TEXT="${GREEN}✅ Đã Active${NC}"
-            CMD_HINT=""
-        elif echo "$RAW_DATA" | grep -iq "Registration in progress"; then
-             STATUS_TEXT="${YELLOW}⏳ Đang ĐK...${NC}"
-        else
-            STATUS_TEXT="❓ Không rõ"
-        fi
+        echo "   ✅ Claim thành công! Node đã kết nối Dashboard."
     fi
 
-    # In ra kết quả
-    printf "%-10s | %-42s | %b %s\n" "$node" "$IDENTITY" "$STATUS_TEXT" "$CMD_HINT"
-
+    # BƯỚC 4: RESTART ĐỂ ÁP DỤNG PASSWORD
+    docker restart "$node" >/dev/null
+    echo "   🔄 Đã khởi động lại node để áp dụng cấu hình."
+    echo "--------------------------------------------------------"
 done
-echo "------------------------------------------------------------------------"
-echo "👉 LƯU Ý:"
-echo "1. Nếu trạng thái là '❌ Chưa Active': Copy địa chỉ Identity Address."
-echo "2. Gửi khoảng 0.1 MATIC hoặc MYST (Polygon) vào địa chỉ đó."
-echo "3. Sau khi gửi tiền, chạy lệnh sau để kích hoạt:"
-echo "   docker exec <tên_node> myst cli identities register"
+
+echo "🎉 HOÀN TẤT!"
+echo "👉 Bạn hãy thử f5 lại trang web 13.113...:4449."
+echo "   Nó sẽ hỏi mật khẩu (nhập: $NODE_PASSWORD) thay vì màn hình Onboarding."
