@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-# ==== 1. CẤU HÌNH (GIỮ NGUYÊN TỪ SCRIPT CỦA BẠN) ====
+# ==== 1. CẤU HÌNH ====
 IMG_MYST="mysteriumnetwork/myst:latest"
+
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
 err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
 
@@ -13,29 +14,23 @@ IP_PRIVATE_B=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/
 if [ -z "$IP_PRIVATE_A" ] || [ -z "$IP_PRIVATE_B" ]; then err "Không lấy được IP Private trên ens5!"; fi
 log "IP Private detected: A=$IP_PRIVATE_A | B=$IP_PRIVATE_B"
 
-# ==== 3. XÓA SẠCH MYSTERIUM (CONTAINER & VOLUME) ====
-log "Đang xóa sạch các Node Mysterium cũ và Volume dữ liệu..."
+# ==== 3. CHỈ XÓA CONTAINER (GIỮ LẠI VOLUME) ====
+log "Đang dừng và dọn dẹp Container cũ (Dữ liệu/Identity được giữ nguyên)..."
 
 for id in 1 2; do
-    # Dừng và xóa container
+    # Chỉ xóa container, tuyệt đối KHÔNG xóa volume
     docker rm -f myst$id >/dev/null 2>&1 || true
-    # XÓA VOLUME (Để xóa Identity cũ, bắt đầu lại từ đầu)
-    docker volume rm myst-data$id >/dev/null 2>&1 || true
 done
 
-# ==== 4. ĐẢM BẢO NETWORK VÀ IPTABLES (CƠ CHẾ ROUTING) ====
-# (Phần này script sẽ chạy lại để đảm bảo IP 1 đi Network 1, IP 2 đi Network 2)
-# Giả sử bạn đã tạo network my_network_1 và 2 như script trước.
-
-# ==== 5. CÀI ĐẶT LẠI MYSTERIUM (GIỮ PORT 4449) ====
-log "🚀 Khởi chạy lại Mysterium với cơ chế Bind IP..."
+# ==== 4. KHỞI CHẠY LẠI MYSTERIUM (BẮT ĐÚNG IP VÀ PORT 4449) ====
+log "🚀 Khởi chạy lại Mysterium (Gắn lại volume cũ)..."
 
 run_myst_node() {
     local ID=$1
     local NET="my_network_$ID"
     local BIND_IP=$2
     
-    # Cơ chế: -p BIND_IP:4449:4449 cho phép dùng cùng port 4449 trên 2 IP khác nhau
+    # Run container và gắn vào Volume đã có (myst-data1, myst-data2)
     docker run -d \
         --network $NET \
         --cap-add NET_ADMIN \
@@ -45,14 +40,14 @@ run_myst_node() {
         --restart unless-stopped \
         $IMG_MYST service --agreed-terms-and-conditions >/dev/null
     
-    log "✅ Node myst$ID đã chạy trên IP: $BIND_IP | Port: 4449"
+    log "✅ Node myst$ID: Đã khởi động trên $BIND_IP:4449"
 }
 
 run_myst_node 1 "$IP_PRIVATE_A"
 run_myst_node 2 "$IP_PRIVATE_B"
 
 echo "----------------------------------------------------------"
-log "TỔNG KẾT LINK TRUY CẬP UI:"
+log "TỔNG KẾT LINK TRUY CẬP UI (IDENTITY CŨ):"
 echo "🔗 Node 1: http://$IP_PRIVATE_A:4449"
 echo "🔗 Node 2: http://$IP_PRIVATE_B:4449"
 echo "----------------------------------------------------------"
