@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# ==== CẤU HÌNH MÀU SẮC ====
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}=================================================${NC}"
+echo -e "${BLUE}   CÔNG CỤ KIỂM TRA TRẠNG THÁI NODE (LOG CHECK)  ${NC}"
+echo -e "${BLUE}=================================================${NC}"
+echo ""
+
+# Danh sách các app prefix
+APPS=("tm" "myst" "urnetwork" "earnfm" "repocket" "antgain")
+IDS=("1" "2")
+
+# Hàm kiểm tra từng container
+check_container() {
+    local NAME=$1
+    
+    # 1. Kiểm tra xem container có tồn tại không
+    if ! docker inspect "$NAME" > /dev/null 2>&1; then
+        return # Bỏ qua nếu không tìm thấy (ví dụ antgain không cài)
+    fi
+
+    echo -e "-------------------------------------------------"
+    
+    # 2. Lấy trạng thái (Up/Restarting/Exited)
+    STATUS=$(docker inspect --format '{{.State.Status}}' "$NAME")
+    UPTIME=$(docker ps -f "name=^/${NAME}$" --format "{{.Status}}")
+    
+    # 3. Đổi màu trạng thái
+    if [[ "$STATUS" == "running" ]]; then
+        STATUS_COLOR="${GREEN}RUNNING${NC}"
+    else
+        STATUS_COLOR="${RED}$STATUS${NC}"
+    fi
+
+    echo -e "Node: ${YELLOW}$NAME${NC} | Trạng thái: $STATUS_COLOR | ($UPTIME)"
+
+    # 4. Lấy thống kê tài nguyên (CPU/RAM) - Cần cài đặt format
+    STATS=$(docker stats --no-stream --format "CPU: {{.CPUPerc}} | RAM: {{.MemUsage}}" "$NAME")
+    echo -e "Resource: $STATS"
+
+    # 5. In ra 3 dòng log cuối cùng
+    echo -e "📝 ${BLUE}Logs mới nhất:${NC}"
+    
+    # Lấy logs, nếu log trống thì báo trống
+    LOGS=$(docker logs --tail 3 "$NAME" 2>&1)
+    if [ -z "$LOGS" ]; then
+        echo -e "   (Không có log)"
+    else
+        # In logs và tô đỏ nếu có từ khóa lỗi
+        echo "$LOGS" | while read -r line; do
+            if [[ "$line" == *"error"* ]] || [[ "$line" == *"Error"* ]] || [[ "$line" == *"Failed"* ]] || [[ "$line" == *"refused"* ]]; then
+                echo -e "   ${RED}$line${NC}"
+            else
+                echo -e "   $line"
+            fi
+        done
+    fi
+}
+
+# ==== CHẠY VÒNG LẶP KIỂM TRA ====
+
+# Check nhanh IP Public hiện tại của 2 mạng
+echo -e "${YELLOW}[Network Check]${NC}"
+IP1=$(docker run --rm --network my_network_1 curlimages/curl:latest -s --max-time 5 https://api.ipify.org || echo "Error")
+IP2=$(docker run --rm --network my_network_2 curlimages/curl:latest -s --max-time 5 https://api.ipify.org || echo "Error")
+
+if [ "$IP1" == "$IP2" ]; then
+    echo -e "⚠️  ${RED}CẢNH BÁO: TRÙNG IP ($IP1). Node có thể bị ban!${NC}"
+else
+    echo -e "✅ Net 1: $IP1"
+    echo -e "✅ Net 2: $IP2"
+fi
+echo ""
+
+echo -e "${YELLOW}[Container Check]${NC}"
+
+# Duyệt qua các nhóm 1 và 2
+for id in "${IDS[@]}"; do
+    for app in "${APPS[@]}"; do
+        CONTAINER_NAME="${app}${id}"
+        check_container "$CONTAINER_NAME"
+    done
+done
+
+echo -e "\n${BLUE}==== HOÀN TẤT ====${NC}"
