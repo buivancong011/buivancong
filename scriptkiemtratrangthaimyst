@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# =================================================================
+# CẤU HÌNH VÍ CHUẨN ĐỂ SO SÁNH
+# =================================================================
+TARGET_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"
+# =================================================================
+
+# Màu sắc
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo "=========================================================================================================="
+echo "   MYSTERIUM ULTIMATE CHECK (STATUS - WIREGUARD - WALLET - BALANCE)"
+echo "   Ví chuẩn: $TARGET_WALLET"
+echo "=========================================================================================================="
+
+NODES=$(docker ps --format "{{.Names}}" | grep "myst")
+
+if [ -z "$NODES" ]; then echo "❌ Không tìm thấy node."; exit 1; fi
+
+# Header bảng (Canh lề cho đẹp)
+printf "%-8s | %-15s | %-15s | %-15s | %-30s\n" "NODE" "TRẠNG THÁI" "WIREGUARD" "CHECK VÍ" "TÀI CHÍNH (Balance/Total)"
+echo "----------------------------------------------------------------------------------------------------------"
+
+for node in $NODES; do
+    # 1. LẤY IDENTITY
+    RAW_LIST=$(docker exec "$node" myst cli identities list 2>/dev/null)
+    ID=$(echo "$RAW_LIST" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
+
+    if [ -z "$ID" ]; then
+        printf "%-8s | %b | %s | %s | %s\n" "$node" "${RED}No ID ❌${NC}" "-" "-" "Cần tạo ID mới"
+        continue
+    fi
+
+    # 2. LẤY THÔNG TIN CƠ BẢN (Status, Balance, Earnings)
+    INFO=$(docker exec "$node" myst cli identities get "$ID" 2>&1)
+    STATUS_RAW=$(echo "$INFO" | grep "Registration Status" | awk '{print $3}')
+    BALANCE=$(echo "$INFO" | grep "Balance" | awk '{print $2}')
+    TOTAL_EARN=$(echo "$INFO" | grep "Earnings total" | awk '{print $3}')
+
+    # Màu trạng thái
+    if [[ "$STATUS_RAW" == "Registered" ]]; then
+        STATUS_TXT="${GREEN}Registered ✅${NC}"
+    elif [[ "$STATUS_RAW" == "InProgress" ]]; then
+        STATUS_TXT="${YELLOW}Đang ĐK... ⏳${NC}"
+    else
+        STATUS_TXT="${RED}Chưa ĐK ❌${NC}"
+    fi
+
+    # 3. KIỂM TRA WIREGUARD (Service List)
+    SVC_LIST=$(docker exec "$node" myst cli service list 2>&1)
+    if echo "$SVC_LIST" | grep -q "Type: wireguard"; then
+        WG_TXT="${GREEN}Đang Bật 🚀${NC}"
+    else
+        WG_TXT="${RED}Đang Tắt 🛑${NC}"
+    fi
+
+    # 4. KIỂM TRA VÍ RÚT TIỀN (Beneficiary Status)
+    BEN_LOG=$(docker exec "$node" myst cli identities beneficiary-status "$ID" 2>&1)
+    CURRENT_WALLET=$(echo "$BEN_LOG" | grep "Current beneficiary" | awk '{print $NF}')
+
+    # So sánh ví
+    if [ "$CURRENT_WALLET" == "$TARGET_WALLET" ]; then
+        WALLET_TXT="${GREEN}Ví Chuẩn ✅${NC}"
+    else
+        if [[ "$CURRENT_WALLET" == *"0x"* ]]; then
+            WALLET_TXT="${RED}Sai Ví ⚠️${NC}" # Có ví nhưng khác ví chuẩn
+        else
+            WALLET_TXT="${RED}Chưa Set ❌${NC}" # Chưa có ví
+        fi
+    fi
+
+    # 5. HIỂN THỊ DÒNG KẾT QUẢ
+    # Format tài chính: Balance / Total
+    FINANCE_TXT="${BLUE}$BALANCE${NC} / ${YELLOW}$TOTAL_EARN${NC}"
+
+    printf "%-8s | %b | %b | %b | %b\n" "$node" "$STATUS_TXT" "$WG_TXT" "$WALLET_TXT" "$FINANCE_TXT"
+
+done
+
+echo "----------------------------------------------------------------------------------------------------------"
+echo "👉 Giải thích:"
+echo "   - TRẠNG THÁI: Phải là Registered ✅ (Màu xanh)."
+echo "   - WIREGUARD: Phải là Đang Bật 🚀 (Màu xanh)."
+echo "   - CHECK VÍ: Phải là Ví Chuẩn ✅ (Khớp đuôi ...CC7f)."
+echo "   - TÀI CHÍNH: Số dư hiện tại / Tổng kiếm được."
