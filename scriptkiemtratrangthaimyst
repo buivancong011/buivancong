@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =================================================================
-# CẤU HÌNH VÍ CHUẨN ĐỂ SO SÁNH
+# CẤU HÌNH VÍ CHUẨN (ĐỂ SO SÁNH)
 # =================================================================
 TARGET_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"
 # =================================================================
@@ -14,7 +14,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo "========================================================================================================================"
-echo "   MYSTERIUM AUDIT V4 (HIỆN VÍ - FIX LỖI HIỂN THỊ)"
+echo "   MYSTERIUM AUDIT V6 (CHECK VÍ & WIREGUARD CHUẨN LOG)"
 echo "   Ví chuẩn: $TARGET_WALLET"
 echo "========================================================================================================================"
 
@@ -22,8 +22,8 @@ NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then echo "❌ Không tìm thấy node."; exit 1; fi
 
-# Header bảng (Mở rộng cột Ví)
-printf "%-8s | %-12s | %-10s | %-48s | %-20s\n" "NODE" "TRẠNG THÁI" "VPN SVC" "ĐỊA CHỈ VÍ TRÊN NODE (Beneficiary)" "TÀI CHÍNH (Bal/Tot)"
+# Header bảng
+printf "%-8s | %-12s | %-12s | %-48s | %-20s\n" "NODE" "TRẠNG THÁI" "WIREGUARD" "ĐỊA CHỈ VÍ HIỆN TẠI (Current Beneficiary)" "TÀI CHÍNH (Bal/Tot)"
 echo "------------------------------------------------------------------------------------------------------------------------"
 
 for node in $NODES; do
@@ -36,64 +36,69 @@ for node in $NODES; do
         continue
     fi
 
-    # 2. UNLOCK (Bắt buộc để lệnh get không bị lỗi)
+    # 2. UNLOCK (QUAN TRỌNG: Để lấy dữ liệu chính xác)
     docker exec "$node" myst cli identities unlock "$ID" >/dev/null 2>&1
 
-    # 3. LẤY THÔNG TIN CHUNG (Fix cột cắt chuỗi)
+    # 3. LẤY THÔNG TIN TÀI CHÍNH & TRẠNG THÁI (Lệnh: identities get)
     INFO=$(docker exec "$node" myst cli identities get "$ID" 2>&1)
-
-    # Log mẫu: [INFO] Registration Status: Registered (Cột 4)
+    
+    # [INFO] Registration Status: Registered (Cột 4)
     STATUS_RAW=$(echo "$INFO" | grep "Registration Status" | awk '{print $4}')
     
-    # Log mẫu: [INFO] Balance: 0.001705 MYST (Cột 3)
+    # [INFO] Balance: 0.001705 MYST (Cột 3)
     BALANCE=$(echo "$INFO" | grep "Balance:" | awk '{print $3}')
     
-    # Log mẫu: [INFO] Earnings total: 7.960643 (Cột 4)
+    # [INFO] Earnings total: 7.960643 (Cột 4)
     TOTAL_EARN=$(echo "$INFO" | grep "Earnings total:" | awk '{print $4}')
 
-    # Xử lý màu trạng thái
+    # Màu trạng thái
     if [[ "$STATUS_RAW" == "Registered" ]]; then
         STATUS_TXT="${GREEN}Registered${NC}"
     elif [[ "$STATUS_RAW" == "InProgress" ]]; then
         STATUS_TXT="${YELLOW}Pending...${NC}"
     else
-        STATUS_TXT="${RED}Unregistered${NC}"
+        STATUS_TXT="${RED}Unreg...${NC}"
     fi
 
-    # 4. KIỂM TRA WIREGUARD
+    # 4. CHECK WIREGUARD (Lệnh: service list)
+    # Tìm dòng chứa "[Running]" VÀ "Type: wireguard"
     SVC_LIST=$(docker exec "$node" myst cli service list 2>&1)
+    
     if echo "$SVC_LIST" | grep -q "Type: wireguard"; then
-        WG_TXT="${GREEN}Bật 🚀${NC}"
+        if echo "$SVC_LIST" | grep "Type: wireguard" | grep -q "Running"; then
+            WG_TXT="${GREEN}Running 🚀${NC}"
+        else
+            WG_TXT="${YELLOW}Stopped ⚠️${NC}"
+        fi
     else
-        WG_TXT="${RED}Tắt 🛑${NC}"
+        WG_TXT="${RED}Missing ❌${NC}"
     fi
 
-    # 5. LẤY ĐỊA CHỈ VÍ (HIỆN NGUYÊN VĂN)
+    # 5. CHECK VÍ (Lệnh: identities beneficiary-status) - PHẦN QUAN TRỌNG NHẤT
     BEN_LOG=$(docker exec "$node" myst cli identities beneficiary-status "$ID" 2>&1)
     
-    # Log mẫu: [INFO] Current beneficiary: 0x... (Cột 4)
+    # Log mẫu: [INFO] Current beneficiary: 0x22c... (Cột 4)
     CURRENT_WALLET=$(echo "$BEN_LOG" | grep "Current beneficiary" | awk '{print $4}')
 
-    # So sánh ví
+    # So sánh với ví chuẩn
     if [ "$CURRENT_WALLET" == "$TARGET_WALLET" ]; then
-        # Nếu đúng: Hiện ví màu xanh
+        # Nếu trùng khớp: In màu xanh + tick
         WALLET_DISPLAY="${GREEN}${CURRENT_WALLET} ✅${NC}"
     else
-        # Nếu sai hoặc rỗng
-        if [ -z "$CURRENT_WALLET" ] || [ "$CURRENT_WALLET" == "None" ]; then
+        # Nếu khác hoặc rỗng
+        if [ -z "$CURRENT_WALLET" ] || [ "$CURRENT_WALLET" == "None" ] || [ "$CURRENT_WALLET" == "not_found" ]; then
              WALLET_DISPLAY="${RED}CHƯA CÀI VÍ ❌${NC}"
         else
              WALLET_DISPLAY="${RED}${CURRENT_WALLET} (SAI) ⚠️${NC}"
         fi
     fi
 
-    # 6. IN RA MÀN HÌNH
-    # Nếu balance rỗng thì điền số 0
+    # 6. HIỂN THỊ KẾT QUẢ
     if [ -z "$BALANCE" ]; then BALANCE="0"; fi
     if [ -z "$TOTAL_EARN" ]; then TOTAL_EARN="0"; fi
 
     FINANCE_TXT="${BLUE}$BALANCE${NC} / ${YELLOW}$TOTAL_EARN${NC}"
-    
+
     printf "%-8s | %b | %b | %b | %b\n" "$node" "$STATUS_TXT" "$WG_TXT" "$WALLET_DISPLAY" "$FINANCE_TXT"
 
 done
