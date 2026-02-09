@@ -7,21 +7,21 @@
 MYST_API_KEY="nX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT" 
 
 # 2. Ví nhận tiền (Ví chính Polygon/Metamask)
-MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f" 
+MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"
 # =================================================================
 
 echo "========================================================"
-echo "   MYSTERIUM AUTO SETUP (FORCE WALLET SET)"
+echo "   MYSTERIUM SMART SETUP (SKIP IF REGISTERED)"
 echo "========================================================"
 
 NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then echo "❌ Không tìm thấy node."; exit 1; fi
 
-# Tạo file danh sách nạp tiền
-> myst_topup.txt
+# Tạo file danh sách nạp tiền (chỉ lưu những node chưa active)
+> myst_topup_needed.txt
 
-printf "%-10s | %-42s | %-42s\n" "NODE" "IDENTITY (ProviderID)" "CHANNEL ADDRESS (Nạp tiền vào đây)"
+printf "%-10s | %-15s | %-42s\n" "NODE" "TRẠNG THÁI" "HÀNH ĐỘNG / CHANNEL ADDRESS"
 echo "--------------------------------------------------------------------------------------------------------"
 
 for node in $NODES; do
@@ -29,44 +29,53 @@ for node in $NODES; do
     RAW_LIST=$(docker exec "$node" myst cli identities list)
     ID=$(echo "$RAW_LIST" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
 
-    # Nếu chưa có thì tạo mới
+    # Nếu chưa có ID thì tạo mới
     if [ -z "$ID" ]; then
         docker exec "$node" myst cli identities new >/dev/null 2>&1
         ID=$(docker exec "$node" myst cli identities list | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
     fi
 
-    # 2. UNLOCK (Bước bắt buộc)
+    # 2. KIỂM TRA TRẠNG THÁI (Bước thông minh mới thêm)
+    INFO=$(docker exec "$node" myst cli identities get "$ID" 2>&1)
+    
+    if echo "$INFO" | grep -q "Registration Status: Registered"; then
+        # === TRƯỜNG HỢP 1: ĐÃ ĐĂNG KÝ XONG ===
+        # Chỉ đảm bảo service đang chạy, còn lại bỏ qua hết
+        docker exec "$node" myst cli service start "$ID" wireguard >/dev/null 2>&1
+        printf "%-10s | \e[32mRegistered ✅\e[0m  | Bỏ qua cài đặt (Đã chạy ổn)\n" "$node"
+        continue 
+    fi
+
+    # === TRƯỜNG HỢP 2: CHƯA ĐĂNG KÝ (Làm đủ quy trình) ===
+    
+    # A. Unlock
     docker exec "$node" myst cli identities unlock "$ID" >/dev/null 2>&1
 
-    # 3. KẾT NỐI DASHBOARD (MMN)
+    # B. MMN Connect
     docker exec "$node" myst cli mmn "$MYST_API_KEY" >/dev/null 2>&1
 
-    # 4. ĐĂNG KÝ (REGISTER)
+    # C. Register (Kèm ví)
     docker exec "$node" myst cli identities register "$ID" "$MY_WALLET" >/dev/null 2>&1
 
-    # 5. SET VÍ (FORCE SET - THEO YÊU CẦU CỦA BẠN)
-    # Lệnh này sẽ chạy và bỏ qua lỗi hiển thị (như lỗi 500 fee)
-    # Chúng ta thêm "|| true" để script không bị dừng nếu có lỗi
+    # D. Force Set Beneficiary (Bất chấp lỗi)
     docker exec "$node" myst cli identities beneficiary-set "$ID" "$MY_WALLET" >/dev/null 2>&1 || true
 
-    # 6. START WIREGUARD
+    # E. Start Wireguard
     docker exec "$node" myst cli service start "$ID" wireguard >/dev/null 2>&1
 
-    # 7. LẤY CHANNEL ADDRESS ĐỂ NẠP TIỀN
-    INFO=$(docker exec "$node" myst cli identities get "$ID")
-    CHANNEL_ADDR=$(echo "$INFO" | grep "Channel address" | awk '{print $NF}')
+    # F. Lấy Channel Address để nạp tiền
+    # Lấy lại info mới nhất sau khi register
+    INFO_NEW=$(docker exec "$node" myst cli identities get "$ID")
+    CHANNEL_ADDR=$(echo "$INFO_NEW" | grep "Channel address" | awk '{print $NF}')
 
-    # In ra màn hình
-    printf "%-10s | %-42s | %-42s\n" "$node" "$ID" "$CHANNEL_ADDR"
+    printf "%-10s | \e[31mUnregistered ❌\e[0m | Cần nạp tiền: %s\n" "$node" "$CHANNEL_ADDR"
     
     # Lưu vào file
-    echo "$CHANNEL_ADDR" >> myst_topup.txt
+    echo "$CHANNEL_ADDR" >> myst_topup_needed.txt
 
 done
 
 echo "--------------------------------------------------------------------------------------------------------"
-echo "🎉 ĐÃ SET VÍ THÀNH CÔNG (Bất chấp lỗi báo đỏ)!"
-echo ""
-echo "👉 BƯỚC CUỐI CÙNG:"
-echo "   Copy danh sách địa chỉ ở cột 'CHANNEL ADDRESS' (bên phải cùng)."
-echo "   Nạp 0.1 MYST (Polygon) vào đó để Node chính thức chạy."
+echo "🎉 HOÀN TẤT!"
+echo "👉 Những node báo 'Registered ✅' là đã xong, không cần làm gì thêm."
+echo "👉 Những node báo 'Unregistered ❌' -> Copy địa chỉ Channel Address và nạp tiền (0.1 MYST)."
