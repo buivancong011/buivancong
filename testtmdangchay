@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# ==== CẤU HÌNH ====
+# Danh sách tên container cần check
+NODES=("tm1" "tm2" "tm")
+
+# Từ khóa xác nhận là đang chạy ổn (Viết thường hết)
+KEYWORD="connected"
+
+# ==== LOGIC CHECK ====
+echo "Starting check at $(date)"
+
+for node in "${NODES[@]}"; do
+    # 1. Kiểm tra xem container có đang chạy không
+    if [ ! "$(docker ps -q -f name=^/${node}$)" ]; then
+        echo "❌ Node $node đang tắt -> Khởi động lại..."
+        docker start "$node"
+        continue
+    fi
+
+    # 2. Lấy dòng log cuối cùng
+    LAST_LOG=$(docker logs --tail 1 "$node" 2>&1 | tr '[:upper:]' '[:lower:]')
+
+    # 3. Kiểm tra từ khóa "connected"
+    if [[ "$LAST_LOG" == *"$KEYWORD"* ]]; then
+        echo "✅ $node: Ổn định ($LAST_LOG)"
+    else
+        echo "⚠️  $node: Dòng cuối lạ ('$LAST_LOG'). Chờ 10s để check lại..."
+        sleep 10
+        
+        # Check lại lần 2 (Double check)
+        LAST_LOG_2=$(docker logs --tail 1 "$node" 2>&1 | tr '[:upper:]' '[:lower:]')
+        
+        if [[ "$LAST_LOG_2" == *"$KEYWORD"* ]]; then
+             echo "✅ $node: Đã tự phục hồi ($LAST_LOG_2)"
+        else
+             echo "Mq $node: Vẫn lỗi -> 🔄 RESTARTING..."
+             docker restart "$node"
+             echo "   -> Đã restart xong."
+        fi
+    fi
+done
+echo "---------------------------------"
