@@ -1,52 +1,58 @@
 #!/bin/bash
 
-# ==== CẤU HÌNH VÍ NHẬN TIỀN CỦA BẠN (SỬA Ở ĐÂY) ====
-MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"  # <-- Thay ví Metamask của bạn vào đây
+# ==== CẤU HÌNH MÀU SẮC ====
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
 
-echo "=================================================="
-echo "   AUTO CONFIG MYSTERIUM NODES"
-echo "   Ví nhận tiền: $MY_WALLET"
-echo "=================================================="
+echo "=========================================================="
+echo "   KIỂM TRA TRẠNG THÁI NODE MYSTERIUM (AUTO-CHECK)"
+echo "=========================================================="
 
-# Lấy danh sách container myst
+# Lấy danh sách container
 NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then
-    echo "❌ Không tìm thấy container Mysterium nào đang chạy."
+    echo "❌ Không tìm thấy container Mysterium nào."
     exit 1
 fi
 
-echo "Đang xử lý các node..."
-echo "--------------------------------------------------"
-printf "%-10s | %-42s | %-10s\n" "Node" "Identity Address (Cần nạp tiền vào đây)" "Trạng thái"
-echo "--------------------------------------------------"
+printf "%-10s | %-42s | %-15s\n" "NODE" "IDENTITY ADDRESS" "TRẠNG THÁI"
+echo "------------------------------------------------------------------------"
 
 for node in $NODES; do
-    # 1. Chấp nhận điều khoản (đề phòng chưa chấp nhận)
-    docker exec "$node" myst cli --agreed-terms-and-conditions >/dev/null 2>&1
-
-    # 2. Set ví nhận tiền (Payout)
-    # Lệnh này set ví chính của bạn làm nơi nhận lãi
-    docker exec "$node" myst cli payout set "$MY_WALLET" >/dev/null 2>&1
-
-    # 3. Lấy địa chỉ Identity của Node (để bạn nạp tiền active)
-    # Lọc lấy dòng chứa địa chỉ ví bắt đầu bằng 0x
-    NODE_ADDR=$(docker exec "$node" myst cli identities list | grep -o '0x[a-fA-F0-9]\{40\}' | head -n 1)
-
-    # 4. Kiểm tra trạng thái đăng ký
-    IS_REG=$(docker exec "$node" myst cli identities list | grep "Unregistered")
+    # 1. Lấy toàn bộ thông tin Identity
+    RAW_DATA=$(docker exec "$node" myst cli identities list 2>&1)
     
-    if [ -n "$IS_REG" ]; then
-        STATUS="Chưa Active ❌"
+    # 2. Lấy địa chỉ ví (Identity) - Lấy chuỗi 0x đầu tiên tìm thấy
+    IDENTITY=$(echo "$RAW_DATA" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
+
+    if [ -z "$IDENTITY" ]; then
+        IDENTITY="Không tìm thấy ID"
+        STATUS_TEXT="${RED}Lỗi Node${NC}"
     else
-        STATUS="Đã Active ✅"
+        # 3. Kiểm tra trạng thái dựa trên từ khóa trong log
+        # Dùng grep -i để không phân biệt hoa thường
+        if echo "$RAW_DATA" | grep -iq "Unregistered"; then
+            STATUS_TEXT="${RED}❌ Chưa Active${NC}"
+            CMD_HINT="(Cần nạp phí)"
+        elif echo "$RAW_DATA" | grep -iq "Registered"; then
+            STATUS_TEXT="${GREEN}✅ Đã Active${NC}"
+            CMD_HINT=""
+        elif echo "$RAW_DATA" | grep -iq "Registration in progress"; then
+             STATUS_TEXT="${YELLOW}⏳ Đang ĐK...${NC}"
+        else
+            STATUS_TEXT="❓ Không rõ"
+        fi
     fi
 
-    printf "%-10s | %-42s | %-10s\n" "$node" "$NODE_ADDR" "$STATUS"
+    # In ra kết quả
+    printf "%-10s | %-42s | %b %s\n" "$node" "$IDENTITY" "$STATUS_TEXT" "$CMD_HINT"
 
 done
-echo "--------------------------------------------------"
-echo "👉 HƯỚNG DẪN BƯỚC TIẾP THEO:"
-echo "1. Copy danh sách 'Identity Address' ở trên."
-echo "2. Dùng ví chính của bạn, gửi khoảng 0.1 - 0.2 MYST (mạng Polygon) vào các địa chỉ đó."
-echo "3. Sau khi có tiền, Node sẽ tự động đăng ký (hoặc chạy lệnh: docker exec <tên_node> myst cli identities register)."
+echo "------------------------------------------------------------------------"
+echo "👉 LƯU Ý:"
+echo "1. Nếu trạng thái là '❌ Chưa Active': Copy địa chỉ Identity Address."
+echo "2. Gửi khoảng 0.1 MATIC hoặc MYST (Polygon) vào địa chỉ đó."
+echo "3. Sau khi gửi tiền, chạy lệnh sau để kích hoạt:"
+echo "   docker exec <tên_node> myst cli identities register"
