@@ -1,20 +1,20 @@
 #!/bin/bash
 
 # =================================================================
-# CẤU HÌNH (BẮT BUỘC ĐIỀN ĐÚNG)
+# CẤU HÌNH (SỬA 3 DÒNG NÀY)
 # =================================================================
-# 1. API Key lấy tại: https://my.mystnodes.com/me
+# 1. API Key (Lấy tại my.mystnodes.com/me)
 MYST_API_KEY="nX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT" 
 
-# 2. Mật khẩu bạn muốn đặt cho Web UI
+# 2. Mật khẩu bạn muốn đặt cho Node (Để đăng nhập IP:4449)
 NODE_PASSWORD="CAOcao123@"
 
-# 3. Ví nhận tiền (Nếu có)
-MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"
+# 3. Ví nhận tiền (Polygon/Metamask)
+MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f" 
 # =================================================================
 
 echo "========================================================"
-echo "   MYSTERIUM FORCE FIX (AUTO ONBOARDING)"
+echo "   MYSTERIUM FULL SETUP (CLI)"
 echo "========================================================"
 
 NODES=$(docker ps --format "{{.Names}}" | grep "myst")
@@ -26,59 +26,33 @@ fi
 
 for node in $NODES; do
     echo "--------------------------------------------------"
-    echo "🔧 Đang xử lý Node: $node"
+    echo "🔌 Đang xử lý Node: $node"
 
-    # 1. CHẤP NHẬN ĐIỀU KHOẢN (Bằng lệnh CLI trước)
+    # 1. CHẤP NHẬN ĐIỀU KHOẢN
     docker exec "$node" myst cli --agreed-terms-and-conditions >/dev/null 2>&1
-    
-    # 2. BIỆN PHÁP MẠNH: Sửa file config.toml trực tiếp
-    # Chúng ta dùng sed để chèn mật khẩu vào file cấu hình
-    echo "   🔑 Đang ghi mật khẩu vào file cấu hình..."
-    
-    # Lệnh này tìm dòng [tequilapi] và đảm bảo các dòng pass được set
-    # Lưu ý: Pass phải nằm trong dấu ngoặc kép
-    docker exec "$node" sh -c "sed -i 's/^pass = .*/pass = \"$NODE_PASSWORD\"/' /var/lib/mysterium-node/config.toml"
-    
-    # Nếu trong file chưa có dòng pass (node mới tinh), ta chèn vào dưới [tequilapi]
-    # Kiểm tra xem có [tequilapi] chưa, nếu chưa thì thêm vào cuối
-    docker exec "$node" sh -c "grep -q '\[tequilapi\]' /var/lib/mysterium-node/config.toml || echo -e '\n[tequilapi]\npass = \"$NODE_PASSWORD\"' >> /var/lib/mysterium-node/config.toml"
-    
-    # Đảm bảo dòng pass tồn tại nếu section đã có
-    docker exec "$node" sh -c "grep -q 'pass =' /var/lib/mysterium-node/config.toml || sed -i '/\[tequilapi\]/a pass = \"$NODE_PASSWORD\"' /var/lib/mysterium-node/config.toml"
 
-    # 3. RESTART NODE (Bắt buộc để file config có hiệu lực)
-    echo "   🔄 Restart node để áp dụng..."
-    docker restart "$node"
-    
-    # Chờ 10 giây cho node khởi động xong
-    echo "   ⏳ Đợi 10s cho node khởi động..."
-    sleep 10
+    # 2. SET MẬT KHẨU (Quan trọng)
+    # Lệnh này cấu hình trực tiếp vào service Tequilapi (Giao diện Web)
+    echo "   🔑 Đang cài mật khẩu Local..."
+    docker exec "$node" myst config set tequilapi.pass "$NODE_PASSWORD"
 
-    # 4. TẠO IDENTITY (Nếu chưa có)
-    echo "   🆔 Kiểm tra Identity..."
-    ID_CHECK=$(docker exec "$node" myst cli identities list)
-    if [[ $ID_CHECK == *"Empty"* ]] || [[ -z $ID_CHECK ]]; then
-         docker exec "$node" myst cli identities new >/dev/null 2>&1
-    fi
+    # 3. KẾT NỐI DASHBOARD (Lệnh mmn)
+    echo "   ☁️  Đang kết nối Dashboard (MMN)..."
+    docker exec "$node" myst cli mmn "$MYST_API_KEY"
 
-    # 5. ĐĂNG KÝ VÍ (Register)
-    echo "   💰 Đang đăng ký ví..."
+    # 4. ĐĂNG KÝ VÍ (Register)
+    echo "   💰 Đang đăng ký ví nhận tiền..."
     docker exec "$node" myst cli identities register "$MY_WALLET" >/dev/null 2>&1
 
-    # 6. LIÊN KẾT DASHBOARD (Claim)
-    echo "   🔗 Đang liên kết API Dashboard..."
-    CLAIM_LOG=$(docker exec "$node" myst cli mmn "$MYST_API_KEY" 2>&1)
+    # 5. KHỞI ĐỘNG LẠI (Bắt buộc để mật khẩu có hiệu lực)
+    echo "   🔄 Đang khởi động lại node..."
+    docker restart "$node" >/dev/null
     
-    if echo "$CLAIM_LOG" | grep -q "Error"; then
-        echo "      ⚠️  Kết quả Claim: $CLAIM_LOG"
-    else
-        echo "      ✅ Claim thành công!"
-    fi
-
     echo "   ✅ Xong node $node"
 done
 
 echo "--------------------------------------------------"
-echo "🎉 ĐÃ HOÀN TẤT!"
-echo "👉 Hãy thử truy cập lại IP:4449."
-echo "👉 Nếu nó hỏi mật khẩu, hãy nhập: $NODE_PASSWORD"
+echo "🎉 HOÀN TẤT!"
+echo "👉 Truy cập Web Local: http://<IP_VPS>:4449"
+echo "👉 Mật khẩu đăng nhập: $NODE_PASSWORD"
+echo "👉 Kiểm tra Dashboard: https://my.mystnodes.com/nodes"
