@@ -1,0 +1,61 @@
+#!/bin/bash
+set -e
+
+# ==== CẤU HÌNH ====
+TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
+IMG_EARN="earnfm/earnfm-client:latest"
+
+# Màu sắc
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[INFO] $1${NC}"; }
+warn() { echo -e "${YELLOW}[WARN] $1${NC}"; }
+
+# ==== 1. DỌN DẸP EARNFM CŨ ====
+log "Đang dọn dẹp các container EarnFM cũ..."
+# Tìm và xóa tất cả container có tên bắt đầu bằng 'earnfm'
+CONTAINERS=$(docker ps -a --filter "name=earnfm" --format "{{.Names}}")
+
+if [ -n "$CONTAINERS" ]; then
+    for c in $CONTAINERS; do
+        log "Xóa container: $c"
+        docker rm -f "$c" >/dev/null 2>&1
+    done
+else
+    warn "Không tìm thấy container EarnFM nào đang chạy."
+fi
+
+# ==== 2. KHỞI CHẠY LẠI TRÊN CÁC NETWORK ====
+# Hàm chạy node cho từng network
+run_earnfm() {
+    local ID=$1
+    local NET="my_network_$ID"
+
+    # Kiểm tra xem network có tồn tại không trước khi chạy
+    if docker network inspect "$NET" >/dev/null 2>&1; then
+        log "🚀 Đang khởi tạo earnfm$ID trên $NET..."
+        docker run -d \
+            --name "earnfm$ID" \
+            --network "$NET" \
+            --restart always \
+            --dns 1.1.1.1 \
+            --dns 1.0.0.1 \
+            -e EARNFM_TOKEN="$TOKEN_EARNFM" \
+            "$IMG_EARN" >/dev/null
+        log "✅ earnfm$ID đã sẵn sàng."
+    else
+        echo -e "${RED}[ERROR] Network $NET không tồn tại. Bỏ qua node $ID.${NC}"
+    fi
+}
+
+# Thực thi cho IP 1 và IP 2 (Ông có thể thêm 3, 4... nếu muốn)
+run_earnfm 1
+run_earnfm 2
+
+# ==== 3. TỔNG KẾT ====
+echo "----------------------------------------------------"
+log "HOÀN TẤT: Toàn bộ node EarnFM đã được cập nhật DNS & Token."
+docker ps --filter "name=earnfm" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
