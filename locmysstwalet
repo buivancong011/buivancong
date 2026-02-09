@@ -1,20 +1,22 @@
 #!/bin/bash
 
 # =================================================================
-# CẤU HÌNH (BẠN PHẢI SỬA 2 DÒNG NÀY)
+# CẤU HÌNH (SỬA 3 DÒNG NÀY)
 # =================================================================
 # 1. API Key lấy tại: https://my.mystnodes.com/me
 MYST_API_KEY="nX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT" 
 
-# 2. Mật khẩu bạn muốn đặt cho Node (Thay cho việc nhập trên web)
-NODE_PASSWORD="MnX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT"
+# 2. Địa chỉ ví Polygon/Metamask để nhận tiền
+MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"
+
+# 3. Mật khẩu cho Web UI (IP:4449) -> Để bạn login vào kiểm tra
+NODE_PASSWORD="nX51wlGwSBAmcZ6da2tKUqTf6kzDNRMCg1xIxCwT"
 # =================================================================
 
 echo "========================================================"
-echo "   MYSTERIUM AUTO ONBOARDING (CLI BASED)"
+echo "   MYSTERIUM FULL AUTO SETUP (CLI + PASS + WALLET)"
 echo "========================================================"
 
-# Lấy danh sách các container myst đang chạy
 NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then
@@ -23,36 +25,40 @@ if [ -z "$NODES" ]; then
 fi
 
 for node in $NODES; do
+    echo "--------------------------------------------------"
     echo "Processing Node: $node..."
 
-    # BƯỚC 1: CHẤP NHẬN ĐIỀU KHOẢN (Bắt buộc theo Docs)
-    # Lệnh: --agreed-terms-and-conditions
-    docker exec "$node" sh -c "myst cli --agreed-terms-and-conditions >/dev/null 2>&1"
-    echo "   ✅ Đã chấp nhận điều khoản."
+    # BƯỚC 1: CHẤP NHẬN ĐIỀU KHOẢN (Bắt buộc)
+    docker exec "$node" myst cli --agreed-terms-and-conditions >/dev/null 2>&1
 
-    # BƯỚC 2: CÀI ĐẶT MẬT KHẨU CHO UI (Bỏ qua bước Create Password trên màn hình)
-    # Chúng ta can thiệp vào file config.toml thông qua lệnh config set
-    docker exec "$node" sh -c "myst config set 'tequilapi.pass'='$NODE_PASSWORD' >/dev/null 2>&1"
-    echo "   ✅ Đã set mật khẩu quản trị."
+    # BƯỚC 2: CÀI ĐẶT MẬT KHẨU CHO WEB UI (Cái bạn đang thiếu)
+    # Lệnh này can thiệp vào file config để set pass luôn
+    echo "   🔑 Đang set mật khẩu Web UI..."
+    docker exec "$node" myst config set "tequilapi.pass" "$NODE_PASSWORD"
 
-    # BƯỚC 3: CLAIM NODE (Liên kết với my.mystnodes.com)
-    # Lệnh: claims create [API_KEY]
-    # Bước này sẽ bỏ qua ô nhập API Key trên màn hình
-    CLAIM_OUT=$(docker exec "$node" myst cli claims create "$MYST_API_KEY" 2>&1)
-    
-    if echo "$CLAIM_OUT" | grep -q "Error"; then
-        # Nếu đã claim rồi thì nó sẽ báo lỗi, không sao cả
-        echo "   ⚠️  Thông báo Claim: $CLAIM_OUT"
-    else
-        echo "   ✅ Claim thành công! Node đã kết nối Dashboard."
+    # BƯỚC 3: LIÊN KẾT DASHBOARD (MMN)
+    echo "   🔗 Đang liên kết Dashboard..."
+    docker exec "$node" myst cli mmn "$MYST_API_KEY"
+
+    # BƯỚC 4: ĐĂNG KÝ IDENTITY & VÍ (Để nhận tiền)
+    echo "   💰 Đang cài đặt ví nhận tiền..."
+    # Lấy Identity hiện tại
+    ID_ADDR=$(docker exec "$node" myst cli identities list | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
+    if [ -z "$ID_ADDR" ]; then
+        docker exec "$node" myst cli identities new >/dev/null 2>&1
     fi
+    # Đăng ký
+    docker exec "$node" myst cli identities register "$MY_WALLET"
 
-    # BƯỚC 4: RESTART ĐỂ ÁP DỤNG PASSWORD
+    # BƯỚC 5: KHỞI ĐỘNG LẠI ĐỂ ÁP DỤNG MẬT KHẨU
+    echo "   🔄 Restart node để mật khẩu có hiệu lực..."
     docker restart "$node" >/dev/null
-    echo "   🔄 Đã khởi động lại node để áp dụng cấu hình."
-    echo "--------------------------------------------------------"
+    sleep 5
+
+    echo "   ✅ Xong node $node!"
 done
 
-echo "🎉 HOÀN TẤT!"
-echo "👉 Bạn hãy thử f5 lại trang web 13.113...:4449."
-echo "   Nó sẽ hỏi mật khẩu (nhập: $NODE_PASSWORD) thay vì màn hình Onboarding."
+echo "--------------------------------------------------"
+echo "🎉 HOÀN TẤT TOÀN BỘ!"
+echo "👉 Giờ bạn vào IP:4449 sẽ thấy màn hình Login (không phải Onboarding nữa)."
+echo "👉 Mật khẩu đăng nhập là: $NODE_PASSWORD"
