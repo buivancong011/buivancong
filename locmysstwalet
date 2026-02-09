@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# ==== CẤU HÌNH VÍ NHẬN TIỀN CỦA BẠN (SỬA Ở ĐÂY) ====
+MY_WALLET="0x22cBdE4c61BA69374169eB9B1a49d62Db3beCC7f"  # <-- Thay ví Metamask của bạn vào đây
+
+echo "=================================================="
+echo "   AUTO CONFIG MYSTERIUM NODES"
+echo "   Ví nhận tiền: $MY_WALLET"
+echo "=================================================="
+
+# Lấy danh sách container myst
+NODES=$(docker ps --format "{{.Names}}" | grep "myst")
+
+if [ -z "$NODES" ]; then
+    echo "❌ Không tìm thấy container Mysterium nào đang chạy."
+    exit 1
+fi
+
+echo "Đang xử lý các node..."
+echo "--------------------------------------------------"
+printf "%-10s | %-42s | %-10s\n" "Node" "Identity Address (Cần nạp tiền vào đây)" "Trạng thái"
+echo "--------------------------------------------------"
+
+for node in $NODES; do
+    # 1. Chấp nhận điều khoản (đề phòng chưa chấp nhận)
+    docker exec "$node" myst cli --agreed-terms-and-conditions >/dev/null 2>&1
+
+    # 2. Set ví nhận tiền (Payout)
+    # Lệnh này set ví chính của bạn làm nơi nhận lãi
+    docker exec "$node" myst cli payout set "$MY_WALLET" >/dev/null 2>&1
+
+    # 3. Lấy địa chỉ Identity của Node (để bạn nạp tiền active)
+    # Lọc lấy dòng chứa địa chỉ ví bắt đầu bằng 0x
+    NODE_ADDR=$(docker exec "$node" myst cli identities list | grep -o '0x[a-fA-F0-9]\{40\}' | head -n 1)
+
+    # 4. Kiểm tra trạng thái đăng ký
+    IS_REG=$(docker exec "$node" myst cli identities list | grep "Unregistered")
+    
+    if [ -n "$IS_REG" ]; then
+        STATUS="Chưa Active ❌"
+    else
+        STATUS="Đã Active ✅"
+    fi
+
+    printf "%-10s | %-42s | %-10s\n" "$node" "$NODE_ADDR" "$STATUS"
+
+done
+echo "--------------------------------------------------"
+echo "👉 HƯỚNG DẪN BƯỚC TIẾP THEO:"
+echo "1. Copy danh sách 'Identity Address' ở trên."
+echo "2. Dùng ví chính của bạn, gửi khoảng 0.1 - 0.2 MYST (mạng Polygon) vào các địa chỉ đó."
+echo "3. Sau khi có tiền, Node sẽ tự động đăng ký (hoặc chạy lệnh: docker exec <tên_node> myst cli identities register)."
