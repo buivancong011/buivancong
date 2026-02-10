@@ -1,19 +1,19 @@
 #!/bin/bash
 
 # ==============================================================================
-# ⚠️ CẤU HÌNH TOKEN (Đã nạp từ mã của ông cung cấp)
+# ⚠️ CẤU HÌNH TOKEN (Giữ nguyên Token của ông)
 # ==============================================================================
 MY_TOKEN='{"access_token":"ya29.a0AUMWg_J-n1JzYx8ejOKWldMx5geH1bGV0cpToGvSUhDKFvnXRjW0U3s9ffNDvHEqaneYKXFHy1mLle9DQDHGno5SHND3HF9Wwmql7wJIZhoDZioif2Q4wnniMyL5xUxQ-Y5D7L6JW0CnOb5nEUJQ-9zRw6-SIIWPICTHMmD7sXCBLNVTExp1lnVpmfDHI9w_YIgyuz0aCgYKAcUSARISFQHGX2MiSsd1nB41GS0W43QmzKltJg0206","token_type":"Bearer","refresh_token":"1//0gFPED7f2vTjNCgYIARAAGBASNwF-L9IrZy_TjKtj0dCpzmoIFJ3vT6A3AGXWIBx76k7AM09n83TH0keomuVpAvl8lQMMOh2h_0M","expiry":"2026-02-10T19:12:28.616082+07:00"}'
 # ==============================================================================
 
-echo "🚀 BẮT ĐẦU CẤU HÌNH TỰ ĐỘNG 100%..."
+echo "🚀 ĐANG CẤU HÌNH HỆ THỐNG BACKUP SIÊU NHẸ (KHÔNG NÉN)..."
 
 # 1. Cài đặt Rclone & Unzip
 sudo apt-get update -qq >/dev/null 2>&1
 sudo apt-get install -y unzip curl >/dev/null 2>&1
 curl https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
 
-# 2. Tự động tạo file cấu hình Rclone
+# 2. Tạo file cấu hình Rclone
 mkdir -p /root/.config/rclone
 cat << EOF > /root/.config/rclone/rclone.conf
 [gdrive]
@@ -22,9 +22,7 @@ scope = drive
 token = $MY_TOKEN
 EOF
 
-echo "✅ Đã ốp cấu hình Google Drive thành công!"
-
-# 3. Tạo Script Backup thông minh (Tại /root/auto_backup.sh)
+# 3. Tạo Script Backup thông minh (ĐÃ TỐI ƯU CPU)
 cat << 'EOF' > /root/auto_backup.sh
 #!/bin/bash
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
@@ -38,32 +36,33 @@ backup_node() {
     local VOL="myst-data$ID"
     local NET="my_network_$ID"
     
-    # Check IP để đặt tên file
     PUBLIC_IP=$(docker run --rm --network "$NET" curlimages/curl:latest -s --max-time 10 https://api.ipify.org)
     [ -z "$PUBLIC_IP" ] && PREFIX="Unknown_myst$ID" || PREFIX="${PUBLIC_IP}_myst$ID"
-    FILENAME="${PREFIX}_$(date +%F).tar.gz"
     
-    # Nén & Upload
+    # ĐỔI THÀNH .tar (KHÔNG NÉN)
+    FILENAME="${PREFIX}_$(date +%F).tar"
+    
     if docker volume inspect "$VOL" >/dev/null 2>&1; then
-        echo "📦 Đang backup $VOL -> $FILENAME"
-        docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar czf "/backup/$FILENAME" -C /data .
+        echo "📦 Đang xử lý $VOL (Low CPU Mode)..."
+        # BỎ CHỮ 'z' TRONG tar czf -> CHỈ CÒN tar cf
+        docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar cf "/backup/$FILENAME" -C /data .
+        
         rclone copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"
         rm -f "$LOCAL_TEMP/$FILENAME"
-        echo "✅ Đã tải lên Google Drive."
+        echo "✅ Đã lên Google Drive: $FILENAME"
     fi
 }
 
-for id in "${NODE_IDS[@]}"; do backup_node "$id"; done
+# THÊM nice -n 19: Ép script chạy ở mức ưu tiên thấp nhất để không làm lag Node
+nice -n 19 bash -c "$(declare -f backup_node); for id in ${NODE_IDS[@]}; do backup_node \$id; done"
 EOF
 
 chmod +x /root/auto_backup.sh
 
-# --- PHẦN CRONJOB ĐÃ ĐƯỢC XOÁ THEO YÊU CẦU ---
-
-# 4. Chạy thử luôn để kiểm tra kết quả
-echo "⏳ Đang chạy thử backup lần đầu để check kết nối..."
+# 4. Chạy thử nghiệm
+echo "⏳ Đang chạy thử lần đầu..."
 /root/auto_backup.sh
 
 echo "----------------------------------------------------------------"
-echo "🎉 XONG! Rclone đã sẵn sàng."
-echo "👉 Từ giờ, khi nào muốn backup, ông chỉ cần gõ lệnh: /root/auto_backup.sh"
+echo "🎉 XONG! Rclone đã sẵn sàng với chế độ KHÔNG NÉN."
+echo "👉 Muốn backup thủ công: /root/auto_backup.sh"
