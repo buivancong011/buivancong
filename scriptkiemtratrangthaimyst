@@ -14,7 +14,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo "========================================================================================================================================"
-echo "   MYSTERIUM AUDIT V9 (CHECK MONITORING + VÍ & WIREGUARD)"
+echo "   MYSTERIUM AUDIT V10 (AUTO-RESTART IF FAILED)"
 echo "   Ví chuẩn: $TARGET_WALLET"
 echo "========================================================================================================================================"
 
@@ -22,11 +22,14 @@ NODES=$(docker ps --format "{{.Names}}" | grep "myst")
 
 if [ -z "$NODES" ]; then echo "❌ Không tìm thấy node."; exit 1; fi
 
-# Header bảng (Thêm cột MONITOR)
-printf "%-8s | %-12s | %-12s | %-12s | %-48s | %-20s\n" "NODE" "TRẠNG THÁI" "MONITOR" "WIREGUARD" "ĐỊA CHỈ VÍ HIỆN TẠI (Current Beneficiary)" "TÀI CHÍNH (Bal/Tot)"
+# Header bảng
+printf "%-8s | %-12s | %-12s | %-12s | %-48s | %-20s\n" "NODE" "TRẠNG THÁI" "MONITOR" "WIREGUARD" "ĐỊA CHỈ VÍ HIỆN TẠI" "TÀI CHÍNH (Bal/Tot)"
 echo "----------------------------------------------------------------------------------------------------------------------------------------"
 
 for node in $NODES; do
+    # Biến cờ để đánh dấu có cần restart không (Mặc định là Không)
+    NEED_RESTART=0
+
     # 1. LẤY IDENTITY
     RAW_LIST=$(docker exec "$node" myst cli identities list 2>/dev/null)
     ID=$(echo "$RAW_LIST" | grep -oE '0x[a-fA-F0-9]{40}' | head -n 1)
@@ -39,7 +42,7 @@ for node in $NODES; do
     # 2. UNLOCK
     docker exec "$node" myst cli identities unlock "$ID" >/dev/null 2>&1
 
-    # 3. MỚI: CHECK MONITORING STATUS (Lệnh: nat)
+    # 3. CHECK MONITORING STATUS (Lệnh: nat)
     NAT_INFO=$(docker exec "$node" myst cli nat 2>&1)
     MON_STATUS=$(echo "$NAT_INFO" | grep "Node Monitoring Status" | awk -F': ' '{print $2}' | tr -d '"')
     
@@ -47,9 +50,10 @@ for node in $NODES; do
         MON_TXT="${GREEN}Success ✅${NC}"
     else
         MON_TXT="${RED}Failed ❌${NC}"
+        NEED_RESTART=1  # <--- Đánh dấu cần Restart
     fi
 
-    # 4. LẤY THÔNG TIN TÀI CHÍNH & TRẠNG THÁI (Lệnh: identities get)
+    # 4. LẤY THÔNG TIN TÀI CHÍNH
     INFO=$(docker exec "$node" myst cli identities get "$ID" 2>&1)
     STATUS_RAW=$(echo "$INFO" | grep "Registration Status" | awk '{print $4}')
     BALANCE=$(echo "$INFO" | grep "Balance:" | awk '{print $3}')
@@ -89,6 +93,13 @@ for node in $NODES; do
     FINANCE_TXT="${BLUE}${BALANCE:-0}${NC} / ${YELLOW}${TOTAL_EARN:-0}${NC}"
 
     printf "%-8s | %b | %b | %b | %b | %b\n" "$node" "$STATUS_TXT" "$MON_TXT" "$WG_TXT" "$WALLET_DISPLAY" "$FINANCE_TXT"
+
+    # 8. THỰC HIỆN AUTO-RESTART (Nếu cờ NEED_RESTART == 1)
+    if [ "$NEED_RESTART" -eq 1 ]; then
+        echo -e "         └── ${YELLOW}⚠️ Phát hiện lỗi Monitoring! Đang Restart container ${node}...${NC}"
+        docker restart "$node" >/dev/null 2>&1
+        echo -e "         └── ${GREEN}✅ Đã gửi lệnh Restart xong.${NC}"
+    fi
 
 done
 
