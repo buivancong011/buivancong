@@ -1,0 +1,55 @@
+#!/bin/bash
+set -e
+
+# ==== CẤU HÌNH TOKEN ====
+TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
+
+# ==== TỰ ĐỘNG CHỌN IMAGE THEO CPU ====
+ARCH=$(uname -m)
+if [[ "$ARCH" == "aarch64" ]]; then
+  echo -e "\e[32m[INFO] Detected ARM64 CPU (Graviton)\e[0m"
+  IMG_TM="traffmonetizer/cli_v2:arm64v8"
+else
+  echo -e "\e[32m[INFO] Detected AMD64/x86 CPU\e[0m"
+  IMG_TM="traffmonetizer/cli_v2:latest"
+fi
+
+# Hàm log màu mè cho dễ nhìn
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+
+# ==== 1. DỌN DẸP CONTAINER TM CŨ ====
+log "Đang dọn dẹp các node Traffmonetizer cũ..."
+# Xóa tm1, tm2... (nếu có)
+docker rm -f tm1 tm2 >/dev/null 2>&1 || true
+
+# ==== 2. KHỞI CHẠY LẠI ====
+run_tm() {
+  local ID=$1
+  local NET="my_network_$ID"
+
+  # Kiểm tra mạng có tồn tại không
+  if docker network inspect "$NET" >/dev/null 2>&1; then
+      log "🚀 Đang khởi tạo tm$ID trên mạng $NET..."
+      
+      docker run -d \
+        --name "tm$ID" \
+        --network "$NET" \
+        --restart always \
+        --dns 1.1.1.1 \
+        --dns 1.0.0.1 \
+        "$IMG_TM" start accept --token "$TOKEN_TM" >/dev/null
+        
+      log "✅ tm$ID đã chạy thành công."
+  else
+      echo -e "\e[31m[ERROR] Network $NET không tồn tại. Hãy chạy script tạo mạng trước!\e[0m"
+  fi
+}
+
+# Chạy cho IP 1 và IP 2
+run_tm 1
+run_tm 2
+
+# ==== 3. KIỂM TRA ====
+echo "----------------------------------------------------"
+log "DANH SÁCH TRAFFMONETIZER:"
+docker ps --filter "name=tm" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
