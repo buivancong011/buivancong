@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# ==============================================================================
+# ⚠️ CẤU HÌNH TOKEN (QUAN TRỌNG NHẤT)
+# Dán cái mã {"access_token":...} ông lấy được ở Bước 1 vào giữa 2 dấu nháy đơn
+# ==============================================================================
+MY_TOKEN='{"access_token":"ya29.a0AUMWg_J-n1JzYx8ejOKWldMx5geH1bGV0cpToGvSUhDKFvnXRjW0U3s9ffNDvHEqaneYKXFHy1mLle9DQDHGno5SHND3HF9Wwmql7wJIZhoDZioif2Q4wnniMyL5xUxQ-Y5D7L6JW0CnOb5nEUJQ-9zRw6-SIIWPICTHMmD7sXCBLNVTExp1lnVpmfDHI9w_YIgyuz0aCgYKAcUSARISFQHGX2MiSsd1nB41GS0W43QmzKltJg0206","token_type":"Bearer","refresh_token":"1//0gFPED7f2vTjNCgYIARAAGBASNwF-L9IrZy_TjKtj0dCpzmoIFJ3vT6A3AGXWIBx76k7AM09n83TH0keomuVpAvl8lQMMOh2h_0M","expiry":"2026-02-10T19:12:28.616082+07:00"}'
+# ==============================================================================
+
+echo "🚀 BẮT ĐẦU CẤU HÌNH TỰ ĐỘNG 100%..."
+
+# 1. Cài đặt Rclone & Unzip (Không hỏi han gì cả)
+sudo apt-get update -qq >/dev/null 2>&1
+sudo apt-get install -y unzip curl >/dev/null 2>&1
+curl https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+
+# 2. Tự động tạo file cấu hình (Bỏ qua bước đăng nhập thủ công)
+mkdir -p /root/.config/rclone
+
+# Tạo file rclone.conf với Token đã nhúng sẵn
+cat << EOF > /root/.config/rclone/rclone.conf
+[gdrive]
+type = drive
+scope = drive
+token = $MY_TOKEN
+EOF
+
+echo "✅ Đã ốp cấu hình Google Drive thành công!"
+
+# 3. Tạo Script Backup thông minh (Tự check IP)
+cat << 'EOF' > /root/auto_backup.sh
+#!/bin/bash
+RCLONE_REMOTE="gdrive:Mysterium_Backups"
+LOCAL_TEMP="/tmp/myst_backups"
+NODE_IDS=(1 2) 
+
+mkdir -p "$LOCAL_TEMP"
+
+backup_node() {
+    local ID=$1
+    local VOL="myst-data$ID"
+    local NET="my_network_$ID"
+    
+    # Check IP để đặt tên file
+    PUBLIC_IP=$(docker run --rm --network "$NET" curlimages/curl:latest -s --max-time 10 https://api.ipify.org)
+    [ -z "$PUBLIC_IP" ] && PREFIX="Unknown_myst$ID" || PREFIX="${PUBLIC_IP}_myst$ID"
+    FILENAME="${PREFIX}_$(date +%F).tar.gz"
+    
+    # Nén & Upload
+    if docker volume inspect "$VOL" >/dev/null 2>&1; then
+        echo "📦 Backup $VOL -> $FILENAME"
+        docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar czf "/backup/$FILENAME" -C /data .
+        rclone copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"
+        rm -f "$LOCAL_TEMP/$FILENAME"
+    fi
+}
+
+for id in "${NODE_IDS[@]}"; do backup_node "$id"; done
+EOF
+
+chmod +x /root/auto_backup.sh
+
+# 4. Cài Cronjob (Tự chạy 3h sáng)
+(crontab -l 2>/dev/null; echo "0 3 * * * /bin/bash /root/auto_backup.sh >> /var/log/myst_backup.log 2>&1") | sort -u | crontab -
+
+# 5. Chạy thử luôn để check hàng
+echo "⏳ Đang chạy thử backup lần đầu..."
+/root/auto_backup.sh
+
+echo "🎉 XONG PHIM! 100% TỰ ĐỘNG."
