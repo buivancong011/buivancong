@@ -1,0 +1,75 @@
+#!/bin/bash
+set -e
+
+# ==== CẤU HÌNH ====
+IMG_MYST="mysteriumnetwork/myst:latest"
+
+# Màu sắc thông báo
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[INFO] $1${NC}"; }
+err() { echo -e "${RED}[ERROR] $1${NC}"; exit 1; }
+
+# ==== 1. LẤY IP PRIVATE ĐỂ BIND PORT (Bắt buộc cho Multi-IP) ====
+# Cần lấy IP này để map port 4449 chính xác, tránh xung đột giữa 2 node
+IP_PRIVATE_A=$(/sbin/ip -4 -o addr show scope global noprefixroute ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
+IP_PRIVATE_B=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
+
+if [ -z "$IP_PRIVATE_A" ] || [ -z "$IP_PRIVATE_B" ]; then 
+    err "Không lấy được IP Private trên ens5! Kiểm tra lại mạng."
+fi
+
+log "IP Private detected: A=$IP_PRIVATE_A | B=$IP_PRIVATE_B"
+
+# ==== 2. HÀM TẠO LẠI MYSTERIUM ====
+recreate_myst() {
+    local ID=$1
+    local BIND_IP=$2
+    local NAME="myst$ID"
+    local NET="my_network_$ID"
+    local VOL="myst-data$ID"  # Tên volume cũ chứa dữ liệu
+
+    log "------------------------------------------------"
+    log "🛠  Đang xử lý node: $NAME (Network: $NET)"
+
+    # Bước 1: Xóa container cũ
+    if docker ps -a --format '{{.Names}}' | grep -q "^${NAME}$"; then
+        log "🗑  Xóa container cũ..."
+        docker rm -f "$NAME" >/dev/null 2>&1
+    else
+        log "ℹ️  Container $NAME không tồn tại, sẽ tạo mới."
+    fi
+
+    # Bước 2: Tạo lại với DNS mới + Giữ Volume
+    log "🚀 Khởi chạy lại với DNS 1.1.1.1..."
+    
+    docker run -d \
+        --name "$NAME" \
+        --network "$NET" \
+        --restart unless-stopped \
+        --cap-add NET_ADMIN \
+        --dns 1.1.1.1 \
+        --dns 1.0.0.1 \
+        -p "${BIND_IP}:4449:4449" \
+        -v "${VOL}:/var/lib/mysterium-node" \
+        "$IMG_MYST" service --agreed-terms-and-conditions >/dev/null
+
+    log "✅ $NAME đã chạy thành công!"
+}
+
+# ==== 3. THỰC THI ====
+# Pull image mới nhất để đảm bảo update phần mềm
+log "📥 Đang tải image Mysterium mới nhất..."
+docker pull "$IMG_MYST" >/dev/null
+
+# Chạy cho Node 1 và Node 2
+recreate_myst 1 "$IP_PRIVATE_A"
+recreate_myst 2 "$IP_PRIVATE_B"
+
+log "------------------------------------------------"
+log "🎉 HOÀN TẤT! Dữ liệu (Identity/Tiền) đã được giữ nguyên."
+# Kiểm tra nhanh xem ID cũ còn không
+log "🔍 Kiểm tra ID của myst1:"
+docker exec myst1 myst cli identities list | grep "0x" || echo "Không tìm thấy ID (Có thể do lỗi Volume)"
