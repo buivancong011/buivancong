@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # ==============================================================================
-# ⚠️ CẤU HÌNH TOKEN (Đã check kỹ, không lỗi)
+# ⚠️ CẤU HÌNH TOKEN (Giữ nguyên Token của ông)
 # ==============================================================================
 MY_TOKEN='{"access_token":"ya29.a0AUMWg_Kv0s3-JmIBl3jGwG1Pwn-0877B8JiOenW0J1O2C0gV52r3tQZCMC_a6Y-r_nRUh-AIlbb61qyCiosp4j4BUoPZZykHd3YTJDQ7x3o1kL5n84E-SfZV_nNFDlh_gElAFX_TwO-R97Hg-BIT4wAIwv41m6eWsP9_5eeG4glGLKttsbb_hG4EjwgRzp3HxDyPItEaCgYKAe4SARISFQHGX2MiFWO2VNZwCbdqMice83bxeQ0206","token_type":"Bearer","refresh_token":"1//0gYKP3t9gNLbcCgYIARAAGBASNwF-L9Ir1JCy9-XxItZRooJntSaxU1pkFCpfJFbdbsVtvGy7SCMdhavxXRN_Ky-tXfBUqF_dfXA","expiry":"2026-02-12T13:42:42.0402294+07:00"}'
 # ==============================================================================
 
-echo "🚀 ĐANG SỬA LỖI & CẤU HÌNH LẠI..."
+echo "🚀 ĐANG CẤU HÌNH HỆ THỐNG BACKUP (BẢN FIX LỖI)..."
 
 # 1. Cài đặt Rclone & Unzip
 sudo apt-get update -qq >/dev/null 2>&1
@@ -22,12 +22,12 @@ scope = drive
 token = $MY_TOKEN
 EOF
 
-# 3. Tạo Script Backup (SỬ DỤNG CƠ CHẾ RENICE - KHÔNG LỖI SYNTAX)
+# 3. Tạo Script Backup thông minh (SỬ DỤNG RENICE)
 cat << 'EOF' > /root/auto_backup.sh
 #!/bin/bash
 
-# --- QUAN TRỌNG: TỰ GIẢM ƯU TIÊN CPU XUỐNG THẤP NHẤT ---
-# Thay vì dùng nice phức tạp, ta dùng renice ngay đầu script
+# --- QUAN TRỌNG: Tự giảm ưu tiên CPU của chính script này xuống thấp nhất ---
+# (Thay thế cho lệnh nice phức tạp gây lỗi syntax cũ)
 renice -n 19 -p $$ >/dev/null 2>&1
 
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
@@ -41,38 +41,29 @@ backup_node() {
     local VOL="myst-data$ID"
     local NET="my_network_$ID"
     
-    # Lấy IP
+    # Lấy IP Public
     PUBLIC_IP=$(docker run --rm --network "$NET" curlimages/curl:latest -s --max-time 10 https://api.ipify.org)
     [ -z "$PUBLIC_IP" ] && PREFIX="Unknown_myst$ID" || PREFIX="${PUBLIC_IP}_myst$ID"
     
-    # FILE .tar (KHÔNG NÉN - LOW CPU)
+    # Đuôi .tar (KHÔNG NÉN - GIÚP CPU 1 CORE KHÔNG BỊ LAG)
     FILENAME="${PREFIX}_$(date +%F).tar"
     
     if docker volume inspect "$VOL" >/dev/null 2>&1; then
-        echo "📦 Đang xử lý $VOL (Low CPU Mode)..."
+        echo "📦 Đang xử lý Node $ID ($VOL)..."
         
-        # Chỉ đóng gói, không nén (tar cf)
+        # Chỉ đóng gói tar cf (Không nén)
         docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar cf "/backup/$FILENAME" -C /data .
         
-        rclone copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"
-        rm -f "$LOCAL_TEMP/$FILENAME"
-        echo "✅ Đã lên Google Drive: $FILENAME"
+        # Upload
+        if rclone copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"; then
+             echo "✅ Đã backup xong: $FILENAME"
+             rm -f "$LOCAL_TEMP/$FILENAME"
+        else
+             echo "❌ Lỗi Upload Node $ID"
+        fi
     fi
 }
 
-# Chạy vòng lặp bình thường (Hết lỗi syntax)
-for id in "${NODE_IDS[@]}"; do 
-    backup_node "$id"
-done
-
-echo "🎉 HOÀN TẤT TOÀN BỘ!"
-EOF
-
-chmod +x /root/auto_backup.sh
-
-# 4. Chạy thử nghiệm
-echo "⏳ Đang chạy thử lần đầu..."
-/root/auto_backup.sh
-
-echo "----------------------------------------------------------------"
-echo "✅ ĐÃ SỬA XONG! Script chạy mượt mà không lỗi."
+# Chạy vòng lặp bình thường (Không còn bị lỗi cú pháp nữa)
+for id in "${NODE_IDS[@]}"; do
+    backup
