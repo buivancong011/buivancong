@@ -66,4 +66,18 @@ backup_node() {
 
 # Chạy vòng lặp bình thường (Không còn bị lỗi cú pháp nữa)
 for id in "${NODE_IDS[@]}"; do
-    backup
+    backup_node "$id"
+done
+
+echo "🎉 HOÀN TẤT TOÀN BỘ!"
+EOF
+
+chmod +x /root/auto_backup.sh
+
+# 4. Chạy thử nghiệm
+echo "⏳ Đang chạy thử lần đầu..."
+/root/auto_backup.sh
+
+echo "----------------------------------------------------------------"
+echo "✅ ĐÃ SỬA XONG! Script chạy mượt mà không lỗi."
+echo "👉 Lệnh chạy thủ công: /root/auto_backup.sh"
