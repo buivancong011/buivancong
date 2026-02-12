@@ -1,13 +1,19 @@
 #!/bin/bash
 set -e
 
-# ==== CẤU HÌNH TOKEN ====
+# ==========================================
+# 1. CẤU HÌNH TOKEN (GIỮ NGUYÊN)
+# ==========================================
 TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
 TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
 TOKEN_REPOCKET_EMAIL="nguyenvinhson000@gmail.com"
 TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="buivancong012@gmail.com"
 PASS_UR="buivancong012"
+
+# ==== CẤU HÌNH DNS MỚI (Cloudflare) ====
+# Chỉ thêm dòng này để áp dụng cho toàn bộ container bên dưới
+DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
 
 # ==== TỰ ĐỘNG CHỌN IMAGE THEO CPU ====
 ARCH=$(uname -m)
@@ -40,14 +46,14 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # ==== 2. LẤY IP PRIVATE (QUAN TRỌNG CHO IPTABLES) ====
-# Ta lấy IP Private gắn trên card mạng để làm mốc cho iptables SNAT
 IP_PRIVATE_A=$(/sbin/ip -4 -o addr show scope global noprefixroute ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 IP_PRIVATE_B=$(/sbin/ip -4 -o addr show scope global dynamic ens5 | awk '{gsub(/\/.*/,"",$4); print $4}')
 
 if [ -z "$IP_PRIVATE_A" ] || [ -z "$IP_PRIVATE_B" ]; then err "Không lấy được IP Private trên ens5!"; fi
-log "IP Private detected (dùng cho routing): A=$IP_PRIVATE_A | B=$IP_PRIVATE_B"
+log "IP Private detected: A=$IP_PRIVATE_A | B=$IP_PRIVATE_B"
 
 # ==== 3. DỌN DẸP DOCKER ====
+# Chỉ xóa container đang chạy, KHÔNG xóa volume (giữ nguyên dữ liệu)
 if [ -n "$(docker ps -aq)" ]; then docker rm -f $(docker ps -aq) >/dev/null 2>&1; fi
 docker network prune -f >/dev/null 2>&1
 
@@ -64,23 +70,21 @@ ensure_network() {
 ensure_network "my_network_1" "192.168.33.0/24"
 ensure_network "my_network_2" "192.168.34.0/24"
 
-# ==== 5. CẤU HÌNH IPTABLES (SNAT THEO IP PRIVATE) ====
+# ==== 5. CẤU HÌNH IPTABLES ====
 log "Cấu hình IPTables SNAT..."
-# Reset rules cũ
 sudo iptables -t nat -D POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_PRIVATE_A} 2>/dev/null || true
 sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_PRIVATE_B} 2>/dev/null || true
-# Apply rules mới (Map dải mạng docker -> IP Private card mạng)
 sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_PRIVATE_A}
 sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_PRIVATE_B}
 
 log "⏳ Đợi 5s cho iptables cập nhật..."
 sleep 5
 
-# ==== 6. CHECK IP PUBLIC THỰC TẾ (LOGIC MỚI) ====
+# ==== 6. CHECK IP PUBLIC THỰC TẾ ====
 get_public_ip() {
     local NET=$1
-    # Dùng api.ipify.org hoặc ifconfig.me để lấy IP Public
-    docker run --rm --network "$NET" curlimages/curl:latest -s --max-time 10 https://api.ipify.org
+    # Thêm DNS vào lệnh check này luôn cho chắc
+    docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
 }
 
 log "🕵️ Đang kiểm tra IP Public thực tế..."
@@ -89,24 +93,22 @@ PUB_IP_1=$(get_public_ip "my_network_1")
 PUB_IP_2=$(get_public_ip "my_network_2")
 
 log "👉 Kết quả Check:"
-log "   Network 1 (Private: $IP_PRIVATE_A) -> Ra ngoài bằng Public IP: [$PUB_IP_1]"
-log "   Network 2 (Private: $IP_PRIVATE_B) -> Ra ngoài bằng Public IP: [$PUB_IP_2]"
+log "   Network 1 -> Public IP: [$PUB_IP_1]"
+log "   Network 2 -> Public IP: [$PUB_IP_2]"
 
-# KIỂM TRA ĐIỀU KIỆN
 if [ -z "$PUB_IP_1" ] || [ -z "$PUB_IP_2" ]; then
-    err "❌ LỖI: Không lấy được IP Public (Mất mạng hoặc lỗi Docker)."
+    err "❌ LỖI: Không lấy được IP Public."
 fi
 
 if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then
-    err "❌ LỖI TRÙNG IP: Cả 2 mạng đều đang ra cùng 1 IP Public ($PUB_IP_1). Cấu hình Fail!"
+    err "❌ LỖI TRÙNG IP: Cả 2 mạng đều ra cùng 1 IP ($PUB_IP_1)."
 else
-    log "✅ THÀNH CÔNG: Hai mạng đã nhận diện 2 IP Public KHÁC NHAU."
+    log "✅ THÀNH CÔNG: IP khác nhau."
 fi
 
-# ==== 7. CHẠY NODES (NẾU CHECK THÀNH CÔNG) ====
+# ==== 7. CHẠY NODES (ĐÃ THÊM DNS 1.1.1.1) ====
 log "🚀 Mạng OK. Đang khởi chạy nodes..."
 
-# Pull images background
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
   docker pull $img >/dev/null 2>&1 &
 done
@@ -115,28 +117,31 @@ wait
 run_node_group() {
   local ID=$1; local NET="my_network_$1"; local BIND_IP=$2
   
-  # Traffmonetizer
-  docker run -d --network $NET --restart always --name tm$ID $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
+  # Traffmonetizer (Thêm $DNS_OPTS)
+  docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
+    $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium (Bind vào IP Private để port forward đúng)
-  docker run -d --network $NET --cap-add NET_ADMIN -p ${BIND_IP}:4449:4449 \
+  # Mysterium (Thêm $DNS_OPTS, Giữ nguyên Volume myst-data)
+  docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
+    -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
     --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
 
-  # UrNetwork
-  docker run -d --network $NET --restart always --cap-add NET_ADMIN \
+  # UrNetwork (Thêm $DNS_OPTS, Giữ nguyên Volume ur_data)
+  docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
     --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
     -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
 
-  # EarnFM
-  docker run -d --network $NET --restart always -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
+  # EarnFM (Thêm $DNS_OPTS)
+  docker run -d --network $NET --restart always $DNS_OPTS \
+    -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
 
-  # Repocket
-  docker run -d --network $NET --restart always --name repocket$ID \
+  # Repocket (Thêm $DNS_OPTS)
+  docker run -d --network $NET --restart always $DNS_OPTS \
+    --name repocket$ID \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 }
 
-# Lưu ý: Mysterium cần bind port vào IP Private để forward traffic
 run_node_group 1 "$IP_PRIVATE_A"
 run_node_group 2 "$IP_PRIVATE_B"
 
