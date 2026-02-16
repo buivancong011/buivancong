@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# ==============================================================================
+# CẤU HÌNH CẢNH BÁO
+# ==============================================================================
+THRESHOLD=80  # Ngưỡng cảnh báo (80%)
+
+# Nếu ông muốn nhận tin nhắn về Telegram, điền Token và ChatID vào đây
+# Nếu không dùng thì để trống, script sẽ chỉ hiện ra màn hình console.
+TELEGRAM_TOKEN=""
+CHAT_ID=""
+
+# ==============================================================================
+# 1. KIỂM TRA RAM
+# ==============================================================================
+# Lấy tổng RAM và RAM đã dùng (đơn vị MB)
+TOTAL_RAM=$(free -m | grep Mem | awk '{print $2}')
+USED_RAM=$(free -m | grep Mem | awk '{print $3}')
+# Tính phần trăm
+RAM_PERCENT=$(( 100 * USED_RAM / TOTAL_RAM ))
+
+# ==============================================================================
+# 2. KIỂM TRA Ổ CỨNG (Disk Usage)
+# ==============================================================================
+# Lấy % sử dụng của thư mục gốc /
+DISK_PERCENT=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
+
+# ==============================================================================
+# 3. XỬ LÝ CẢNH BÁO
+# ==============================================================================
+ALERT_MSG=""
+HAS_ALERT=false
+
+# Check RAM
+if [ "$RAM_PERCENT" -ge "$THRESHOLD" ]; then
+    HAS_ALERT=true
+    ALERT_MSG="${ALERT_MSG}⚠️ [CẢNH BÁO] RAM ĐANG CAO: ${RAM_PERCENT}% ($USED_RAM/${TOTAL_RAM}MB)%0A"
+    # Lấy top 3 tiến trình ăn RAM nhiều nhất
+    TOP_MEM=$(ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 4)
+    ALERT_MSG="${ALERT_MSG}Top thủ phạm:%0A${TOP_MEM}%0A-----------------%0A"
+else
+    echo "✅ RAM ổn định: ${RAM_PERCENT}%"
+fi
+
+# Check Disk
+if [ "$DISK_PERCENT" -ge "$THRESHOLD" ]; then
+    HAS_ALERT=true
+    ALERT_MSG="${ALERT_MSG}⚠️ [CẢNH BÁO] Ổ CỨNG SẮP ĐẦY: ${DISK_PERCENT}%%0A"
+    ALERT_MSG="${ALERT_MSG}Gợi ý: Chạy lệnh 'docker system prune -a' để xóa rác."
+else
+    echo "✅ Ổ cứng thoải mái: ${DISK_PERCENT}%"
+fi
+
+# ==============================================================================
+# 4. GỬI THÔNG BÁO (Telegram)
+# ==============================================================================
+if [ "$HAS_ALERT" = true ]; then
+    echo -e "\n🔥 PHÁT HIỆN VẤN ĐỀ! Đang gửi cảnh báo..."
+    
+    # Nếu có cấu hình Telegram thì gửi
+    if [ ! -z "$TELEGRAM_TOKEN" ] && [ ! -z "$CHAT_ID" ]; then
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d text="${ALERT_MSG}" \
+            -d parse_mode="HTML" > /dev/null
+        echo "-> Đã gửi tin nhắn Telegram."
+    else
+        echo "-> Chưa cấu hình Telegram. Hãy check log trên màn hình."
+        echo -e "${ALERT_MSG}"
+    fi
+fi
