@@ -1,22 +1,27 @@
 #!/bin/bash
 
 # ==============================================================================
-# 1. CẤU HÌNH TOKEN
+# NHẬN DIỆN IP TỰ ĐỘNG TỪ TOOL PYTHON
+# ==============================================================================
+OLD_IP_1="$1"
+OLD_IP_2="$2"
+
+if [ -z "$OLD_IP_1" ] || [ -z "$OLD_IP_2" ]; then
+    echo "❌ LỖI: Script cần tham số IP. (Tool Python sẽ tự truyền vào)"
+    exit 1
+fi
+
+# ==============================================================================
+# CẤU HÌNH TOKEN
 # ==============================================================================
 MY_TOKEN='{"access_token":"ya29.a0AUMWg_Kv0s3-JmIBl3jGwG1Pwn-0877B8JiOenW0J1O2C0gV52r3tQZCMC_a6Y-r_nRUh-AIlbb61qyCiosp4j4BUoPZZykHd3YTJDQ7x3o1kL5n84E-SfZV_nNFDlh_gElAFX_TwO-R97Hg-BIT4wAIwv41m6eWsP9_5eeG4glGLKttsbb_hG4EjwgRzp3HxDyPItEaCgYKAe4SARISFQHGX2MiFWO2VNZwCbdqMice83bxeQ0206","token_type":"Bearer","refresh_token":"1//0gYKP3t9gNLbcCgYIARAAGBASNwF-L9Ir1JCy9-XxItZRooJntSaxU1pkFCpfJFbdbsVtvGy7SCMdhavxXRN_Ky-tXfBUqF_dfXA","expiry":"2026-02-12T13:42:42.0402294+07:00"}'
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
 TEMP_DIR="/root/restore_temp"
 
-# ==============================================================================
-# 2. CÀI ĐẶT
-# ==============================================================================
-echo "⚙️  Đang cài đặt Rclone & Docker..."
+# Cài đặt
 if ! command -v rclone &> /dev/null; then
-    sudo apt-get update -qq >/dev/null 2>&1
-    sudo apt-get install -y unzip curl >/dev/null 2>&1
     curl https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
 fi
-
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
     systemctl enable --now docker
@@ -30,71 +35,40 @@ type = drive
 scope = drive
 token = $MY_TOKEN
 EOF
-
 mkdir -p "$TEMP_DIR"
 
-# ==============================================================================
-# 3. HÀM KHÔI PHỤC (Xử lý từng node riêng biệt)
-# ==============================================================================
+# HÀM KHÔI PHỤC (Đã sửa để nhận biến, KHÔNG dùng read)
 restore_process() {
     local ID=$1
-    local NODE_SUFFIX="myst$ID"    # Ví dụ: myst1 hoặc myst2
-    local VOL_NAME="myst-data$ID"  # Ví dụ: myst-data1 hoặc myst-data2
+    local TARGET_IP=$2
+    local NODE_SUFFIX="myst$ID"
+    local VOL_NAME="myst-data$ID"
 
-    echo "============================================================"
-    echo "🔍 ĐANG XỬ LÝ NODE $ID ($NODE_SUFFIX)..."
-    echo "👉 Nhập IP CŨ của Node $ID (IP mà nó dùng để chạy ấy):"
-    read -p "   IP Cũ Node $ID: " OLD_IP
+    echo "🔍 Xử lý Node $ID (Nguồn IP: $TARGET_IP)..."
 
-    if [ -z "$OLD_IP" ]; then
-        echo "❌ Bỏ qua Node $ID vì không nhập IP."
-        return
-    fi
-
-    echo "🔍 Đang tìm file backup mới nhất khớp lệnh: $OLD_IP...$NODE_SUFFIX"
-    
-    # Tìm file có tên chứa cả IP Cũ và 'myst1'/'myst2'
-    # Sort theo thời gian để lấy file mới nhất
-    FILE_NAME=$(rclone lsl "$RCLONE_REMOTE" | grep "$OLD_IP" | grep "$NODE_SUFFIX" | sort -k2,2 -k3,3 | tail -n 1 | awk '{print $4}')
+    # Tìm file backup
+    FILE_NAME=$(rclone lsl "$RCLONE_REMOTE" | grep "$TARGET_IP" | grep "$NODE_SUFFIX" | sort -k2,2 -k3,3 | tail -n 1 | awk '{print $4}')
 
     if [ -z "$FILE_NAME" ]; then
-        echo "⚠️  KHÔNG TÌM THẤY file backup nào!"
-        echo "   (Check lại xem IP $OLD_IP có đúng không, hoặc node đó tên là myst$ID không)"
+        echo "⚠️  KHÔNG TÌM THẤY BACKUP!"
         return
     fi
 
-    echo "📥 Đã tìm thấy: $FILE_NAME"
-    echo "⏳ Đang tải về..."
+    echo "📥 Tải: $FILE_NAME"
     rclone copyto "$RCLONE_REMOTE/$FILE_NAME" "$TEMP_DIR/backup_$ID.tar"
 
-    echo "♻️  Đang bung nén vào Volume: $VOL_NAME..."
-    
-    # 1. Tạo Volume
+    echo "♻️  Bung nén vào $VOL_NAME..."
     docker volume create "$VOL_NAME" >/dev/null 2>&1
-    
-    # 2. Xóa dữ liệu rác trong volume (nếu có)
     docker run --rm -v "$VOL_NAME":/data alpine sh -c 'rm -rf /data/*'
-    
-    # 3. Bung file vào
     docker run --rm -v "$VOL_NAME":/data -v "$TEMP_DIR":/backup alpine tar xf "/backup/backup_$ID.tar" -C /data
     
-    # Dọn dẹp file tạm
     rm -f "$TEMP_DIR/backup_$ID.tar"
-    echo "✅ Đã khôi phục xong Node $ID!"
+    echo "✅ Xong Node $ID!"
 }
 
-# ==============================================================================
-# 4. CHẠY
-# ==============================================================================
-echo "📡 KẾT NỐI DRIVE THÀNH CÔNG!"
-echo "💡 Vì là VPS Multi-IP, file backup Node 1 và Node 2 có thể mang IP khác nhau."
-echo "   Hãy nhập chính xác IP cũ của từng node nhé."
-
-restore_process 1  # Hỏi IP cũ node 1 -> Restore vào myst-data1
-restore_process 2  # Hỏi IP cũ node 2 -> Restore vào myst-data2
+# CHẠY
+restore_process 1 "$OLD_IP_1"
+restore_process 2 "$OLD_IP_2"
 
 rm -rf "$TEMP_DIR"
-echo "============================================================"
-echo "🎉 XONG TOÀN BỘ!"
-echo "👉 Dữ liệu đã vào 2 volume: myst-data1 & myst-data2"
-echo "👉 Giờ chạy Script Cài Đặt (Install) là xong phim!"
+echo "🎉 RESTORE COMPLETE"
