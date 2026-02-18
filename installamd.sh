@@ -11,6 +11,9 @@ TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="buivancong012@gmail.com"
 PASS_UR="buivancong012"
 
+# ==== CẤU HÌNH DNS (Mới thêm) ====
+DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+
 # ==========================================
 # 2. CHỌN IMAGE & PHÂN TÁCH KIẾN TRÚC (CPU)
 # ==========================================
@@ -50,21 +53,18 @@ if [ -n "$(docker ps -aq)" ]; then docker rm -f $(docker ps -aq) >/dev/null 2>&1
 docker network prune -f >/dev/null 2>&1
 
 # ==========================================
-# 4. BẮT IP THEO CƠ CHẾ ENX0 (THEO YÊU CẦU)
+# 4. BẮT IP THEO CƠ CHẾ ENX0
 # ==========================================
 log "Đang bắt IP trên interface enX0..."
 
-# IP_ALLA: Lấy IP có thuộc tính noprefixroute
 IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute enX0 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
-
-# IP_ALLB: Lấy IP có thuộc tính dynamic
 IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic enX0 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
 
 if [ -z "$IP_ALLA" ] || [ -z "$IP_ALLB" ]; then 
     err "Không lấy được IP trên enX0! Hãy kiểm tra lệnh: ip addr show dev enX0"
 fi
 
-log "👉 IP Bắt được: A (noprefix)=$IP_ALLA | B (dynamic)=$IP_ALLB"
+log "👉 IP Bắt được: A=$IP_ALLA | B=$IP_ALLB"
 
 # ==========================================
 # 5. TẠO NETWORK & CẤU HÌNH IPTABLES
@@ -94,7 +94,8 @@ sleep 5
 # ==========================================
 get_public_ip() {
     local NET=$1
-    docker run --rm --network "$NET" curlimages/curl:latest -s --max-time 10 https://api.ipify.org
+    # Thêm DNS vào lệnh check IP
+    docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
 }
 
 log "🕵️ Đang xác thực IP Public thực tế..."
@@ -105,10 +106,10 @@ log "   Check 1: Source $IP_ALLA -> Exit: [$PUB_IP_1]"
 log "   Check 2: Source $IP_ALLB -> Exit: [$PUB_IP_2]"
 
 if [ -z "$PUB_IP_1" ] || [ -z "$PUB_IP_2" ]; then err "Lỗi kết nối ra ngoài internet!"; fi
-if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then err "LỖI: Trùng IP Public. Kiểm tra lại routing!"; fi
+if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then err "LỖI: Trùng IP Public."; fi
 
 # ==========================================
-# 7. KHỞI CHẠY NODES (KHÔNG DNS)
+# 7. KHỞI CHẠY NODES (CÓ DNS CLOUDFLARE)
 # ==========================================
 log "🚀 Đang Pull images (Song song)..."
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
@@ -120,19 +121,27 @@ run_node_group() {
   local ID=$1; local NET="my_network_$1"; local BIND_IP=$2
   
   # Traffmonetizer
-  docker run -d --network $NET --restart always --name tm$ID $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
+  docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
+    $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
+  
   # Mysterium
-  docker run -d --network $NET --cap-add NET_ADMIN -p ${BIND_IP}:4449:4449 \
+  docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
+    -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
     --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
+  
   # UrNetwork
-  docker run -d --network $NET --restart always --cap-add NET_ADMIN \
+  docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
     --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
     -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
+  
   # EarnFM
-  docker run -d --network $NET --restart always -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
+  docker run -d --network $NET --restart always $DNS_OPTS \
+    -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
+  
   # Repocket
-  docker run -d --network $NET --restart always --name repocket$ID \
+  docker run -d --network $NET --restart always $DNS_OPTS \
+    --name repocket$ID \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 }
 
