@@ -11,7 +11,7 @@ fi
 
 # ================= CẤU HÌNH =================
 # (Giữ nguyên Token cũ của ông)
-MY_TOKEN='{"access_token":"ya29.a0AUMWg_Kv0s3-JmIBl3jGwG1Pwn-0877B8JiOenW0J1O2C0gV52r3tQZCMC_a6Y-r_nRUh-AIlbb61qyCiosp4j4BUoPZZykHd3YTJDQ7x3o1kL5n84E-SfZV_nNFDlh_gElAFX_TwO-R97Hg-BIT4wAIwv41m6eWsP9_5eeG4glGLKttsbb_hG4EjwgRzp3HxDyPItEaCgYKAe4SARISFQHGX2MiFWO2VNZwCbdqMice83bxeQ0206","token_type":"Bearer","refresh_token":"1//0gYKP3t9gNLbcCgYIARAAGBASNwF-L9Ir1JCy9-XxItZRooJntSaxU1pkFCpfJFbdbsVtvGy7SCMdhavxXRN_Ky-tXfBUqF_dfXA","expiry":"2026-02-12T13:42:42.0402294+07:00"}'
+MY_TOKEN='{"access_token":"ya29.a0ATkoCc5YpwZF-TrK_rAeVfHZAWYTTp-hwfTJhpoZh5mvak5WsF2Sg-a6vUfkBsW5LtZadeA98Ucg_dGjn_gYvFj4haeJsN9EsVUcYR1ChiU4CYgNjaHrdj1OAb3b4vv7LBz_dZTgtWcIxH0TrKxF_t6px7JoFswEYCm8lKI7qImA5fm_T9LGHVHMJARzKqHm0GKx0wEaCgYKAf4SARISFQHGX2MiC8QhB1N6QohsaQCKD2WbIg0206","token_type":"Bearer","refresh_token":"1//0gBDTyzwX2lYYCgYIARAAGBASNwF-L9IrlihLVC49TEFn9gUlCkgqpta8F09ccC249ZdF1Lc5DFM4ThRf2FYlKYRE2VYmcnrcqBI","expiry":"2026-02-19T01:23:11.0332194+07:00"}'
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
 TEMP_DIR="/root/restore_temp"
 
