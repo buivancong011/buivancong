@@ -46,7 +46,7 @@ docker image prune -f >/dev/null 2>&1
 log "Đang tải Images..."
 docker pull traffmonetizer/cli_v2:latest >/dev/null 2>&1 &
 docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
-docker pull pinors/antgain-cli:latest >/dev/null 2>&1 &
+
 docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
 docker pull repocket/repocket:latest >/dev/null 2>&1 &
 
