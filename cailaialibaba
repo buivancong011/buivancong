@@ -12,8 +12,7 @@ RP_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 # UrNetwork
 UR_USER="buivancong012@gmail.com"
 UR_PASS="buivancong012"
-# AntGain
-ANT_KEY="ud0F9rj2KgAXWgJ20Dw6sogFOjJvytLyVSGtQUrfo4QJq3LAAvdh8XF5jUERcIeU"
+
 
 # ==== CẤU HÌNH DNS CHUNG (Tăng tốc độ kết nối) ====
 DNS_OPTS="--dns 8.8.8.8 --dns 1.1.1.1"
@@ -69,10 +68,6 @@ docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS \
   -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" \
   techroy23/docker-urnetwork:latest
 
-# 3. AntGain
-docker run -d --name antgain --restart always $DNS_OPTS \
-  -e ANTGAIN_API_KEY="$ANT_KEY" \
-  pinors/antgain-cli:latest
 
 # 4. EarnFM
 docker run -d --name earnfm --restart always $DNS_OPTS \
