@@ -116,16 +116,20 @@ fi
 log "🚀 Start Nodes..."
 
 run_nodes() {
-    local ID=$1; local NET=$2; local BIND_IP=$3; local SUFFIX=$4
+    # Thêm biến INDEX để xác định số thứ tự (1 hoặc 2) cho volume Mysterium
+    local INDEX=$1
+    local NET=$2
+    local BIND_IP=$3
+    local SUFFIX=$4
     
     # Traffmonetizer
     docker run -d --network $NET --restart always --name tm_$SUFFIX $DNS_OPTS \
       $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
 
-    # Mysterium (Map port vào đúng IP Bind)
+    # Mysterium (SỬA LỖI: Dùng volume cố định myst-data1 / myst-data2)
     docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
       -p ${BIND_IP}:4449:4449 \
-      --name myst_$SUFFIX -v myst_data_$SUFFIX:/var/lib/mysterium-node \
+      --name myst_$SUFFIX -v myst-data${INDEX}:/var/lib/mysterium-node \
       --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
 
     # UrNetwork
@@ -143,14 +147,15 @@ run_nodes() {
       -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 }
 
+# Chạy Node 1 (Index 1 -> Volume myst-data1)
 run_nodes 1 "my_network_1" "$IP_ALLA" "main"
 
-# Nếu có IP B (và IP B khác rỗng) thì chạy node 2
+# Chạy Node 2 (Index 2 -> Volume myst-data2)
 if [ -n "$IP_ALLB" ] && [ "$IP_ALLB" != "$IP_ALLA" ]; then
     run_nodes 2 "my_network_2" "$IP_ALLB" "sub"
 elif [ "$IP_ALLB" == "$IP_ALLA" ]; then
-    # Trường hợp chỉ có 1 IP nhưng vẫn muốn chạy 2 node (chấp nhận trùng)
-    log "Chạy node 2 trên cùng IP chính (do không tìm thấy IP phụ)..."
+    # Trường hợp 1 IP chạy 2 node
+    log "Chạy node 2 trên cùng IP chính..."
     run_nodes 2 "my_network_2" "$IP_ALLA" "sub"
 fi
 
