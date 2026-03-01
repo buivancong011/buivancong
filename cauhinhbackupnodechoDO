@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# ==============================================================================
+# ⚠️ CẤU HÌNH TOKEN (Dùng lại Token của bạn)
+# ==============================================================================
+MY_TOKEN='{"access_token":"ya29.a0AUMWg_Kv0s3-JmIBl3jGwG1Pwn-0877B8JiOenW0J1O2C0gV52r3tQZCMC_a6Y-r_nRUh-AIlbb61qyCiosp4j4BUoPZZykHd3YTJDQ7x3o1kL5n84E-SfZV_nNFDlh_gElAFX_TwO-R97Hg-BIT4wAIwv41m6eWsP9_5eeG4glGLKttsbb_hG4EjwgRzp3HxDyPItEaCgYKAe4SARISFQHGX2MiFWO2VNZwCbdqMice83bxeQ0206","token_type":"Bearer","refresh_token":"1//0gYKP3t9gNLbcCgYIARAAGBASNwF-L9Ir1JCy9-XxItZRooJntSaxU1pkFCpfJFbdbsVtvGy7SCMdhavxXRN_Ky-tXfBUqF_dfXA","expiry":"2026-02-12T13:42:42.0402294+07:00"}'
+# ==============================================================================
+
+echo "🚀 ĐANG CỐI ƯU HÓA HỆ THỐNG BACKUP CHO DEBIAN 12..."
+
+# 1. Cài đặt môi trường (Debian 12 cần cài thêm vài gói)
+sudo apt-get update -qq >/dev/null 2>&1
+sudo apt-get install -y unzip curl grep >/dev/null 2>&1
+
+# Cài Rclone (Nếu chưa có)
+if ! command -v rclone &> /dev/null; then
+    curl https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+fi
+
+# 2. Nạp cấu hình Rclone
+mkdir -p /root/.config/rclone
+cat << EOF > /root/.config/rclone/rclone.conf
+[gdrive]
+type = drive
+scope = drive
+token = $MY_TOKEN
+EOF
+
+# Kiểm tra Token sống hay chết
+if ! rclone lsd gdrive: >/dev/null 2>&1; then
+    echo "❌ CẢNH BÁO: Token có vẻ đã hết hạn hoặc lỗi. Vui lòng cập nhật Token mới!"
+    # Script vẫn tiếp tục tạo file để bạn sửa token sau
+fi
+
+# 3. Tạo Script Backup thông minh (auto_backup.sh)
+cat << 'EOF' > /root/auto_backup.sh
+#!/bin/bash
+
+# --- 1. TỐI ƯU TÀI NGUYÊN (QUAN TRỌNG) ---
+# Giảm ưu tiên CPU xuống mức thấp nhất
+renice -n 19 -p $$ >/dev/null 2>&1
+# Giảm ưu tiên ổ cứng (Chỉ đọc ghi khi ổ cứng rảnh) - Giúp Node không bị lag
+ionice -c 3 -p $$ >/dev/null 2>&1
+
+# --- 2. CẤU HÌNH ---
+RCLONE_REMOTE="gdrive:Mysterium_Backups"
+LOCAL_TEMP="/root/tmp_backup"
+RETENTION_DAYS="7d"  # Xóa file cũ hơn 7 ngày
+
+mkdir -p "$LOCAL_TEMP"
+
+backup_node() {
+    local ID=$1
+    local VOL="myst-data$ID"      # Tên volume cố định như bạn yêu cầu
+    local NET="my_network_$ID"    # Network tương ứng
+    
+    # Kiểm tra Volume có tồn tại không
+    if ! docker volume inspect "$VOL" >/dev/null 2>&1; then
+        echo "⚠️  Không tìm thấy Volume $VOL. Bỏ qua."
+        return
+    fi
+
+    echo "📦 [Node $ID] Đang xử lý volume $VOL..."
+
+    # Lấy IP Public (Dùng alpine + wget cho nhẹ, thay vì curlimages nặng nề)
+    PUBLIC_IP=$(docker run --rm --network "$NET" alpine wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null)
+    
+    # Nếu không lấy được IP thì đặt tên là Unknown
+    if [ -z "$PUBLIC_IP" ]; then PUBLIC_IP="Unknown_IP"; fi
+    
+    # Đặt tên file chuẩn để script Restore nhận diện được
+    # Format: IP_mystID_Ngày.tar
+    FILENAME="${PUBLIC_IP}_myst${ID}_$(date +%F).tar"
+    
+    # Đóng gói (TAR - Không nén để giảm tải CPU tối đa)
+    # Dùng alpine map volume vào để tar
+    docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar cf "/backup/$FILENAME" -C /data .
+    
+    # Upload lên Google Drive
+    if rclone copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"; then
+         echo "   ✅ Upload thành công: $FILENAME"
+         rm -f "$LOCAL_TEMP/$FILENAME"
+    else
+         echo "   ❌ Upload thất bại: $FILENAME"
+    fi
+}
+
+echo "--- BẮT ĐẦU BACKUP $(date) ---"
+
+# Chạy backup cho Node 1 và Node 2
+backup_node 1
+backup_node 2
+
+# --- 3. DỌN DẸP FILE CŨ ---
+echo "🧹 Đang dọn dẹp backup cũ hơn $RETENTION_DAYS..."
+# Xóa file cũ
+rclone delete "$RCLONE_REMOTE" --min-age "$RETENTION_DAYS" --include "*.tar" >/dev/null 2>&1
+# Xóa thư mục rỗng (nếu có)
+rclone rmdirs "$RCLONE_REMOTE" --leave-root >/dev/null 2>&1
+
+echo "🎉 HOÀN TẤT!"
+EOF
+
+# Cấp quyền thực thi
+chmod +x /root/auto_backup.sh
+
+# 4. Tự động thêm vào Cronjob (Chạy 3:00 sáng hàng ngày)
+# Kiểm tra xem đã có lịch chưa, nếu chưa thì thêm vào
+if ! crontab -l 2>/dev/null | grep -q "/root/auto_backup.sh"; then
+    (crontab -l 2>/dev/null; echo "0 3 * * * /root/auto_backup.sh >> /var/log/myst_backup.log 2>&1") | crontab -
+    echo "⏰ Đã cài đặt lịch: Backup tự chạy vào 03:00 sáng hàng ngày."
+else
+    echo "✅ Lịch backup đã tồn tại."
+fi
+
+# 5. Chạy thử ngay lập tức
+echo "----------------------------------------------------------------"
+echo "⏳ Đang chạy thử backup lần đầu (Vui lòng đợi)..."
+/root/auto_backup.sh
+
+echo "----------------------------------------------------------------"
+echo "✅ CÀI ĐẶT HOÀN TẤT!"
+echo "👉 Kiểm tra log: cat /var/log/myst_backup.log"
+echo "👉 Chạy thủ công: /root/auto_backup.sh"
