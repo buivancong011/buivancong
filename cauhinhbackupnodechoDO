@@ -3,7 +3,7 @@
 # ==============================================================================
 # ⚠️ CẤU HÌNH TOKEN (Dùng lại Token của bạn)
 # ==============================================================================
-MY_TOKEN='{"access_token":"ya29.a0AUMWg_Kv0s3-JmIBl3jGwG1Pwn-0877B8JiOenW0J1O2C0gV52r3tQZCMC_a6Y-r_nRUh-AIlbb61qyCiosp4j4BUoPZZykHd3YTJDQ7x3o1kL5n84E-SfZV_nNFDlh_gElAFX_TwO-R97Hg-BIT4wAIwv41m6eWsP9_5eeG4glGLKttsbb_hG4EjwgRzp3HxDyPItEaCgYKAe4SARISFQHGX2MiFWO2VNZwCbdqMice83bxeQ0206","token_type":"Bearer","refresh_token":"1//0gYKP3t9gNLbcCgYIARAAGBASNwF-L9Ir1JCy9-XxItZRooJntSaxU1pkFCpfJFbdbsVtvGy7SCMdhavxXRN_Ky-tXfBUqF_dfXA","expiry":"2026-02-12T13:42:42.0402294+07:00"}'
+MY_TOKEN='{"access_token":"ya29.a0ATkoCc6k_YEywjATfv4HtaVxmPJdlGiXSGYRgx8iWuKYfxAtEG7P98sosVLHD16jGK2yK0_4O6bN9iJsghZ-4z6oh0uPxP83ZA8hCRZDPRd0eXdJBU0ESfD3HT20oWNq8YlNPeCz6hJpO87mboJP9O7Ew6gQZOZR9yKgPwgri0aDVf5nik8EABnKPh4ol8BlSwGxRbAaCgYKAQ8SARISFQHGX2MiUgR7k-zHGHi5yD-Yg4Esfg0206","token_type":"Bearer","refresh_token":"1//0gPaLni_jLOX7CgYIARAAGBASNwF-L9Ir0aWV9Ce2Ad0l4JhY6XF_2Vid9gM0fEvOMZd_buJ7WDbiTSkjgVECjDJRX8SqoenYdUE","expiry":"2026-03-02T04:59:54.1289289+07:00"}'
 # ==============================================================================
 
 echo "🚀 ĐANG CỐI ƯU HÓA HỆ THỐNG BACKUP CHO DEBIAN 12..."
