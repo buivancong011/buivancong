@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Dừng script ngay lập tức nếu có lỗi xảy ra
+set -e
+
+echo "--- [1/5] Cập nhật hệ thống Debian 12 ---"
+sudo apt-get update && sudo apt-get upgrade -y
+
+echo "--- [2/5] Cài đặt gói phụ trợ (curl, git) ---"
+sudo apt-get install -y curl git
+
+echo "--- [3/5] Tải và chạy script cài đặt Docker chính chủ ---"
+curl -fsSL https://get.docker.com | sh
+
+echo "--- [4/5] Cấu hình quyền user và khởi động dịch vụ ---"
+sudo systemctl enable --now docker
+
+# Lấy user hiện tại (xử lý trường hợp chạy bằng sudo)
+CURRENT_USER=${SUDO_USER:-$USER}
+sudo usermod -aG docker $CURRENT_USER
+
+echo "--- [5/5] Cài đặt hoàn tất! ---"
+echo "Phiên bản Docker đã cài:"
+docker --version
+
+echo "---------------------------------------------------------"
+echo "Hệ thống sẽ KHỞI ĐỘNG LẠI (Reboot) trong 5 giây..."
+echo "Kết nối SSH sẽ bị ngắt. Vui lòng đợi 1 phút rồi kết nối lại."
+echo "---------------------------------------------------------"
+
+# Đợi 5 giây để user kịp đọc thông báo
+sleep 5
+
+# Thực hiện lệnh reboot
+sudo reboot
