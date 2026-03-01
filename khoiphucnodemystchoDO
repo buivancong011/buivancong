@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# NHẬN DIỆN IP TỪ THAM SỐ (GIỮ NGUYÊN LOGIC CỦA BẠN)
+OLD_IP_1="$1"
+OLD_IP_2="$2"
+
+if [ -z "$OLD_IP_1" ] || [ -z "$OLD_IP_2" ]; then
+    echo "❌ LỖI: Thiếu IP đầu vào. Cách dùng: ./restore.sh <IP_NODE_1> <IP_NODE_2>"
+    exit 1
+fi
+
+# ================= CẤU HÌNH =================
+# Token cũ của bạn (Lưu ý: Sắp hết hạn vào sáng 02/03/2026)
+MY_TOKEN='{"access_token":"ya29.a0ATkoCc6k_YEywjATfv4HtaVxmPJdlGiXSGYRgx8iWuKYfxAtEG7P98sosVLHD16jGK2yK0_4O6bN9iJsghZ-4z6oh0uPxP83ZA8hCRZDPRd0eXdJBU0ESfD3HT20oWNq8YlNPeCz6hJpO87mboJP9O7Ew6gQZOZR9yKgPwgri0aDVf5nik8EABnKPh4ol8BlSwGxRbAaCgYKAQ8SARISFQHGX2MiUgR7k-zHGHi5yD-Yg4Esfg0206","token_type":"Bearer","refresh_token":"1//0gPaLni_jLOX7CgYIARAAGBASNwF-L9Ir0aWV9Ce2Ad0l4JhY6XF_2Vid9gM0fEvOMZd_buJ7WDbiTSkjgVECjDJRX8SqoenYdUE","expiry":"2026-03-02T04:59:54.1289289+07:00"}'
+RCLONE_REMOTE="gdrive:Mysterium_Backups"
+TEMP_DIR="/root/restore_temp"
+
+# CÀI ĐẶT NHANH (FIX CHO DEBIAN)
+# Debian cần update trước khi cài gói
+apt-get update -qq >/dev/null 2>&1
+apt-get install -y unzip curl grep >/dev/null 2>&1
+
+if ! command -v rclone &> /dev/null; then
+    curl https://rclone.org/install.sh | bash >/dev/null 2>&1
+fi
+if ! command -v docker &> /dev/null; then
+    curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
+    systemctl enable --now docker
+fi
+
+# TẠO CONFIG RCLONE
+mkdir -p /root/.config/rclone
+cat << EOF > /root/.config/rclone/rclone.conf
+[gdrive]
+type = drive
+scope = drive
+token = $MY_TOKEN
+EOF
+mkdir -p "$TEMP_DIR"
+
+# KIỂM TRA KẾT NỐI
+if ! rclone lsd gdrive: >/dev/null 2>&1; then
+    echo "❌ LỖI: Token Google Drive lỗi hoặc hết hạn."
+    exit 1
+fi
+
+# HÀM KHÔI PHỤC (LOGIC CŨ NHƯNG CẢI TIẾN LỆNH TÌM FILE)
+restore_process() {
+    local ID=$1
+    local TARGET_IP=$2
+    local NODE_SUFFIX="myst$ID"
+    local VOL_NAME="myst-data$ID"
+
+    echo "🔍 Node $ID: Đang tìm file chứa IP '$TARGET_IP'..."
+
+    # --- SỬA LỖI QUAN TRỌNG Ở ĐÂY ---
+    # Thay vì dùng 'lsl' rồi 'awk' cắt cột (dễ sai trên Debian), ta dùng 'lsf' chỉ lấy tên file.
+    # sort -r: Sắp xếp ngược (File mới nhất có ngày tháng lớn nhất sẽ lên đầu)
+    FILE_NAME=$(rclone lsf "$RCLONE_REMOTE" --files-only | grep "$TARGET_IP" | grep "$NODE_SUFFIX" | sort -r | head -n 1)
+
+    if [ -z "$FILE_NAME" ]; then
+        echo "❌ LỖI: Không tìm thấy file backup nào khớp với IP $TARGET_IP cho Node $ID"
+        exit 1
+    fi
+
+    echo "📥 Tìm thấy: $FILE_NAME. Đang tải..."
+    if ! rclone copyto "$RCLONE_REMOTE/$FILE_NAME" "$TEMP_DIR/backup_$ID.tar"; then
+        echo "❌ LỖI: Tải file thất bại."
+        exit 1
+    fi
+
+    echo "♻️  Bung nén vào $VOL_NAME..."
+    # Xóa volume cũ để tránh lỗi permission
+    docker volume rm "$VOL_NAME" >/dev/null 2>&1 || true
+    docker volume create "$VOL_NAME" >/dev/null 2>&1
+    
+    # Dùng alpine bung nén (An toàn nhất trên mọi OS)
+    if ! docker run --rm -v "$VOL_NAME":/data -v "$TEMP_DIR":/backup alpine tar xf "/backup/backup_$ID.tar" -C /data; then
+          echo "❌ LỖI: Bung nén thất bại."
+          exit 1
+    fi
+
+    rm -f "$TEMP_DIR/backup_$ID.tar"
+    echo "✅ Xong Node $ID"
+}
+
+# CHẠY THEO THỨ TỰ NHƯ SCRIPT CŨ
+restore_process 1 "$OLD_IP_1"
+restore_process 2 "$OLD_IP_2"
+
+rm -rf "$TEMP_DIR"
+echo "RESTORE COMPLETE"
