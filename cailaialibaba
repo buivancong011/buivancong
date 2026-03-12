@@ -75,7 +75,7 @@ docker run -d --name earnfm --restart always $DNS_OPTS \
   earnfm/earnfm-client:latest
 
 # 5. Repocket
-docker run -d --name repocket --restart always $DNS_OPTS \
+docker run -d --name repocket --restart always  \
   -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
   repocket/repocket:latest
 
