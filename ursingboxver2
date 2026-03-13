@@ -351,7 +351,7 @@ UR_ENABLE_IP_CHECKER="true"
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
 IMG_EFM="earnfm/earnfm-client:latest"
-IMG_UR="nguyenvinhcao123/docker-urnetwork:latest"
+IMG_UR="techroy23/docker-urnetwork:latest"
 
 # Thư mục lưu trữ tĩnh trên VPS (Giúp dọn dẹp siêu nhanh, không rác)
 CONFIG_DIR="/opt/sbox_farm"
