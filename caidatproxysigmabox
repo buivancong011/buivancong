@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách 500 Proxy của bạn vào đây (Nhớ bọc trong dấu ngoặc kép "")
+# Dán danh sách 1000 Proxy của bạn vào đây (Cú pháp MỚI: Chỉ IP:PORT)
 PROXIES=(
 "216.26.234.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "45.3.32.11:1081:cao_noH1Bw:3EflPoSalj1GVbp"
@@ -504,41 +504,543 @@ PROXIES=(
 "45.3.48.29:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "216.26.236.203:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "45.3.37.3:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.15:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.81:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.138:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.45.236:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.56:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.162.192:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.23:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.246:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.74:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.13.155:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.119:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.118:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.46.91:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.241:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.163:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.194:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.212:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.170:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.175:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.34.211:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.43.194:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.188:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.46.97:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.2.215:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.40:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.108:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.84:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.187:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.115:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.138:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.47.187:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.161.112:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.178:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.89:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.13.254:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.32:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.224:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.174:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.227:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.34.5:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.37.8:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.252:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.119:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.103:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.161.32:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.223:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.168:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.1.96:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.47.1:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.63:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.195:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.32:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.51.200:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.188:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.48.136:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.7.148:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.9:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.198:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.7:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.196:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.10.93:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.32.143:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.87:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.247:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.60:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.233:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.127:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.126:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.2.199:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.216:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.160.205:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.51.36:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.195:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.10.76:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.11.235:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.74:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.152:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.2.105:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.74:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.99:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.3.102:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.11.18:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.34.21:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.76:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.224:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.172.66:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.2.193:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.227:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.13:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.179:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.44:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.10.7:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.222:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.123:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.227:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.135:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.2.251:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.27:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.161:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.151:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.182:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.71:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.161.1:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.134:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.136:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.246:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.174:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.248:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.11.39:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.68:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.227.159:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.210:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.178:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.180:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.172.6:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.72:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.201:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.228.216:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.11.34:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.148:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.7.236:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.89:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.127:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.163.56:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.216:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.80:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.171.48:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.61:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.55:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.45:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.246:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.35:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.161:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.237:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.229.224:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.124:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.107:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.1.75:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.81:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.57:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.235.164:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.201:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.214:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.45.255:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.118:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.160.195:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.131:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.232:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.47.117:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.169.155:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.12.181:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.56:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.127:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.220:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.43.97:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.227:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.219:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.41.202:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.235.231:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.122:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.119:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.215:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.164:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.225.8:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.19.54:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.45.1:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.32:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.52:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.55:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.252:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.228.50:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.29:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.3.219:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.169.140:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.96:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.125:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.48.182:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.171.33:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.33.80:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.210:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.200:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.37.34:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.12.83:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.211:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.92:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.44:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.215:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.13.107:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.238.54:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.22:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.199:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.226:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.62.126:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.227.110:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.171.20:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.71:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.228.8:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.35.57:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.160.38:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.103:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.141:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.203:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.235:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.97:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.162.48:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.159:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.32.213:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.165:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.218:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.60:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.26:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.82:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.23:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.76:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.5:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.55:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.6:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.164:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.1.24:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.34.224:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.193:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.197:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.19.38:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.235.82:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.179:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.100:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.213:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.168:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.58:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.220:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.194:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.156:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.246:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.62.198:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.199:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.110:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.169.165:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.220:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.230.59:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.34.93:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.56:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.44:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.88:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.230.147:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.142:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.146:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.63:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.252:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.101:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.171:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.58:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.196:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.204:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.8:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.163:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.164.35:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.15:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.143:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.210:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.162.50:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.239:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.40:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.228:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.32.137:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.10:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.172.207:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.238:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.39:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.96:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.189:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.0.42:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.107:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.92:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.37.63:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.62.46:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.171:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.74:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.34.120:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.47.161:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.164.7:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.7.158:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.35.1:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.32.212:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.17:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.164.72:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.19.36:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.33.6:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.53:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.229.188:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.183:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.32.48:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.32.153:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.11.12:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.217:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.40:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.225.18:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.114:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.169.74:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.43:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.204:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.142:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.136:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.46.26:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.244:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.86:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.172.123:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.19:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.12:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.225.152:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.25.61:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.251:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.3.83:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.225.43:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.128:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.127:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.224:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.76:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.9.15:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.173:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.230.122:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.128:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.157:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.150:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.178:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.72:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.20:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.235.23:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.138:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.25.188:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.176:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.235.205:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.21:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.46.207:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.127:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.222:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.19.155:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.239:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.206:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.37.214:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.2.6:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.11.43:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.86:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.192:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.205:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.8:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.10:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.33.226:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.223:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.48.207:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.169.123:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.108:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.5.114:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.167:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.102:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.65:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.47.203:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.36:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.192:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.25.190:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.125:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.9:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.79:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.102:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.144:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.15:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.122:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.28:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.6:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.204:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.37.72:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.147:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.13:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.17:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.246:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.37.223:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.40:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.38:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.10.37:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.1.228:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.75:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.91:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.104:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.13.34:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.136:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.233.253:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.34.37:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.170.133:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.62.71:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.79:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.110:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.62.34:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.45.9:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.34:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.240:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.253:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.34.99:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.239:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.214:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.183:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.38.152:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.141:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.39.117:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.210:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.227.217:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.102:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.155:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.32.118:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.118:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.19.225:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.12.203:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.172:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.25:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.225.49:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.73:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.174.84:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.169.178:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.48.158:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.248:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.134:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.143:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.47.176:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.141:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.243:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.44.244:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.113:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.38.20:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.160.80:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.76:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.33.228:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.7.237:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.234.174:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.239:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.230.194:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.172.35:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.232.72:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.49.166:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.80:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.46.12:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.41.183:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.34.102:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.236.9:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.41.8:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.5:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.179:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.225.7:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.0.164:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.199:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.167.232:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.132:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.51.53:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.219:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.160.63:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.5:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.128:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.34.36:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.43:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.43:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.12.154:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.123:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.227.100:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.226.0:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.36.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.10.18:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.114:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.50:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.161.189:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.166.180:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.6.19:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.167.25.199:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.12.159:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.46:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.40.72:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.175.149:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.231.144:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.224.181:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.46.99:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.165.148:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.51.57:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.99:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.237.201:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.194:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.33.15:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.4.114:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.36.150:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.39.161:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.227.200:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.15.178:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.161.25:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.43.143:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.35.45:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.75:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.173.95:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"193.56.28.118:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.50.156:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.111:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.14.158:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"216.26.227.22:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.7.109:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.186:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 )
 
-# Token App
+# Token của Traffmonetizer
 TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
-EFM_TOKEN="79431c35-7cb0-477d-82f0-62f0be33d3cf"
 
-# Thông số hệ thống
-CONFIG_DIR="/opt/sbox_farm"
-DATA_BASE="/opt/earnfm-data"
+# Tên Image Docker
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
-IMG_EFM="earnfm/earnfm-client:latest"
 
-# ===================== 2. HÀM TỐI ƯU HỆ THỐNG GCP =====================
+# Thư mục lưu trữ cấu hình mạng tĩnh
+CONFIG_DIR="/opt/gcp_sbox_farm"
+
+# ===================== 2. TỐI ƯU KERNEL (DÀNH CHO GCP 8 Core) =====================
 setup_system() {
-    echo "[INFO] Đang tối ưu mạng và mở khóa giới hạn Docker cho Google Cloud..."
-    sudo mkdir -p "$CONFIG_DIR" "$DATA_BASE"
+    echo "[INFO] Tối ưu hóa Kernel Linux cho GCP (8 Core / 64GB RAM)..."
+    sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
-    # Mở rộng giới hạn kết nối mạng (Bắt buộc cho >500 container)
-    sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
+    # Mở rộng giới hạn mạng cực đại cho 2000 Containers
+    sudo bash -c 'cat > /etc/sysctl.d/99-gcp-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 fs.file-max=2097152
-net.netfilter.nf_conntrack_max=1048576
+net.netfilter.nf_conntrack_max=2097152
+net.ipv4.neigh.default.gc_thresh1=4096
+net.ipv4.neigh.default.gc_thresh2=8192
+net.ipv4.neigh.default.gc_thresh3=16384
 EOF
     sudo sysctl --system >/dev/null 2>&1 || true
 
-    # Mở giới hạn File Descriptor cho Docker
+    # Bơm giới hạn file cho hệ thống Docker
     if [[ ! -f /etc/systemd/system/docker.service.d/override.conf ]]; then
         sudo mkdir -p /etc/systemd/system/docker.service.d/
         sudo tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
 [Service]
-LimitNOFILE=1048576
-LimitNPROC=1048576
+LimitNOFILE=2097152
+LimitNPROC=2097152
 LimitCORE=infinity
 EOF
         sudo systemctl daemon-reload && sudo systemctl restart docker || true
@@ -546,140 +1048,115 @@ EOF
     fi
 }
 
-# ===================== 3. HÀM TẠO FILE JSON (ĐÃ SỬA LỖI) =====================
+# ===================== 3. HÀM TẠO FILE MẠNG (ĐÃ XÓA USER/PASS) =====================
 mk_sbox_config() {
-    local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
+    local cfg="$1" ip="$2" port="$3"
     cat > "$cfg" <<JSON
 {
-  "log": { "level": "error" },
+  "log": { "disabled": true },
   "dns": { 
-    "servers": [
-      { "tag": "dns_direct", "address": "udp://8.8.8.8", "detour": "direct" }
-    ], 
+    "servers": [{ "tag": "dns_direct", "address": "udp://8.8.8.8", "detour": "direct" }], 
     "strategy": "ipv4_only" 
   },
-  "inbounds": [
-    { 
-      "type": "tun", 
-      "interface_name": "tun0", 
-      "inet4_address": ["172.19.0.1/30"], 
-      "auto_route": true, 
-      "strict_route": false, 
-      "mtu": 1400 
-    }
-  ],
+  "inbounds": [{ 
+    "type": "tun", "interface_name": "tun0", "inet4_address": ["172.19.0.1/30"], 
+    "auto_route": true, "strict_route": false, "mtu": 1400 
+  }],
   "outbounds": [
-    { "tag": "proxy", "type": "socks", "server": "${ip}", "server_port": ${port}, "version": "5", "username": "${user}", "password": "${pass}" },
+    { "tag": "proxy", "type": "socks", "server": "${ip}", "server_port": ${port}, "version": "5" },
     { "tag": "direct", "type": "direct" }
   ],
-  "route": { 
-    "auto_detect_interface": true,
-    "rules": [
-      { "port": 53, "outbound": "direct" } 
-    ],
-    "final": "proxy" 
-  }
+  "route": { "auto_detect_interface": true, "rules": [{ "port": 53, "outbound": "direct" }], "final": "proxy" }
 }
 JSON
 }
 
-# ===================== 4. LỆNH CHẠY (UP) =====================
+# ===================== 4. LỆNH TRIỂN KHAI (UP) =====================
 cmd_up() {
     setup_system
-    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm để tăng tốc)..."
+    echo "[INFO] Kéo tải Images mới nhất..."
     docker pull "$IMG_SBOX" >/dev/null 2>&1 &
     docker pull "$IMG_TM" >/dev/null 2>&1 &
-    docker pull "$IMG_EFM" >/dev/null 2>&1 &
     wait
 
-    echo "[INFO] Bắt đầu khởi tạo tuần tự ${#PROXIES[@]} Cụm (Proxy + TM + EFM)..."
+    echo "[INFO] Bắt đầu triển khai 1000 Cụm (Mỗi cụm: 1 Proxy + 1 TM)..."
+    echo "⚠️ LƯU Ý GCP: Quá trình này sẽ chạy từ từ để tránh bị Google khóa máy!"
     
     local i=1
     for spec in "${PROXIES[@]}"; do
-        IFS=':' read -r ip port user pass <<<"$spec"
+        # Đã đổi: Chỉ đọc 2 biến IP và PORT từ mảng
+        IFS=':' read -r ip port <<<"$spec"
         
         local s_name="csbox${i}"
         local tm_name="tm${i}"
-        local efm_name="efm-csbox${i}"
         
-        # Dọn dẹp xác container cũ nếu bị kẹt
-        docker rm -f "$s_name" "$tm_name" "$efm_name" >/dev/null 2>&1 || true
+        # Dọn xác container cũ
+        docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
         
-        # --- BƯỚC 1: Dựng Proxy Sing-box ---
+        # --- [1] Dựng Proxy Sing-box ---
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
-        mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
+        
+        # Truyền đúng 3 biến: Tên file, IP, Port
+        mk_sbox_config "$s_cfg" "$ip" "$port"
         
         docker run -d --name "$s_name" --restart=unless-stopped \
             --cap-add=NET_ADMIN --device /dev/net/tun \
-            --log-driver none \
-            -v "$s_cfg":/etc/sing-box/config.json:ro \
+            --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
             "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-        # Nghỉ 1 giây để hầm mạng TUN tạo xong (Chống lỗi cannot join network namespace)
-        sleep 1
+        # 🛑 NHỊP CHỜ SINH TỬ CỦA GCP
+        sleep 1.0 
 
-        # --- BƯỚC 2: Cắm Traffmonetizer ---
+        # --- [2] Dựng Traffmonetizer ---
         docker run -d --name "$tm_name" --restart=unless-stopped \
-            --network="container:$s_name" \
-            --log-driver none \
-            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "device_tm${i}" >/dev/null
+            --network="container:$s_name" --log-driver none \
+            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
 
-        # --- BƯỚC 3: Cắm EarnFM ---
-        local efm_data="$DATA_BASE/csbox${i}"
-        mkdir -p "$efm_data"
+        # In tiến trình mỗi 20 cụm
+        if (( i % 20 == 0 )); then
+            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
+        fi
         
-        docker run -d --name "$efm_name" --restart=unless-stopped \
-            --network="container:$s_name" \
-            --log-driver none \
-            -e EARNFM_TOKEN="$EFM_TOKEN" -v "$efm_data":/data \
-            "$IMG_EFM" >/dev/null
-
-        echo "🟢 [Cụm $i] Đã dựng xong mạng: $ip"
-        
-        # Nghỉ 0.5s bảo vệ CPU Google Cloud không bị khóa Acc
+        # 🛑 NHỊP CHỜ SINH TỬ SỐ 2
         sleep 0.5 
+        
         ((i++))
     done
-    
-    echo "========================================================="
-    echo "✅ HOÀN TẤT TRIỂN KHAI TOÀN BỘ CONTAINER LÊN GOOGLE CLOUD!"
-    echo "👉 Dùng lệnh: bash <(curl...) status để xem số lượng đang chạy"
-    echo "========================================================="
+    echo "====================================================="
+    echo "✅ HOÀN TẤT TRIỂN KHAI 2000 CONTAINER LÊN GOOGLE CLOUD!"
+    echo "====================================================="
 }
 
-# ===================== 5. LỆNH DỌN DẸP & KIỂM TRA =====================
+# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
 cmd_down() {
-    echo "🧹 Đang gỡ bỏ tuần tự toàn bộ container hệ thống..."
-    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm|efm)' | xargs -r -n 1 -P 10 docker rm -f >/dev/null 2>&1 || true
+    echo "🧹 Đang gỡ bỏ 2000 container (Chạy đa luồng tốc độ cao)..."
+    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 16 docker rm -f >/dev/null 2>&1 || true
     echo "✅ Đã gỡ sạch sẽ container."
 }
 
 cmd_clean() {
     cmd_down
-    echo "🧹 Đang dọn dẹp file cấu hình mạng rác và RAM ảo..."
+    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
     sudo rm -rf "$CONFIG_DIR"/*.json || true
     docker system prune -f >/dev/null 2>&1
     echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
 }
 
 cmd_status() {
-    echo "📊 THỐNG KÊ HỆ THỐNG:"
-    echo "---------------------------"
-    echo "🌐 Proxy Sing-box: $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]} đang chạy"
-    echo "🐝 Traffmonetizer: $(docker ps | grep tm | wc -l) / ${#PROXIES[@]} đang chạy"
-    echo "💸 EarnFM        : $(docker ps | grep efm | wc -l) / ${#PROXIES[@]} đang chạy"
-    echo "---------------------------"
-    echo "💾 RAM trống     : $(free -m | awk '/^Mem:/{print $7}') MB"
+    echo "📊 THỐNG KÊ HỆ THỐNG GOOGLE CLOUD:"
+    echo "-----------------------------------"
+    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
+    echo "🐝 Traffmonetizer : $(docker ps | grep tm | wc -l) / ${#PROXIES[@]}"
+    echo "-----------------------------------"
+    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
+    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
 }
 
-# ===================== ĐIỀU HƯỚNG LỆNH =====================
+# ===================== ROUTER =====================
 case "${1:-up}" in
     up)     cmd_up ;;
     down)   cmd_down ;;
     clean)  cmd_clean ;;
     status) cmd_status ;;
-    *) 
-        echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"
-        exit 1 
-        ;;
+    *) echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"; exit 1 ;;
 esac
