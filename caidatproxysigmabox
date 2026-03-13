@@ -1,8 +1,8 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-# ===================== CẤU HÌNH (THAY ĐỔI TẠI ĐÂY) =====================
-# 1. Danh sách Proxy (Dán 333 dòng của bạn vào đây)
+# ===================== 1. CẤU HÌNH CỦA BẠN =====================
+# Dán danh sách 500 Proxy của bạn vào đây (Nhớ bọc trong dấu ngoặc kép "")
 PROXIES=(
 "216.26.234.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "45.3.32.11:1081:cao_noH1Bw:3EflPoSalj1GVbp"
@@ -506,24 +506,24 @@ PROXIES=(
 "45.3.37.3:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 )
 
-# 2. Token của bạn
+# Token App
 TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 EFM_TOKEN="79431c35-7cb0-477d-82f0-62f0be33d3cf"
 
-# 3. Thông số hệ thống
+# Thông số hệ thống
 CONFIG_DIR="/opt/sbox_farm"
 DATA_BASE="/opt/earnfm-data"
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
 IMG_EFM="earnfm/earnfm-client:latest"
 
-# ===================== HÀM HỖ TRỢ =====================
+# ===================== 2. HÀM TỐI ƯU HỆ THỐNG GCP =====================
 setup_system() {
-    echo "[INFO] Đang tối ưu mạng và Docker cho VPS..."
+    echo "[INFO] Đang tối ưu mạng và mở khóa giới hạn Docker cho Google Cloud..."
     sudo mkdir -p "$CONFIG_DIR" "$DATA_BASE"
     sudo modprobe tun || true
 
-    # Mở rộng giới hạn kết nối của Linux
+    # Mở rộng giới hạn kết nối mạng (Bắt buộc cho >500 container)
     sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
@@ -532,42 +532,64 @@ net.netfilter.nf_conntrack_max=1048576
 EOF
     sudo sysctl --system >/dev/null 2>&1 || true
 
-    # Mở giới hạn Docker
+    # Mở giới hạn File Descriptor cho Docker
     if [[ ! -f /etc/systemd/system/docker.service.d/override.conf ]]; then
         sudo mkdir -p /etc/systemd/system/docker.service.d/
         sudo tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
 [Service]
 LimitNOFILE=1048576
 LimitNPROC=1048576
+LimitCORE=infinity
 EOF
         sudo systemctl daemon-reload && sudo systemctl restart docker || true
         sleep 3
     fi
 }
 
+# ===================== 3. HÀM TẠO FILE JSON (ĐÃ SỬA LỖI) =====================
 mk_sbox_config() {
     local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "level": "error" },
-  "dns": { "servers": [{ "tag": "dns1", "address": "udp://8.8.8.8" }], "strategy": "ipv4_only" },
-  "inbounds": [{ "type": "tun", "interface_name": "tun0", "address": ["172.19.0.1/30"], "auto_route": true, "strict_route": false, "mtu": 1400 }],
+  "dns": { 
+    "servers": [
+      { "tag": "dns_direct", "address": "udp://8.8.8.8", "detour": "direct" }
+    ], 
+    "strategy": "ipv4_only" 
+  },
+  "inbounds": [
+    { 
+      "type": "tun", 
+      "interface_name": "tun0", 
+      "inet4_address": ["172.19.0.1/30"], 
+      "auto_route": true, 
+      "strict_route": false, 
+      "mtu": 1400 
+    }
+  ],
   "outbounds": [
     { "tag": "proxy", "type": "socks", "server": "${ip}", "server_port": ${port}, "version": "5", "username": "${user}", "password": "${pass}" },
     { "tag": "direct", "type": "direct" }
   ],
-  "route": { "auto_detect_interface": true, "final": "proxy" }
+  "route": { 
+    "auto_detect_interface": true,
+    "rules": [
+      { "port": 53, "outbound": "direct" } 
+    ],
+    "final": "proxy" 
+  }
 }
 JSON
 }
 
-# ===================== LỆNH UP =====================
+# ===================== 4. LỆNH CHẠY (UP) =====================
 cmd_up() {
     setup_system
-    echo "[INFO] Kéo Images mới nhất..."
-    docker pull "$IMG_SBOX" >/dev/null &
-    docker pull "$IMG_TM" >/dev/null &
-    docker pull "$IMG_EFM" >/dev/null &
+    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm để tăng tốc)..."
+    docker pull "$IMG_SBOX" >/dev/null 2>&1 &
+    docker pull "$IMG_TM" >/dev/null 2>&1 &
+    docker pull "$IMG_EFM" >/dev/null 2>&1 &
     wait
 
     echo "[INFO] Bắt đầu khởi tạo tuần tự ${#PROXIES[@]} Cụm (Proxy + TM + EFM)..."
@@ -580,10 +602,10 @@ cmd_up() {
         local tm_name="tm${i}"
         local efm_name="efm-csbox${i}"
         
-        # Xóa các container cũ nếu đang tồn tại để dựng lại cái mới sạch sẽ
+        # Dọn dẹp xác container cũ nếu bị kẹt
         docker rm -f "$s_name" "$tm_name" "$efm_name" >/dev/null 2>&1 || true
         
-        # 1. Dựng Proxy (Tắt log, không giới hạn RAM)
+        # --- BƯỚC 1: Dựng Proxy Sing-box ---
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
         mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
         
@@ -593,15 +615,16 @@ cmd_up() {
             -v "$s_cfg":/etc/sing-box/config.json:ro \
             "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-        sleep 0.5 # Chờ hầm TUN nội bộ thông mạng
+        # Nghỉ 1 giây để hầm mạng TUN tạo xong (Chống lỗi cannot join network namespace)
+        sleep 1
 
-        # 2. Dựng TM (Tắt log, không giới hạn RAM)
+        # --- BƯỚC 2: Cắm Traffmonetizer ---
         docker run -d --name "$tm_name" --restart=unless-stopped \
             --network="container:$s_name" \
             --log-driver none \
             "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "device_tm${i}" >/dev/null
 
-        # 3. Dựng EarnFM (Tắt log, không giới hạn RAM, vẫn giữ mount data)
+        # --- BƯỚC 3: Cắm EarnFM ---
         local efm_data="$DATA_BASE/csbox${i}"
         mkdir -p "$efm_data"
         
@@ -611,32 +634,36 @@ cmd_up() {
             -e EARNFM_TOKEN="$EFM_TOKEN" -v "$efm_data":/data \
             "$IMG_EFM" >/dev/null
 
-        echo "🟢 [Cụm $i] Đã dựng xong mạng tĩnh: $ip"
-        sleep 0.5 # Nghỉ nhịp nhàng chống Spike Google Cloud
+        echo "🟢 [Cụm $i] Đã dựng xong mạng: $ip"
         
+        # Nghỉ 0.5s bảo vệ CPU Google Cloud không bị khóa Acc
+        sleep 0.5 
         ((i++))
     done
-    echo "✅ HOÀN TẤT TRIỂN KHAI 1000 CONTAINER!"
+    
+    echo "========================================================="
+    echo "✅ HOÀN TẤT TRIỂN KHAI TOÀN BỘ CONTAINER LÊN GOOGLE CLOUD!"
+    echo "👉 Dùng lệnh: bash <(curl...) status để xem số lượng đang chạy"
+    echo "========================================================="
 }
 
-# ===================== LỆNH DOWN & CLEAN =====================
+# ===================== 5. LỆNH DỌN DẸP & KIỂM TRA =====================
 cmd_down() {
-    echo "🧹 Đang gỡ bỏ tuần tự toàn bộ container..."
+    echo "🧹 Đang gỡ bỏ tuần tự toàn bộ container hệ thống..."
     docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm|efm)' | xargs -r -n 1 -P 10 docker rm -f >/dev/null 2>&1 || true
     echo "✅ Đã gỡ sạch sẽ container."
 }
 
 cmd_clean() {
     cmd_down
-    echo "🧹 Đang dọn dẹp file cấu hình mạng rác..."
+    echo "🧹 Đang dọn dẹp file cấu hình mạng rác và RAM ảo..."
     sudo rm -rf "$CONFIG_DIR"/*.json || true
     docker system prune -f >/dev/null 2>&1
     echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
 }
 
-# ===================== LỆNH STATUS =====================
 cmd_status() {
-    echo "📊 THỐNG KÊ NHANH HỆ THỐNG:"
+    echo "📊 THỐNG KÊ HỆ THỐNG:"
     echo "---------------------------"
     echo "🌐 Proxy Sing-box: $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]} đang chạy"
     echo "🐝 Traffmonetizer: $(docker ps | grep tm | wc -l) / ${#PROXIES[@]} đang chạy"
@@ -645,14 +672,14 @@ cmd_status() {
     echo "💾 RAM trống     : $(free -m | awk '/^Mem:/{print $7}') MB"
 }
 
-# ===================== CLI ROUTER =====================
-case "${1:-}" in
+# ===================== ĐIỀU HƯỚNG LỆNH =====================
+case "${1:-up}" in
     up)     cmd_up ;;
     down)   cmd_down ;;
     clean)  cmd_clean ;;
     status) cmd_status ;;
     *) 
-        echo "Sử dụng: ./farm.sh [up|down|clean|status]"
+        echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"
         exit 1 
         ;;
 esac
