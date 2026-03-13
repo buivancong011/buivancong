@@ -508,7 +508,7 @@ PROXIES=(
 
 # 2. Token của bạn
 TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
-EFM_TOKEN="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
+EFM_TOKEN="79431c35-7cb0-477d-82f0-62f0be33d3cf"
 
 # 3. Thông số hệ thống
 CONFIG_DIR="/opt/sbox_farm"
