@@ -11,9 +11,10 @@ TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
 
-# ==== CẤU HÌNH DNS MỚI (Cloudflare) ====
-# Chỉ thêm dòng này để áp dụng cho toàn bộ container bên dưới
+# ==== CẤU HÌNH TỐI ƯU (DNS & ZERO LOG) ====
+# Cố định DNS Cloudflare và tắt tuyệt đối hệ thống ghi log của Docker
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+LOG_OPTS="--log-driver none"
 
 # ==== TỰ ĐỘNG CHỌN IMAGE THEO CPU ====
 ARCH=$(uname -m)
@@ -83,7 +84,6 @@ sleep 5
 # ==== 6. CHECK IP PUBLIC THỰC TẾ ====
 get_public_ip() {
     local NET=$1
-    # Thêm DNS vào lệnh check này luôn cho chắc
     docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
 }
 
@@ -106,7 +106,7 @@ else
     log "✅ THÀNH CÔNG: IP khác nhau."
 fi
 
-# ==== 7. CHẠY NODES (ĐÃ THÊM DNS 1.1.1.1) ====
+# ==== 7. CHẠY NODES (ÁP DỤNG ZERO LOG) ====
 log "🚀 Mạng OK. Đang khởi chạy nodes..."
 
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
@@ -117,27 +117,27 @@ wait
 run_node_group() {
   local ID=$1; local NET="my_network_$1"; local BIND_IP=$2
   
-  # Traffmonetizer (Thêm $DNS_OPTS)
-  docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
+  # Traffmonetizer
+  docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS $LOG_OPTS \
     $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium (Thêm $DNS_OPTS, Giữ nguyên Volume myst-data)
-  docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
+  # Mysterium
+  docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS $LOG_OPTS \
     -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
     --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
 
-  # UrNetwork (Thêm $DNS_OPTS, Giữ nguyên Volume ur_data)
-  docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
+  # UrNetwork
+  docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS $LOG_OPTS \
     --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
     -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
 
-  # EarnFM (Thêm $DNS_OPTS)
-  docker run -d --network $NET --restart always $DNS_OPTS \
+  # EarnFM
+  docker run -d --network $NET --restart always $DNS_OPTS $LOG_OPTS \
     -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
 
-  # Repocket (Thêm $DNS_OPTS)
-  docker run -d --network $NET --restart always $DNS_OPTS \
+  # Repocket
+  docker run -d --network $NET --restart always $DNS_OPTS $LOG_OPTS \
     --name repocket$ID \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 }
