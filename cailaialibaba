@@ -13,9 +13,9 @@ RP_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 UR_USER="nguyenvinhcao123@gmail.com"
 UR_PASS="CAOcao123CAO@"
 
-
-# ==== CẤU HÌNH DNS CHUNG (Tăng tốc độ kết nối) ====
+# ==== CẤU HÌNH DNS & TỐI ƯU (Tắt Log) ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+NO_LOG="--log-driver none" # Tắt log hoàn toàn để thu hồi RAM đệm & chống nghẽn ổ cứng
 
 # ==========================================
 # 2. HÀM LOG
@@ -46,7 +46,6 @@ docker image prune -f >/dev/null 2>&1
 log "Đang tải Images..."
 docker pull traffmonetizer/cli_v2:latest >/dev/null 2>&1 &
 docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
-
 docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
 docker pull repocket/repocket:latest >/dev/null 2>&1 &
 
@@ -54,28 +53,27 @@ wait # Đợi tất cả tải xong
 log "Tải ảnh hoàn tất."
 
 # ==========================================
-# 6. KHỞI CHẠY CONTAINER (FULL 5 APPS + DNS)
+# 6. KHỞI CHẠY CONTAINER (FULL 4 APPS + DNS + NO LOG)
 # ==========================================
 log "🚀 Khởi chạy các ứng dụng cày tiền..."
 
 # 1. Traffmonetizer
-docker run -d --restart always --name tm $DNS_OPTS \
+docker run -d --restart always --name tm $DNS_OPTS $NO_LOG \
   traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM"
 
-# 2. UrNetwork (Đã thêm lại theo yêu cầu)
-docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS \
+# 2. UrNetwork
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS $NO_LOG \
   -v ur_data:/var/lib/vnstat \
   -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" \
   techroy23/docker-urnetwork:latest
 
-
-# 4. EarnFM
-docker run -d --name earnfm --restart always $DNS_OPTS \
+# 3. EarnFM
+docker run -d --name earnfm --restart always $DNS_OPTS $NO_LOG \
   -e EARNFM_TOKEN="$TOKEN_EARNFM" \
   earnfm/earnfm-client:latest
 
-# 5. Repocket
-docker run -d --name repocket --restart always  \
+# 4. Repocket (Đã bổ sung DNS_OPTS)
+docker run -d --name repocket --restart always $DNS_OPTS $NO_LOG \
   -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
   repocket/repocket:latest
 
