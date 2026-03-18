@@ -2,14 +2,15 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách Proxy của bạn vào đây. 
-# Hỗ trợ cả 2 định dạng: "IP:Port" hoặc "IP:Port:User:Pass" (Script sẽ tự động bỏ qua User/Pass)
+# Dán danh sách Proxy của bạn vào đây (Cấu trúc: IP:Port:User:Pass)
 PROXIES=(
-"216.26.234.16:1081"
-"45.3.32.11:1081"
-"209.50.168.59:1081"
-"104.207.42.240:1081"
-
+"216.26.234.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"45.3.32.11:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"209.50.168.59:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.42.240:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"104.207.43.115:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+"65.111.8.196:1081:cao_noH1Bw:3EflPoSalj1GVbp"
+# ... dán tiếp vào đây ...
 )
 
 # Token Traffmonetizer
@@ -19,54 +20,48 @@ TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
 
-# Thư mục lưu trữ tĩnh trên VPS
-CONFIG_DIR="/opt/gcp_sbox_farm"
+CONFIG_DIR="/opt/gcp_farm_v3"
 
-# ===================== 2. TỐI ƯU KERNEL (GOOGLE CLOUD) =====================
+# ===================== 2. TỐI ƯU KERNEL =====================
 setup_system() {
-    echo "[INFO] Tối ưu hóa Kernel Debian cho hệ thống Google Cloud..."
+    echo "[INFO] Tối ưu Kernel và Bật IP Forwarding cho GCP..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
-    # Mở giới hạn siêu bạo lực cho kết nối mạng
+    # Bắt buộc bật IPv4 Forwarding để mạng ảo Docker không bị chặn
+    sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+
     sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 fs.file-max=2097152
 net.netfilter.nf_conntrack_max=2097152
-net.ipv4.neigh.default.gc_thresh1=4096
-net.ipv4.neigh.default.gc_thresh2=8192
-net.ipv4.neigh.default.gc_thresh3=16384
 EOF
     sudo sysctl --system >/dev/null 2>&1 || true
-
-    # Bơm giới hạn file cho Docker Daemon để không bị ngộp
-    if [[ ! -f /etc/systemd/system/docker.service.d/override.conf ]]; then
-        sudo mkdir -p /etc/systemd/system/docker.service.d/
-        sudo tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
-[Service]
-LimitNOFILE=2097152
-LimitNPROC=2097152
-LimitCORE=infinity
-EOF
-        sudo systemctl daemon-reload && sudo systemctl restart docker || true
-        sleep 3
-    fi
 }
 
-# ===================== 3. HÀM TẠO FILE MẠNG (IP WHITELIST - KHÔNG AUTH) =====================
+# ===================== 3. LÕI MẠNG SING-BOX (FIXED ROUTING) =====================
 mk_sbox_config() {
-    local cfg="$1" ip="$2" port="$3"
+    local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
   "dns": { 
-    "servers": [{ "tag": "dns_direct", "address": "udp://8.8.8.8", "detour": "direct" }], 
+    "servers": [
+      { "tag": "dns_proxy", "address": "tcp://8.8.8.8", "detour": "proxy" }
+    ], 
+    "final": "dns_proxy",
     "strategy": "ipv4_only" 
   },
   "inbounds": [{ 
-    "type": "tun", "interface_name": "tun0", "inet4_address": ["172.19.0.1/30"], 
-    "auto_route": true, "strict_route": false, "mtu": 1400 
+    "type": "tun", 
+    "tag": "tun-in",
+    "interface_name": "tun0", 
+    "inet4_address": "172.19.0.1/30", 
+    "auto_route": true, 
+    "strict_route": true, 
+    "sniff": true,
+    "mtu": 1400 
   }],
   "outbounds": [
     { 
@@ -74,99 +69,82 @@ mk_sbox_config() {
       "type": "socks", 
       "server": "${ip}", 
       "server_port": ${port}, 
-      "version": "5" 
+      "version": "5",
+      "username": "${user}", 
+      "password": "${pass}"
     },
-    { "tag": "direct", "type": "direct" }
+    { "tag": "direct", "type": "direct" },
+    { "tag": "dns-out", "type": "dns" }
   ],
-  "route": { "auto_detect_interface": true, "rules": [{ "port": 53, "outbound": "direct" }], "final": "proxy" }
+  "route": { 
+    "auto_detect_interface": true, 
+    "rules": [
+      { "protocol": "dns", "outbound": "dns-out" }
+    ], 
+    "final": "proxy" 
+  }
 }
 JSON
 }
 
-# ===================== 4. LỆNH TRIỂN KHAI (UP) =====================
+# ===================== 4. LỆNH TRIỂN KHAI =====================
 cmd_up() {
     setup_system
-    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm)..."
+    echo "[INFO] Dọn dẹp xác container cũ..."
+    docker ps -aq --filter name='^(csbox|tm)' | xargs -r docker rm -f >/dev/null 2>&1 || true
+
+    echo "[INFO] Kéo tải Images..."
     docker pull "$IMG_SBOX" >/dev/null 2>&1 &
     docker pull "$IMG_TM" >/dev/null 2>&1 &
     wait
 
-    echo "[INFO] Dựng các cụm (Mỗi cụm: 1 Proxy + 1 TM)..."
-    echo "🐢 Nhịp độ: Chậm rãi, an toàn cho CPU..."
+    echo "[INFO] Bắt đầu dựng Cụm Mạng Ảo TUN cho TM..."
     
     local i=1
     for spec in "${PROXIES[@]}"; do
-        # Nâng cấp kỹ thuật đọc mảng: Gọt bỏ phần User:Pass nếu có
-        IFS=':' read -r ip port ignore_user ignore_pass <<<"$spec"
+        IFS=':' read -r ip port user pass <<<"$spec"
         
-        local s_name="csbox${i}"
-        local tm_name="tm${i}"
-        
-        # Dọn xác container cũ sạch sẽ
-        docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
-        
-        # --- [1] Proxy Sing-box (IP Whitelist Mode) ---
+        local s_name="csbox_${i}"
+        local tm_name="tm_${i}"
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
-        mk_sbox_config "$s_cfg" "$ip" "$port"
         
+        mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
+        
+        # 1. Dựng lồng mạng ảo Sing-box
         docker run -d --name "$s_name" --restart=unless-stopped \
             --cap-add=NET_ADMIN --device /dev/net/tun \
             --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
             "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-        # 🛑 CHỜ 1.0 GIÂY - Cho CPU đủ thời gian ráp nối mạng TUN
         sleep 1.0 
 
-        # --- [2] Traffmonetizer ---
+        # 2. Nhét TM vào lồng
         docker run -d --name "$tm_name" --restart=unless-stopped \
             --network="container:$s_name" --log-driver none \
-            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
+            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "GCP_TUN_${i}" >/dev/null
 
-        # In tiến trình mỗi 20 cụm
         if (( i % 20 == 0 )); then
-            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
+            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
         fi
         
-        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU trước khi lặp lại
         sleep 0.5 
         ((i++))
     done
     echo "====================================================="
-    echo "✅ HOÀN TẤT TRIỂN KHAI LÊN GOOGLE CLOUD!"
-    echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
+    echo "✅ HOÀN TẤT! Kiến trúc TUN Bọc Thép đã được triển khai."
     echo "====================================================="
 }
 
-# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
+# ===================== 5. DỌN DẸP =====================
 cmd_down() {
     echo "🧹 Đang gỡ bỏ container..."
-    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
-    echo "✅ Đã gỡ sạch sẽ container."
-}
-
-cmd_clean() {
-    cmd_down
-    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
-    sudo rm -rf "$CONFIG_DIR"/*.json || true
-    docker system prune -f >/dev/null 2>&1
-    echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
-}
-
-cmd_status() {
-    echo "📊 THỐNG KÊ HỆ THỐNG GOOGLE CLOUD:"
-    echo "-----------------------------------"
-    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
-    echo "🐝 Traffmonetizer : $(docker ps | grep tm | wc -l) / ${#PROXIES[@]}"
-    echo "-----------------------------------"
-    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
-    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
+    docker ps -aq --filter name='^(csbox|tm)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
+    echo "✅ Đã gỡ sạch sẽ."
 }
 
 # ===================== ROUTER ĐIỀU HƯỚNG =====================
 case "${1:-up}" in
     up)     cmd_up ;;
     down)   cmd_down ;;
-    clean)  cmd_clean ;;
-    status) cmd_status ;;
-    *) echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"; exit 1 ;;
+    *) echo "Lệnh: up | down"; exit 1 ;;
 esac
