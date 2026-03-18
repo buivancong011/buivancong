@@ -11,8 +11,7 @@ TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
 
-# ==== TỐI ƯU MẠNG VÀ Ổ CỨNG ====
-# Cố định DNS Cloudflare (Đã loại bỏ LOG_OPTS để giữ lại 100% log)
+# DNS Cloudflare
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
 
 # Interface chính (Debian 12 DO thường là eth0)
@@ -112,7 +111,7 @@ if [ "$PUB_1" == "$PUB_2" ] && [ "$IP_ALLA" != "$IP_ALLB" ]; then
 fi
 
 # ==========================================
-# 6. KHỞI CHẠY NODE (ĐÃ MỞ LOG & MỞ PORT UDP CHO MYSTERIUM)
+# 6. KHỞI CHẠY NODE
 # ==========================================
 log "🚀 Start Nodes..."
 
@@ -127,16 +126,11 @@ run_nodes() {
     docker run -d --network $NET --restart always --name tm_$SUFFIX $DNS_OPTS \
       $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
 
-    # Mysterium (Kèm cấu hình UDP tĩnh)
-    local UDP_PORT_START=$(( 10000 + (INDEX - 1) * 20 ))
-    local UDP_PORT_END=$(( UDP_PORT_START + 10 ))
-    
+    # Mysterium (SỬA LỖI: Dùng volume cố định myst-data1 / myst-data2)
     docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
-      -p ${BIND_IP}:4449:4449/tcp \
-      -p ${BIND_IP}:${UDP_PORT_START}-${UDP_PORT_END}:${UDP_PORT_START}-${UDP_PORT_END}/udp \
+      -p ${BIND_IP}:4449:4449 \
       --name myst_$SUFFIX -v myst-data${INDEX}:/var/lib/mysterium-node \
-      --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions \
-      --udp.ports=${UDP_PORT_START}:${UDP_PORT_END} >/dev/null
+      --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
 
     # UrNetwork
     docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
