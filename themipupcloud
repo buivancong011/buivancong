@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Kiểm tra quyền root
+if [ "$EUID" -ne 0 ]; then
+  echo "Lỗi: Vui lòng chạy script bằng quyền root (sudo)."
+  exit 1
+fi
+
+# Yêu cầu nhập 4 IP
+read -p "Nhập 4 địa chỉ IP (cách nhau bằng khoảng trắng): " -a IPS
+
+# Kiểm tra số lượng IP nhập vào
+if [ "${#IPS[@]}" -ne 4 ]; then
+    echo "Lỗi: Bạn phải nhập chính xác 4 địa chỉ IP."
+    exit 1
+fi
+
+CONFIG_FILE="/etc/network/interfaces.d/60-multi-ips"
+INTERFACE="eth0"
+
+echo "----------------------------------------"
+echo "Bắt đầu cấu hình 4 Floating IPs..."
+echo "----------------------------------------"
+
+# Tạo thư mục nếu chưa có và làm sạch file cấu hình cũ
+mkdir -p /etc/network/interfaces.d
+echo "# Cấu hình 4 Alias IPs tự động" > $CONFIG_FILE
+
+# Vòng lặp để tạo cấu hình cho từng IP
+for i in "${!IPS[@]}"; do
+    IP="${IPS[$i]}"
+    ALIAS_NUM=$((i+1))
+    ALIAS_IFACE="${INTERFACE}:${ALIAS_NUM}"
+
+    cat <<EOF >> $CONFIG_FILE
+
+auto $ALIAS_IFACE
+iface $ALIAS_IFACE inet static
+    address $IP
+    netmask 255.255.255.255
+EOF
+    echo " [+] Đã chuẩn bị cấu hình: $IP -> $ALIAS_IFACE"
+done
+
+# Đảm bảo file interfaces chính có load thư mục interfaces.d
+if ! grep -q "source /etc/network/interfaces.d/\*" /etc/network/interfaces; then
+    echo "source /etc/network/interfaces.d/*" >> /etc/network/interfaces
+    echo " [+] Đã thêm lệnh include vào /etc/network/interfaces"
+fi
+
+# Khởi động lại mạng
+echo "Đang áp dụng cấu hình và khởi động lại networking..."
+systemctl restart networking
+sleep 2
+
+# Kiểm tra kết quả
+echo "----------------------------------------"
+echo "Kết quả IP trên hệ thống:"
+ip addr show $INTERFACE | grep inet
+
+echo -e "\nHoàn tất! Nếu bạn thấy cả 4 IP hiển thị ở trên, cấu hình đã thành công."
