@@ -12,9 +12,8 @@ USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
 
 # ==== TỐI ƯU MẠNG VÀ Ổ CỨNG ====
-# Cố định DNS Cloudflare và tắt tuyệt đối hệ thống ghi log của Docker
+# Cố định DNS Cloudflare (Đã loại bỏ LOG_OPTS để giữ lại 100% log)
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-LOG_OPTS="--log-driver none"
 
 # Interface chính (Debian 12 DO thường là eth0)
 IFACE="eth0"
@@ -113,7 +112,7 @@ if [ "$PUB_1" == "$PUB_2" ] && [ "$IP_ALLA" != "$IP_ALLB" ]; then
 fi
 
 # ==========================================
-# 6. KHỞI CHẠY NODE (ÁP DỤNG ZERO LOG)
+# 6. KHỞI CHẠY NODE (ĐÃ MỞ LOG & MỞ PORT UDP CHO MYSTERIUM)
 # ==========================================
 log "🚀 Start Nodes..."
 
@@ -125,26 +124,31 @@ run_nodes() {
     local SUFFIX=$4
     
     # Traffmonetizer
-    docker run -d --network $NET --restart always --name tm_$SUFFIX $DNS_OPTS $LOG_OPTS \
+    docker run -d --network $NET --restart always --name tm_$SUFFIX $DNS_OPTS \
       $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
 
-    # Mysterium 
-    docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS $LOG_OPTS \
-      -p ${BIND_IP}:4449:4449 \
+    # Mysterium (Kèm cấu hình UDP tĩnh)
+    local UDP_PORT_START=$(( 10000 + (INDEX - 1) * 20 ))
+    local UDP_PORT_END=$(( UDP_PORT_START + 10 ))
+    
+    docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
+      -p ${BIND_IP}:4449:4449/tcp \
+      -p ${BIND_IP}:${UDP_PORT_START}-${UDP_PORT_END}:${UDP_PORT_START}-${UDP_PORT_END}/udp \
       --name myst_$SUFFIX -v myst-data${INDEX}:/var/lib/mysterium-node \
-      --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
+      --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions \
+      --udp.ports=${UDP_PORT_START}:${UDP_PORT_END} >/dev/null
 
     # UrNetwork
-    docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS $LOG_OPTS \
+    docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
       --name ur_$SUFFIX -v ur_data_$SUFFIX:/var/lib/vnstat \
       -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
 
     # EarnFM
-    docker run -d --network $NET --restart always $DNS_OPTS $LOG_OPTS \
+    docker run -d --network $NET --restart always $DNS_OPTS \
       -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earn_$SUFFIX $IMG_EARN >/dev/null
 
     # Repocket
-    docker run -d --network $NET --restart always $DNS_OPTS $LOG_OPTS \
+    docker run -d --network $NET --restart always $DNS_OPTS \
       --name rp_$SUFFIX \
       -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 }
