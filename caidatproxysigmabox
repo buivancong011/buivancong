@@ -1013,7 +1013,7 @@ CONFIG_DIR="/opt/gcp_sbox_farm"
 
 # ===================== 2. TỐI ƯU KERNEL & FIX MTU =====================
 setup_system() {
-    echo "⚙️ [INFO] Khởi tạo môi trường Google Cloud (Chế độ An Toàn)..."
+    echo "⚙️ [INFO] Khởi tạo môi trường Google Cloud..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
@@ -1077,7 +1077,7 @@ mk_sbox_config() {
 JSON
 }
 
-# ===================== 3. LỆNH TRIỂN KHAI (CHẾ ĐỘ RÓN RÉN) =====================
+# ===================== 3. LỆNH TRIỂN KHAI (CHẾ ĐỘ MICRO-BATCH) =====================
 cmd_up() {
     setup_system
     echo "📥 [INFO] Kéo tải Images mới nhất..."
@@ -1085,63 +1085,62 @@ cmd_up() {
     docker pull "$IMG_TM" >/dev/null 2>&1 &
     wait
 
-    echo "🐢 [INFO] Bắt đầu bung hệ thống (Chế độ Rón Rén - Chống Spam GCP)..."
+    echo "🚀 [INFO] Bắt đầu bung lụa (Tốc độ Micro-Batching: 5 cụm/lượt)..."
     
     local total=${#PROXIES[@]}
     local i=1
+    local batch_size=5 # Bắn 5 cụm cùng lúc
 
     for spec in "${PROXIES[@]}"; do
         IFS=':' read -r ip port ignore_user ignore_pass <<<"$spec"
         
-        local s_name="csbox${i}"
-        local tm_name="tm${i}"
-        local s_cfg="$CONFIG_DIR/sbox_${i}.json"
+        # Đóng gói 1 cụm vào luồng chạy ngầm
+        (
+            local s_name="csbox${i}"
+            local tm_name="tm${i}"
+            local s_cfg="$CONFIG_DIR/sbox_${i}.json"
+            
+            docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
+            mk_sbox_config "$s_cfg" "$ip" "$port"
+            
+            docker run -d --name "$s_name" --restart=unless-stopped \
+                --cap-add=NET_ADMIN --device /dev/net/tun \
+                --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
+                "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+            
+            sleep 1.0 # Chờ OS tạo TUN ảo cho riêng nhánh này
+            
+            docker run -d --name "$tm_name" --restart=unless-stopped \
+                --network="container:$s_name" --log-driver none \
+                "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
+        ) & # Dấu & đẩy nhánh này chạy nền
         
-        docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
-        mk_sbox_config "$s_cfg" "$ip" "$port"
-        
-        # 1. Khởi động Proxy
-        docker run -d --name "$s_name" --restart=unless-stopped \
-            --cap-add=NET_ADMIN --device /dev/net/tun \
-            --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
-            "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
-        
-        # Thở 1 giây để OS kịp tạo card mạng ảo
-        sleep 1.0 
-
-        # 2. Khởi động TM
-        docker run -d --name "$tm_name" --restart=unless-stopped \
-            --network="container:$s_name" --log-driver none \
-            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
-        
-        # 3. NHỊP ĐỘ AN TOÀN GIỮA CÁC CỤM
-        sleep 1.5
-        
-        # Báo cáo tiến độ
-        if (( i % 20 == 0 )); then
-            echo "✅ Đã dựng an toàn $i / $total Cụm (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
+        # Cứ phóng đủ 5 cụm thì dừng lại kiểm đếm và thở 1 nhịp
+        if (( i % batch_size == 0 || i == total )); then
+            wait # Chờ 5 cụm khởi tạo xong hoàn toàn
+            echo "⚡ Đã lên sóng $i / $total Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
+            sleep 1.5 # Thở 1.5 giây để ổn định CPU và đánh lừa GCP
         fi
         
-        # 🛑 CÚ CHỐT CHỐNG SPAM: Cứ xong 50 cụm, giả vờ ngừng hoạt động 12 giây
-        if (( i % 50 == 0 && i != total )); then
-            echo "🛑 Đang làm mát hệ thống & đánh lừa AI của Google (Nghỉ 12 giây)..."
-            sleep 12
+        # Cứ 100 cụm thì nghỉ giải lao 5 giây
+        if (( i % 100 == 0 && i != total )); then
+            echo "🛑 Đã xong 1 block 100 cụm. Tạm nghỉ 5 giây làm mát hệ thống..."
+            sleep 5
         fi
         
         ((i++))
     done
     
     echo "====================================================="
-    echo "🎉 HOÀN TẤT BÌNH AN! Hệ thống đã lọt qua mắt radar."
+    echo "🔥 HOÀN TẤT THẦN TỐC! 1000 chiến binh đã sẵn sàng!"
     echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
     echo "====================================================="
 }
 
 # ===================== 4. DỌN DẸP & TRẠNG THÁI =====================
 cmd_down() {
-    echo "🧹 [INFO] Đang gỡ bỏ container..."
-    # Khi xóa thì gỡ đa luồng mạnh tay được, vì xóa thì Google không đánh giá là Spam mạng
-    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 10 docker rm -f >/dev/null 2>&1 || true
+    echo "🧹 [INFO] Đang gỡ bỏ container tốc độ cao..."
+    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 15 docker rm -f >/dev/null 2>&1 || true
     echo "✅ Đã dọn sạch chiến trường."
 }
 
