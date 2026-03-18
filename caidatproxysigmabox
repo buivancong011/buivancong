@@ -2,7 +2,6 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách Proxy của bạn vào đây (Cấu trúc: IP:Port:User:Pass)
 PROXIES=(
 "216.26.234.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "45.3.32.11:1081:cao_noH1Bw:3EflPoSalj1GVbp"
@@ -10,62 +9,34 @@ PROXIES=(
 "104.207.42.240:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "104.207.43.115:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "65.111.8.196:1081:cao_noH1Bw:3EflPoSalj1GVbp"
-# ... dán tiếp vào đây ...
+# ... dán tiếp danh sách của bạn vào đây ...
 )
 
-# Token Traffmonetizer
 TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
-# Tên Image Docker
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
 
-CONFIG_DIR="/opt/gcp_farm_v3"
+CONFIG_DIR="/opt/gcp_farm_v4"
 
-# ===================== 2. TỐI ƯU KERNEL =====================
-setup_system() {
-    echo "[INFO] Tối ưu Kernel và Bật IP Forwarding cho GCP..."
-    sudo mkdir -p "$CONFIG_DIR"
-    sudo modprobe tun || true
-
-    # Bắt buộc bật IPv4 Forwarding để mạng ảo Docker không bị chặn
-    sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
-
-    sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
-net.core.default_qdisc=fq
-net.ipv4.tcp_congestion_control=bbr
-fs.file-max=2097152
-net.netfilter.nf_conntrack_max=2097152
-EOF
-    sudo sysctl --system >/dev/null 2>&1 || true
-}
-
-# ===================== 3. LÕI MẠNG SING-BOX (FIXED ROUTING) =====================
+# ===================== 2. LÕI MẠNG ĐỔI SOCKS5 -> HTTP =====================
+# Ở đây ta KHÔNG DÙNG TUN nữa. Chuyển sang HTTP Localhost.
 mk_sbox_config() {
     local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
-  "dns": { 
-    "servers": [
-      { "tag": "dns_proxy", "address": "tcp://8.8.8.8", "detour": "proxy" }
-    ], 
-    "final": "dns_proxy",
-    "strategy": "ipv4_only" 
-  },
-  "inbounds": [{ 
-    "type": "tun", 
-    "tag": "tun-in",
-    "interface_name": "tun0", 
-    "inet4_address": "172.19.0.1/30", 
-    "auto_route": true, 
-    "strict_route": true, 
-    "sniff": true,
-    "mtu": 1400 
-  }],
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "inbound-local",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    }
+  ],
   "outbounds": [
     { 
-      "tag": "proxy", 
+      "tag": "proxy-out", 
       "type": "socks", 
       "server": "${ip}", 
       "server_port": ${port}, 
@@ -73,32 +44,25 @@ mk_sbox_config() {
       "username": "${user}", 
       "password": "${pass}"
     },
-    { "tag": "direct", "type": "direct" },
-    { "tag": "dns-out", "type": "dns" }
+    { "tag": "direct", "type": "direct" }
   ],
-  "route": { 
-    "auto_detect_interface": true, 
-    "rules": [
-      { "protocol": "dns", "outbound": "dns-out" }
-    ], 
-    "final": "proxy" 
-  }
+  "route": { "final": "proxy-out" }
 }
 JSON
 }
 
-# ===================== 4. LỆNH TRIỂN KHAI =====================
+# ===================== 3. LỆNH TRIỂN KHAI =====================
 cmd_up() {
-    setup_system
-    echo "[INFO] Dọn dẹp xác container cũ..."
+    sudo mkdir -p "$CONFIG_DIR"
+    echo "🧹 Dọn dẹp xác container cũ..."
     docker ps -aq --filter name='^(csbox|tm)' | xargs -r docker rm -f >/dev/null 2>&1 || true
 
-    echo "[INFO] Kéo tải Images..."
+    echo "📥 Đang tải Images..."
     docker pull "$IMG_SBOX" >/dev/null 2>&1 &
     docker pull "$IMG_TM" >/dev/null 2>&1 &
     wait
 
-    echo "[INFO] Bắt đầu dựng Cụm Mạng Ảo TUN cho TM..."
+    echo "🚀 Bắt đầu dựng hệ thống Mạng Ảo Nội Bộ (Bypass TUN)..."
     
     local i=1
     for spec in "${PROXIES[@]}"; do
@@ -110,39 +74,37 @@ cmd_up() {
         
         mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
         
-        # 1. Dựng lồng mạng ảo Sing-box
+        # 1. Dựng Sing-box (Chạy siêu nhẹ, không cần NET_ADMIN)
         docker run -d --name "$s_name" --restart=unless-stopped \
-            --cap-add=NET_ADMIN --device /dev/net/tun \
             --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
             "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-        sleep 1.0 
-
-        # 2. Nhét TM vào lồng
+        # 2. Nhét TM vào cùng một không gian mạng với Sing-box
+        # Ép TM dùng cổng HTTP nội bộ do Sing-box vừa tạo ra
         docker run -d --name "$tm_name" --restart=unless-stopped \
             --network="container:$s_name" --log-driver none \
-            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "GCP_TUN_${i}" >/dev/null
+            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "GCP_V4_${i}" \
+            --proxy "http://127.0.0.1:1080" >/dev/null
 
         if (( i % 20 == 0 )); then
-            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
+            echo "⚡ Đã triển khai xong $i / ${#PROXIES[@]} Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
         fi
         
-        sleep 0.5 
         ((i++))
     done
     echo "====================================================="
-    echo "✅ HOÀN TẤT! Kiến trúc TUN Bọc Thép đã được triển khai."
+    echo "✅ HOÀN TẤT V4! Đã luồn lách thành công qua Google Cloud."
     echo "====================================================="
 }
 
-# ===================== 5. DỌN DẸP =====================
+# ===================== 4. DỌN DẸP =====================
 cmd_down() {
     echo "🧹 Đang gỡ bỏ container..."
     docker ps -aq --filter name='^(csbox|tm)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
     echo "✅ Đã gỡ sạch sẽ."
 }
 
-# ===================== ROUTER ĐIỀU HƯỚNG =====================
+# ===================== ROUTER =====================
 case "${1:-up}" in
     up)     cmd_up ;;
     down)   cmd_down ;;
