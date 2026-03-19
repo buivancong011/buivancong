@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
+# Dán danh sách 1000 Proxy vào đây.
+# Cấu trúc bắt buộc: IP:Port:User:Pass
 PROXIES=(
 "216.26.234.16:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 "45.3.32.11:1081:cao_noH1Bw:3EflPoSalj1GVbp"
@@ -1056,8 +1058,9 @@ EOF
     fi
 }
 
+# ===================== 3. HÀM TẠO FILE SING-BOX (CÓ AUTH) =====================
 mk_sbox_config() {
-    local cfg="$1" ip="$2" port="$3"
+    local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
@@ -1070,7 +1073,15 @@ mk_sbox_config() {
     "auto_route": true, "strict_route": false, "mtu": 1400 
   }],
   "outbounds": [
-    { "tag": "proxy", "type": "socks", "server": "${ip}", "server_port": ${port}, "version": "5" },
+    { 
+      "tag": "proxy", 
+      "type": "socks", 
+      "server": "${ip}", 
+      "server_port": ${port}, 
+      "version": "5",
+      "username": "${user}",
+      "password": "${pass}"
+    },
     { "tag": "direct", "type": "direct" }
   ],
   "route": { "auto_detect_interface": true, "rules": [{ "port": 53, "outbound": "direct" }], "final": "proxy" }
@@ -1078,7 +1089,7 @@ mk_sbox_config() {
 JSON
 }
 
-# ===================== 3. LỆNH TRIỂN KHAI (CHẾ ĐỘ MICRO-BATCH) =====================
+# ===================== 4. LỆNH TRIỂN KHAI (CHẾ ĐỘ MICRO-BATCH) =====================
 cmd_up() {
     setup_system
     echo "📥 [INFO] Kéo tải Images mới nhất..."
@@ -1090,40 +1101,40 @@ cmd_up() {
     
     local total=${#PROXIES[@]}
     local i=1
-    local batch_size=5 # Bắn 5 cụm cùng lúc
+    local batch_size=5
 
     for spec in "${PROXIES[@]}"; do
-        IFS=':' read -r ip port ignore_user ignore_pass <<<"$spec"
+        # Nâng cấp: Đọc trọn vẹn cả User và Pass từ mảng
+        IFS=':' read -r ip port user pass <<<"$spec"
         
-        # Đóng gói 1 cụm vào luồng chạy ngầm
         (
             local s_name="csbox${i}"
             local tm_name="tm${i}"
             local s_cfg="$CONFIG_DIR/sbox_${i}.json"
             
             docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
-            mk_sbox_config "$s_cfg" "$ip" "$port"
+            
+            # Đẩy User/Pass vào cấu hình
+            mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
             
             docker run -d --name "$s_name" --restart=unless-stopped \
                 --cap-add=NET_ADMIN --device /dev/net/tun \
                 --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
                 "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
             
-            sleep 1.0 # Chờ OS tạo TUN ảo cho riêng nhánh này
+            sleep 1.0 
             
             docker run -d --name "$tm_name" --restart=unless-stopped \
                 --network="container:$s_name" --log-driver none \
                 "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
-        ) & # Dấu & đẩy nhánh này chạy nền
+        ) & 
         
-        # Cứ phóng đủ 5 cụm thì dừng lại kiểm đếm và thở 1 nhịp
         if (( i % batch_size == 0 || i == total )); then
-            wait # Chờ 5 cụm khởi tạo xong hoàn toàn
+            wait 
             echo "⚡ Đã lên sóng $i / $total Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
-            sleep 1.5 # Thở 1.5 giây để ổn định CPU và đánh lừa GCP
+            sleep 1.5 
         fi
         
-        # Cứ 100 cụm thì nghỉ giải lao 5 giây
         if (( i % 100 == 0 && i != total )); then
             echo "🛑 Đã xong 1 block 100 cụm. Tạm nghỉ 5 giây làm mát hệ thống..."
             sleep 5
@@ -1133,12 +1144,12 @@ cmd_up() {
     done
     
     echo "====================================================="
-    echo "🔥 HOÀN TẤT THẦN TỐC! 1000 chiến binh đã sẵn sàng!"
+    echo "🔥 HOÀN TẤT THẦN TỐC! Đã nhúng xác thực Auth vào hệ thống!"
     echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
     echo "====================================================="
 }
 
-# ===================== 4. DỌN DẸP & TRẠNG THÁI =====================
+# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
 cmd_down() {
     echo "🧹 [INFO] Đang gỡ bỏ container tốc độ cao..."
     docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 15 docker rm -f >/dev/null 2>&1 || true
