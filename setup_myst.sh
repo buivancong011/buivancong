@@ -12,6 +12,6 @@ docker exec myst_sub myst config set payments.zero-stake-unsettled-amount 1 || t
 sleep 2
 
 echo "[INFO] Restart myst1 và myst2 ..."
-docker restart myst1 myst2
+docker restart myst_main myst_sub
 
 echo "[DONE] Setup Myst hoàn tất ✅"
