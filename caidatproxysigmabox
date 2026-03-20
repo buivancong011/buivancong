@@ -1011,13 +1011,12 @@ IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
 CONFIG_DIR="/opt/gcp_sbox_farm"
 
-# ===================== 2. TỐI ƯU KERNEL (CHỐNG DROP + MỞ 2 TRIỆU FILE) =====================
+# ===================== 2. TỐI ƯU KERNEL (TRỢ TIM + MTU) =====================
 setup_system() {
-    echo "⚙️ [INFO] Thiết lập vũ khí hạng nặng chống ngắt kết nối..."
+    echo "⚙️ [INFO] Thiết lập vũ khí hạng nặng (Không dùng TUN)..."
     sudo mkdir -p "$CONFIG_DIR"
-    sudo modprobe tun || true
 
-    # Bơm thuốc trợ tim Keep-Alive 5 phút để giữ mạng
+    # Giữ nguyên thuốc trợ tim 5 phút chống rớt mạng
     sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
@@ -1031,33 +1030,36 @@ EOF
     sudo sysctl --system >/dev/null 2>&1 || true
 }
 
-# ===================== 3. SING-BOX (MẠNG ẢO TUN CHUẨN) =====================
+# ===================== 3. SING-BOX (MỞ CỔNG LOCALHOST) =====================
 mk_sbox_config() {
     local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
-  "dns": { 
-    "servers": [{ "tag": "dns_direct", "address": "tcp://8.8.8.8", "detour": "direct" }], 
-    "strategy": "ipv4_only" 
-  },
-  "inbounds": [{ 
-    "type": "tun", "interface_name": "tun0", "inet4_address": ["172.19.0.1/30"], 
-    "auto_route": true, "strict_route": false, "mtu": 1400 
-  }],
+  "inbounds": [
+    {
+      "type": "mixed",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    }
+  ],
   "outbounds": [
     { 
-      "tag": "proxy", "type": "socks", "server": "${ip}", "server_port": ${port}, 
-      "version": "5", "username": "${user}", "password": "${pass}"
-    },
-    { "tag": "direct", "type": "direct" }
+      "tag": "proxy", 
+      "type": "socks", 
+      "server": "${ip}", 
+      "server_port": ${port}, 
+      "version": "5",
+      "username": "${user}",
+      "password": "${pass}"
+    }
   ],
-  "route": { "auto_detect_interface": true, "rules": [{ "port": 53, "outbound": "direct" }], "final": "proxy" }
+  "route": { "final": "proxy" }
 }
 JSON
 }
 
-# ===================== 4. LỆNH TRIỂN KHAI (ĐA LUỒNG) =====================
+# ===================== 4. LỆNH TRIỂN KHAI =====================
 cmd_up() {
     setup_system
     echo "📥 [INFO] Kéo Images..."
@@ -1065,7 +1067,7 @@ cmd_up() {
     docker pull "$IMG_TM" >/dev/null 2>&1 &
     wait
 
-    echo "🚀 [INFO] Bung hệ thống Mạng Ảo TUN..."
+    echo "🚀 [INFO] Đang bung hệ thống V10 (By-pass TUN)..."
     
     local total=${#PROXIES[@]}
     local i=1
@@ -1082,16 +1084,18 @@ cmd_up() {
             docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
             mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
             
+            # Sing-box giờ rất nhẹ, không cần quyền NET_ADMIN hay /dev/net/tun nữa
             docker run -d --name "$s_name" --restart=unless-stopped \
-                --cap-add=NET_ADMIN --device /dev/net/tun \
                 --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
                 "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
             
             sleep 1.0 
             
+            # App TM bị ép phải chui qua cổng 1080 của Sing-box
             docker run -d --name "$tm_name" --restart=unless-stopped \
                 --network="container:$s_name" --log-driver none \
-                "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
+                "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" \
+                --proxy "socks5://127.0.0.1:1080" >/dev/null
         ) & 
         
         if (( i % batch_size == 0 || i == total )); then
@@ -1101,14 +1105,14 @@ cmd_up() {
         fi
         
         if (( i % 100 == 0 && i != total )); then
-            echo "🛑 Nghỉ giải lao 5s chống khóa tài khoản..."
+            echo "🛑 Nghỉ giải lao 5s..."
             sleep 5
         fi
         ((i++))
     done
     
     echo "====================================================="
-    echo "🔥 HOÀN TẤT! HỆ THỐNG ĐÃ ĐƯỢC MỞ KHÓA TOÀN BỘ!"
+    echo "🔥 HOÀN TẤT V10! ÁC MỘNG GOOGLE CLOUD ĐÃ KẾT THÚC!"
     echo "====================================================="
 }
 
