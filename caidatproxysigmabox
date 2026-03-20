@@ -1005,19 +1005,18 @@ PROXIES=(
 "104.207.42.186:1081:cao_noH1Bw:3EflPoSalj1GVbp"
 )
 
-TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
+TM_TOKEN="0l+0r9mje+tN4NUPfmXkTcnnVAf/7q6iHXV9JSqotkQ="
 
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
 CONFIG_DIR="/opt/gcp_sbox_farm"
 
-# ===================== 2. TỐI ƯU KERNEL (TRỢ TIM + MTU) =====================
+# ===================== 2. TỐI ƯU KERNEL =====================
 setup_system() {
-    echo "⚙️ [INFO] Thiết lập môi trường TUN Tuyệt Đối..."
+    echo "⚙️ [INFO] Thiết lập môi trường TUN Thông Minh..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
-    # Liều thuốc trợ tim 5 phút chống rớt mạng của Google Cloud
     sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
@@ -1030,7 +1029,7 @@ EOF
     sudo sysctl --system >/dev/null 2>&1 || true
 }
 
-# ===================== 3. SING-BOX (TUN VỚI BẢO MẬT DNS) =====================
+# ===================== 3. SING-BOX (TUN + TÁCH LUỒNG DNS) =====================
 mk_sbox_config() {
     local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
@@ -1038,11 +1037,7 @@ mk_sbox_config() {
   "log": { "disabled": true },
   "dns": {
     "servers": [
-      {
-        "tag": "dns_proxy",
-        "address": "tcp://8.8.8.8",
-        "detour": "proxy" 
-      }
+      { "tag": "dns_direct", "address": "tcp://8.8.8.8", "detour": "direct" }
     ],
     "strategy": "ipv4_only"
   },
@@ -1050,9 +1045,10 @@ mk_sbox_config() {
     {
       "type": "tun",
       "interface_name": "tun0",
-      "inet4_address": ["172.19.0.1/30"],
+      "inet4_address": "172.19.0.1/30",
       "auto_route": true,
-      "strict_route": true, 
+      "strict_route": false, 
+      "sniff": true,
       "mtu": 1400
     }
   ],
@@ -1066,13 +1062,13 @@ mk_sbox_config() {
       "username": "${user}",
       "password": "${pass}"
     },
-    { "tag": "direct", "type": "direct" },
-    { "tag": "dns-out", "type": "dns" }
+    { "tag": "direct", "type": "direct" }
   ],
   "route": {
     "auto_detect_interface": true,
     "rules": [
-      { "port": 53, "outbound": "dns-out" }
+      { "protocol": "dns", "outbound": "direct" },
+      { "port": 53, "outbound": "direct" }
     ],
     "final": "proxy"
   }
@@ -1080,7 +1076,7 @@ mk_sbox_config() {
 JSON
 }
 
-# ===================== 4. LỆNH TRIỂN KHAI ĐA LUỒNG =====================
+# ===================== 4. LỆNH TRIỂN KHAI =====================
 cmd_up() {
     setup_system
     echo "📥 [INFO] Kéo tải Images..."
@@ -1088,7 +1084,7 @@ cmd_up() {
     docker pull "$IMG_TM" >/dev/null 2>&1 &
     wait
 
-    echo "🚀 [INFO] Bung hệ thống TUN Tuyệt Đối..."
+    echo "🚀 [INFO] Bung hệ thống TUN Thông Minh (Sẽ không còn mù mạng)..."
     
     local total=${#PROXIES[@]}
     local i=1
@@ -1105,15 +1101,14 @@ cmd_up() {
             docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
             mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
             
-            # Bật mạng TUN lên trước, cấp quyền NET_ADMIN tối cao
+            # Cấp quyền --privileged để Sing-box thao túng mượt mà bảng định tuyến TUN
             docker run -d --name "$s_name" --restart=unless-stopped \
-                --cap-add=NET_ADMIN --device /dev/net/tun \
+                --privileged --device /dev/net/tun \
                 --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
                 "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
             
             sleep 1.0 
             
-            # Nhốt TM vào chung mạng với Sing-box, bị TUN nuốt trọn 100% traffic
             docker run -d --name "$tm_name" --restart=unless-stopped \
                 --network="container:$s_name" --log-driver none \
                 "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_gcp_${i}" >/dev/null
@@ -1121,19 +1116,14 @@ cmd_up() {
         
         if (( i % batch_size == 0 || i == total )); then
             wait 
-            echo "⚡ Đã lên sóng $i / $total Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
+            echo "⚡ Lên sóng $i / $total Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
             sleep 1.5
-        fi
-        
-        if (( i % 100 == 0 && i != total )); then
-            echo "🛑 Nghỉ 5s làm mát hệ thống..."
-            sleep 5
         fi
         ((i++))
     done
     
     echo "====================================================="
-    echo "🔥 HOÀN TẤT! 100% MẠNG ĐÃ ĐƯỢC CÁCH LY BỞI TUN."
+    echo "🔥 HOÀN TẤT V13! HÃY MỞ DASHBOARD VÀ TẬN HƯỞNG!"
     echo "====================================================="
 }
 
