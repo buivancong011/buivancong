@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Khai báo SOCKS5 trần trụi (Chỉ IP:PORT)
+# Dán danh sách SOCKS5 không Pass (Cấu trúc chỉ có IP:Port)
 PROXIES=(
 "65.111.9.193:1081"
 "65.111.3.88:1081"
@@ -170,150 +170,165 @@ PROXIES=(
 "65.111.12.243:1081"
 "104.167.25.152:1081"
 "216.26.234.248:1081"
-
-
 )
 
+# Token Traffmonetizer
 TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
+# Tên Image Docker
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
-CONFIG_DIR="/opt/do_socks_nopass_farm"
 
-# ===================== 2. TỰ ĐỘNG HÓA HẠ TẦNG DIGITALOCEAN =====================
+# Thư mục lưu trữ tĩnh trên VPS
+CONFIG_DIR="/opt/upcloud_sbox_farm"
+
+# ===================== 2. TỐI ƯU KERNEL (DÀNH CHO 4 CORE) =====================
 setup_system() {
-    echo "⚙️ [INFO] Đang thiết lập hạ tầng mạng tự động cho DigitalOcean..."
+    echo "[INFO] Tối ưu hóa Kernel cho cấu hình 4 Core / 48GB RAM..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
-    # Tự động cài resolvconf không hiện bảng hỏi
-    export DEBIAN_FRONTEND=noninteractive
-    sudo apt-get update -qq >/dev/null 2>&1 || true
-    sudo apt-get install -y -qq resolvconf >/dev/null 2>&1 || true
-
-    # Đóng đinh IP Forwarding & Thuốc trợ tim TCP
-    sudo bash -c 'cat > /etc/sysctl.d/99-do-proxy-farm.conf' <<EOF
-net.ipv4.ip_forward=1
+    # Mở giới hạn siêu bạo lực cho kết nối mạng
+    sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 fs.file-max=2097152
 net.netfilter.nf_conntrack_max=2097152
-net.ipv4.tcp_keepalive_time=300
-net.ipv4.tcp_keepalive_intvl=60
-net.ipv4.tcp_keepalive_probes=5
+net.ipv4.neigh.default.gc_thresh1=4096
+net.ipv4.neigh.default.gc_thresh2=8192
+net.ipv4.neigh.default.gc_thresh3=16384
 EOF
     sudo sysctl --system >/dev/null 2>&1 || true
+
+    # Bơm giới hạn file cho Docker Daemon để không bị ngộp
+    if [[ ! -f /etc/systemd/system/docker.service.d/override.conf ]]; then
+        sudo mkdir -p /etc/systemd/system/docker.service.d/
+        sudo tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
+[Service]
+LimitNOFILE=2097152
+LimitNPROC=2097152
+LimitCORE=infinity
+EOF
+        sudo systemctl daemon-reload && sudo systemctl restart docker || true
+        sleep 3
+    fi
 }
 
-# ===================== 3. SING-BOX (TUN SOCKS5 KHÔNG PASS) =====================
+# ===================== 3. HÀM TẠO FILE MẠNG (ĐÃ BỎ USER/PASS) =====================
 mk_sbox_config() {
     local cfg="$1" ip="$2" port="$3"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
-  "dns": {
-    "servers": [
-      { "tag": "dns_cloudflare", "address": "tcp://1.1.1.1", "detour": "direct" }
-    ],
-    "strategy": "ipv4_only"
+  "dns": { 
+    "servers": [{ "tag": "dns_direct", "address": "udp://8.8.8.8", "detour": "direct" }], 
+    "strategy": "ipv4_only" 
   },
-  "inbounds": [
-    {
-      "type": "tun", 
-      "interface_name": "tun0", 
-      "inet4_address": "172.19.0.1/30",
-      "auto_route": true, 
-      "strict_route": false, 
-      "sniff": true, 
-      "mtu": 1500 
-    }
-  ],
+  "inbounds": [{ 
+    "type": "tun", "interface_name": "tun0", "inet4_address": ["172.19.0.1/30"], 
+    "auto_route": true, "strict_route": false, "mtu": 1400 
+  }],
   "outbounds": [
-    {
+    { 
       "tag": "proxy", 
       "type": "socks", 
       "server": "${ip}", 
-      "server_port": ${port},
+      "server_port": ${port}, 
       "version": "5"
     },
     { "tag": "direct", "type": "direct" }
   ],
-  "route": {
-    "auto_detect_interface": true,
-    "rules": [
-      { "port": 53, "outbound": "direct" },
-      { "protocol": "dns", "outbound": "direct" }
-    ],
-    "final": "proxy"
-  }
+  "route": { "auto_detect_interface": true, "rules": [{ "port": 53, "outbound": "direct" }], "final": "proxy" }
 }
 JSON
 }
 
-# ===================== 4. LỆNH TRIỂN KHAI =====================
+# ===================== 4. LỆNH TRIỂN KHAI (UP) =====================
 cmd_up() {
     setup_system
-    echo "📥 [INFO] Kéo Images..."
+    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm)..."
     docker pull "$IMG_SBOX" >/dev/null 2>&1 &
     docker pull "$IMG_TM" >/dev/null 2>&1 &
     wait
 
-    echo "🚀 [INFO] Bắt đầu bung lụa 1000 Node SOCKS5 No-Pass..."
+    echo "[INFO] Dựng các cụm (Mỗi cụm: 1 Proxy + 1 TM)..."
+    echo "🐢 Nhịp độ: Chậm rãi, an toàn cho 4 CPU Core..."
     
-    local total=${#PROXIES[@]}
     local i=1
-    local batch_size=5 
-
     for spec in "${PROXIES[@]}"; do
-        # Tách IP và PORT siêu tốc
+        # Tách IP và PORT cực kỳ gọn gàng
         local ip="${spec%:*}"
         local port="${spec#*:}"
         
-        (
-            local s_name="csbox${i}"
-            local tm_name="tm${i}"
-            local s_cfg="$CONFIG_DIR/sbox_${i}.json"
-            
-            docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
-            mk_sbox_config "$s_cfg" "$ip" "$port"
-            
-            # Bật hầm TUN bằng Sing-box
-            docker run -d --name "$s_name" --restart=unless-stopped \
-                --privileged --device /dev/net/tun \
-                --log-driver none \
-                -v "$s_cfg":/etc/sing-box/config.json:ro \
-                "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
-            
-            sleep 1.0 
-            
-            # Bơm Traffmonetizer vào hầm
-            docker run -d --name "$tm_name" --restart=unless-stopped \
-                --network="container:$s_name" \
-                --log-driver none \
-                "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_do_socks_${i}" >/dev/null
-        ) & 
+        local s_name="csbox${i}"
+        local tm_name="tm${i}"
         
-        if (( i % batch_size == 0 || i == total )); then
-            wait 
-            echo "⚡ Lên sóng $i / $total Cụm (Load: $(uptime | awk -F'load average:' '{ print $2 }') )"
-            sleep 2.0 
+        # Dọn xác container cũ sạch sẽ
+        docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
+        
+        # --- [1] Proxy Sing-box ---
+        local s_cfg="$CONFIG_DIR/sbox_${i}.json"
+        mk_sbox_config "$s_cfg" "$ip" "$port"
+        
+        docker run -d --name "$s_name" --restart=unless-stopped \
+            --cap-add=NET_ADMIN --device /dev/net/tun \
+            --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
+            "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+
+        # 🛑 CHỜ 1.0 GIÂY - Cho 4 CPU đủ thời gian ráp nối mạng TUN
+        sleep 1.0 
+
+        # --- [2] Traffmonetizer ---
+        docker run -d --name "$tm_name" --restart=unless-stopped \
+            --network="container:$s_name" --log-driver none \
+            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_farm_${i}" >/dev/null
+
+        # In tiến trình mỗi 20 cụm
+        if (( i % 20 == 0 )); then
+            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
         fi
+        
+        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU trước khi lặp lại
+        sleep 0.5 
         ((i++))
     done
     echo "====================================================="
-    echo "🔥 HOÀN TẤT! HỆ THỐNG SOCKS5 SIÊU TỐC ĐÃ KHỞI CHẠY!"
+    echo "✅ HOÀN TẤT TRIỂN KHAI LÊN MÁY CHỦ!"
+    echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
     echo "====================================================="
 }
 
-# ===================== 5. DỌN DẸP =====================
+# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
 cmd_down() {
-    echo "🧹 [INFO] Đang dọn sạch toàn bộ..."
-    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 15 docker rm -f >/dev/null 2>&1 || true
-    echo "✅ Máy chủ đã sạch bóng."
+    echo "🧹 Đang gỡ bỏ container (Chạy đa luồng an toàn cho 4 Core)..."
+    # Giảm từ -P 16 xuống -P 8 để tránh treo máy lúc xóa
+    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
+    echo "✅ Đã gỡ sạch sẽ container."
 }
 
+cmd_clean() {
+    cmd_down
+    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
+    sudo rm -rf "$CONFIG_DIR"/*.json || true
+    docker system prune -f >/dev/null 2>&1
+    echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
+}
+
+cmd_status() {
+    echo "📊 THỐNG KÊ HỆ THỐNG CỦA BẠN:"
+    echo "-----------------------------------"
+    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
+    echo "🐝 Traffmonetizer : $(docker ps | grep tm | wc -l) / ${#PROXIES[@]}"
+    echo "-----------------------------------"
+    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
+    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
+}
+
+# ===================== ROUTER ĐIỀU HƯỚNG =====================
 case "${1:-up}" in
     up)     cmd_up ;;
     down)   cmd_down ;;
-    *) echo "Chỉ hỗ trợ: up | down"; exit 1 ;;
+    clean)  cmd_clean ;;
+    status) cmd_status ;;
+    *) echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"; exit 1 ;;
 esac
