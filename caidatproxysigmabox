@@ -15,7 +15,7 @@ PROXIES=(
 "209.50.170.30:1081"
 "104.207.32.236:1081"
 "65.111.14.174:1081"
-"104.207.41.56:1081"
+"104.207.41.56:1081"`
 "216.26.233.35:1081"
 "65.111.10.15:1081"
 "45.3.35.67:1081"
@@ -185,10 +185,7 @@ setup_system() {
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
-    # Tự động cài resolvconf không hiện bảng hỏi
-    export DEBIAN_FRONTEND=noninteractive
-    sudo apt-get update -qq >/dev/null 2>&1 || true
-    sudo apt-get install -y -qq resolvconf >/dev/null 2>&1 || true
+
 
     # Đóng đinh IP Forwarding & Thuốc trợ tim TCP
     sudo bash -c 'cat > /etc/sysctl.d/99-do-proxy-farm.conf' <<EOF
