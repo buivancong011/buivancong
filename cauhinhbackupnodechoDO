@@ -91,27 +91,11 @@ echo "--- BẮT ĐẦU BACKUP $(date) ---"
 backup_node 1
 backup_node 2
 
-# --- 3. DỌN DẸP FILE CŨ ---
-echo "🧹 Đang dọn dẹp backup cũ hơn $RETENTION_DAYS..."
-# Xóa file cũ
-rclone delete "$RCLONE_REMOTE" --min-age "$RETENTION_DAYS" --include "*.tar" >/dev/null 2>&1
-# Xóa thư mục rỗng (nếu có)
-rclone rmdirs "$RCLONE_REMOTE" --leave-root >/dev/null 2>&1
-
 echo "🎉 HOÀN TẤT!"
 EOF
 
 # Cấp quyền thực thi
 chmod +x /root/auto_backup.sh
-
-# 4. Tự động thêm vào Cronjob (Chạy 3:00 sáng hàng ngày)
-# Kiểm tra xem đã có lịch chưa, nếu chưa thì thêm vào
-if ! crontab -l 2>/dev/null | grep -q "/root/auto_backup.sh"; then
-    (crontab -l 2>/dev/null; echo "0 3 * * * /root/auto_backup.sh >> /var/log/myst_backup.log 2>&1") | crontab -
-    echo "⏰ Đã cài đặt lịch: Backup tự chạy vào 03:00 sáng hàng ngày."
-else
-    echo "✅ Lịch backup đã tồn tại."
-fi
 
 # 5. Chạy thử ngay lập tức
 echo "----------------------------------------------------------------"
