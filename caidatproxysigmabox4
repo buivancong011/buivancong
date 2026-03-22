@@ -1,304 +1,335 @@
 #!/bin/bash
 set -Eeuo pipefail
 
-# ===================== CONFIG =====================
-# Danh sách SOCKS5 dạng "ip:1339:user:pass" (đã chuyển qua 1339)
+# ===================== 1. CẤU HÌNH CỦA BẠN =====================
+# Dán danh sách SOCKS5 không Pass (Cấu trúc chỉ có IP:Port)
 PROXIES=(
-"156.239.157.81:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.223:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.206:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.44:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.250:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.204:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.40:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.242:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.43:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.71:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.196:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.178:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.90:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.96:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.212:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.157.37:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.239.156.133:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.120:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.154:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.143:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.141:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.129:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.60:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.231:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.251:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.209:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.85:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.56:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.121:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.213:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.117:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.99:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.63:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.0:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.13:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.35:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.59:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.68:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.142:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.160:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.187:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.77:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.222:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.12:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.215:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.42:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.75:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.203:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.152:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
-"156.242.51.199:1339:vinh_son_noWtsC:lYMKn8PQeXnRI3m"
+"216.26.236.203:1081"
+"45.3.37.3:1081"
+"45.3.39.15:1081"
+"216.26.231.81:1081"
+"65.111.15.138:1081"
+"104.207.45.236:1081"
+"104.207.44.56:1081"
+"209.50.162.192:1081"
+"104.207.40.23:1081"
+"104.207.35.246:1081"
+"65.111.8.74:1081"
+"65.111.13.155:1081"
+"65.111.9.119:1081"
+"209.50.166.118:1081"
+"104.207.46.91:1081"
+"65.111.5.241:1081"
+"209.50.166.163:1081"
+"216.26.231.194:1081"
+"45.3.37.212:1081"
+"45.3.33.170:1081"
+"45.3.36.175:1081"
+"45.3.34.211:1081"
+"104.207.43.194:1081"
+"209.50.170.188:1081"
+"104.207.46.97:1081"
+"65.111.2.215:1081"
+"193.56.28.40:1081"
+"209.50.173.108:1081"
+"104.207.42.84:1081"
+"209.50.174.187:1081"
+"104.207.39.115:1081"
+"65.111.8.138:1081"
+"104.207.47.187:1081"
+"209.50.161.112:1081"
+"104.207.42.178:1081"
+"65.111.8.89:1081"
+"65.111.13.254:1081"
+"65.111.4.32:1081"
+"45.3.50.224:1081"
+"209.50.166.174:1081"
+"209.50.173.227:1081"
+"45.3.34.5:1081"
+"104.207.37.8:1081"
+"65.111.9.252:1081"
+"45.3.50.119:1081"
+"65.111.9.103:1081"
+"209.50.161.32:1081"
+"65.111.14.223:1081"
+"209.50.167.168:1081"
+"65.111.1.96:1081"
+"104.207.47.1:1081"
+"209.50.166.63:1081"
+"209.50.170.195:1081"
+"45.3.49.32:1081"
+"45.3.51.200:1081"
+"45.3.49.188:1081"
+"45.3.48.136:1081"
+"65.111.7.148:1081"
+"104.207.40.9:1081"
+"65.111.6.198:1081"
+"209.50.166.7:1081"
+"104.207.35.196:1081"
+"65.111.10.93:1081"
+"104.207.32.143:1081"
+"209.50.165.87:1081"
+"104.207.39.247:1081"
+"209.50.165.60:1081"
+"65.111.5.233:1081"
+"193.56.28.127:1081"
+"65.111.8.126:1081"
+"65.111.2.199:1081"
+"216.26.232.216:1081"
+"209.50.160.205:1081"
+"45.3.51.36:1081"
+"216.26.234.195:1081"
+"65.111.10.76:1081"
+"65.111.11.235:1081"
+"65.111.15.74:1081"
+"216.26.237.152:1081"
+"65.111.2.105:1081"
+"65.111.6.74:1081"
+"65.111.4.99:1081"
+"65.111.3.102:1081"
+"65.111.11.18:1081"
+"104.207.34.21:1081"
+"216.26.232.76:1081"
+"65.111.8.224:1081"
+"209.50.172.66:1081"
+"65.111.2.193:1081"
+"104.207.44.227:1081"
+"65.111.9.13:1081"
+"65.111.8.179:1081"
+"45.3.36.44:1081"
+"65.111.10.7:1081"
+"65.111.8.222:1081"
+"104.207.36.123:1081"
+"209.50.165.227:1081"
+"216.26.234.135:1081"
+"65.111.2.251:1081"
+"216.26.232.27:1081"
+"65.111.6.161:1081"
+"216.26.224.151:1081"
+"65.111.6.182:1081"
+"104.207.44.71:1081"
+"209.50.161.1:1081"
+"65.111.6.134:1081"
+"216.26.237.136:1081"
+"45.3.37.246:1081"
+"65.111.8.174:1081"
+"216.26.232.248:1081"
+"65.111.11.39:1081"
+"216.26.234.68:1081"
+"216.26.227.159:1081"
+"209.50.167.210:1081"
+"216.26.236.178:1081"
+"209.50.173.180:1081"
+"209.50.172.6:1081"
+"209.50.170.72:1081"
+"65.111.4.201:1081"
+"216.26.228.216:1081"
+"65.111.11.34:1081"
+"45.3.50.148:1081"
+"65.111.7.236:1081"
+"216.26.233.89:1081"
+"65.111.5.127:1081"
+"209.50.163.56:1081"
+"216.26.234.216:1081"
+"65.111.15.80:1081"
+"216.26.231.16:1081"
+"209.50.171.48:1081"
+"216.26.224.61:1081"
+"104.207.44.55:1081"
+"65.111.8.45:1081"
+"104.207.44.246:1081"
+"45.3.37.35:1081"
+"216.26.231.161:1081"
+"209.50.165.237:1081"
+"216.26.229.224:1081"
+"209.50.175.124:1081"
+"104.207.44.107:1081"
+"65.111.1.75:1081"
+"45.3.33.81:1081"
+"45.3.38.57:1081"
+"216.26.235.164:1081"
+"65.111.8.201:1081"
+"216.26.232.214:1081"
+"104.207.45.255:1081"
+"216.26.231.118:1081"
+"209.50.160.195:1081"
+"209.50.166.131:1081"
+"209.50.165.232:1081"
+"104.207.47.117:1081"
+"209.50.169.155:1081"
+"65.111.12.181:1081"
+"45.3.39.56:1081"
+"104.207.40.127:1081"
+"65.111.4.220:1081"
+"104.207.43.97:1081"
+"104.207.36.227:1081"
+"45.3.37.219:1081"
+"104.207.41.202:1081"
+"216.26.235.231:1081"
+"45.3.33.122:1081"
+"216.26.236.119:1081"
+"209.50.170.215:1081"
+"209.50.170.164:1081"
 
-
-
-
-
-
-# ... có thể dán thêm toàn bộ list của bạn ở đây ...
 )
 
-# Ảnh container
-IMG_SBOX="ghcr.io/sagernet/sing-box:latest"
+# Token Traffmonetizer
+TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
-# Tên base cho container theo tuyến
-SBOX_BASE="csbox"
+# Tên Image Docker
+IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
+IMG_TM="traffmonetizer/cli_v2:latest"
 
-# Tối ưu TUN
-MTU="1400"
-ENABLE_BBR=true
-ENABLE_TFO=true
+# Thư mục lưu trữ tĩnh trên VPS
+CONFIG_DIR="/opt/upcloud_sbox_farm"
 
-# DNS mặc định cho container sbox (không DoH, không qua SOCKS)
-# Lưu ý: khi app chạy --network=container:sboxN thì app sẽ dùng DNS của sboxN này.
-RESOLV_CONTENT=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\noptions ndots:0'
+# ===================== 2. TỐI ƯU KERNEL (DÀNH CHO 4 CORE) =====================
+setup_system() {
+    echo "[INFO] Tối ưu hóa Kernel cho cấu hình 4 Core / 48GB RAM..."
+    sudo mkdir -p "$CONFIG_DIR"
+    sudo modprobe tun || true
 
-# ===================== PRECHECK =====================
-command -v docker >/dev/null 2>&1 || { echo "[ERR] Cần Docker."; exit 1; }
-if [[ ! -e /dev/net/tun ]]; then
-  echo "[INFO] Tạo /dev/net/tun..."
-  sudo mkdir -p /dev/net || true
-  sudo mknod /dev/net/tun c 10 200 || true
-  sudo chmod 666 /dev/net/tun || true
-fi
+    # Mở giới hạn siêu bạo lực cho kết nối mạng
+    sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+fs.file-max=2097152
+net.netfilter.nf_conntrack_max=2097152
+net.ipv4.neigh.default.gc_thresh1=4096
+net.ipv4.neigh.default.gc_thresh2=8192
+net.ipv4.neigh.default.gc_thresh3=16384
+EOF
+    sudo sysctl --system >/dev/null 2>&1 || true
 
-# ===================== FUNCS =====================
+    # Bơm giới hạn file cho Docker Daemon để không bị ngộp
+    if [[ ! -f /etc/systemd/system/docker.service.d/override.conf ]]; then
+        sudo mkdir -p /etc/systemd/system/docker.service.d/
+        sudo tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
+[Service]
+LimitNOFILE=2097152
+LimitNPROC=2097152
+LimitCORE=infinity
+EOF
+        sudo systemctl daemon-reload && sudo systemctl restart docker || true
+        sleep 3
+    fi
+}
+
+# ===================== 3. HÀM TẠO FILE MẠNG (ĐÃ BỎ USER/PASS) =====================
 mk_sbox_config() {
-  # $1: file, $2: ip, $3: port, $4: user, $5: pass
-  local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
-  cat > "$cfg" <<JSON
+    local cfg="$1" ip="$2" port="$3"
+    cat > "$cfg" <<JSON
 {
-  "log": { "level": "warn" },
-
-  "dns": {
-    "servers": [
-      { "tag": "dns1", "address": "udp://8.8.8.8", "strategy": "ipv4_only" },
-      { "tag": "dns2", "address": "udp://1.1.1.1", "strategy": "ipv4_only" }
-    ],
-    "strategy": "ipv4_only"
+  "log": { "disabled": true },
+  "dns": { 
+    "servers": [{ "tag": "dns_direct", "address": "udp://8.8.8.8", "detour": "direct" }], 
+    "strategy": "ipv4_only" 
   },
-
-  "inbounds": [
-    {
-      "type": "tun",
-      "interface_name": "tun0",
-      "address": ["172.19.0.1/30"],
-      "auto_route": true,
-      "strict_route": false,
-      "sniff": true,
-      "mtu": ${MTU}
-    }
-  ],
-
+  "inbounds": [{ 
+    "type": "tun", "interface_name": "tun0", "inet4_address": ["172.19.0.1/30"], 
+    "auto_route": true, "strict_route": false, "mtu": 1400 
+  }],
   "outbounds": [
-    {
-      "tag": "proxy",
-      "type": "socks",
-      "server": "${ip}",
-      "server_port": ${port},
-      "version": "5",
-      "username": "${user}",
-      "password": "${pass}"
+    { 
+      "tag": "proxy", 
+      "type": "socks", 
+      "server": "${ip}", 
+      "server_port": ${port}, 
+      "version": "5"
     },
-    { "tag": "direct", "type": "direct" },
-    { "tag": "block",  "type": "block" }
+    { "tag": "direct", "type": "direct" }
   ],
-
-  "route": {
-    "default_domain_resolver": "dns1",
-    "auto_detect_interface": true,
-    "rules": [
-      { "port": 53, "outbound": "direct" }
-    ],
-    "final": "proxy"
-  }
+  "route": { "auto_detect_interface": true, "rules": [{ "port": 53, "outbound": "direct" }], "final": "proxy" }
 }
 JSON
 }
 
+# ===================== 4. LỆNH TRIỂN KHAI (UP) =====================
+cmd_up() {
+    setup_system
+    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm)..."
+    docker pull "$IMG_SBOX" >/dev/null 2>&1 &
+    docker pull "$IMG_TM" >/dev/null 2>&1 &
+    wait
 
-
-sysctl_optimize() {
-  if [[ "${ENABLE_BBR}" == true ]]; then
-    sudo sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1 || true
-    sudo sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
-  fi
-  if [[ "${ENABLE_TFO}" == true ]]; then
-    sudo sysctl -w net.ipv4.tcp_fastopen=3 >/dev/null 2>&1 || true
-  fi
-}
-
-cleanup_one() {
-  local idx="$1"
-  local s="${SBOX_BASE}${idx}"
-  docker rm -f "$s" >/dev/null 2>&1 || true
-  rm -f "sbox_${idx}.json" "resolv_${idx}.conf" >/dev/null 2>&1 || true
-}
-wait_running() {
-  # $1: container name, $2: timeout seconds
-  local name="$1" timeout="${2:-20}"
-  local t=0
-  while true; do
-    st="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || true)"
-    case "$st" in
-      running) return 0 ;;
-      restarting|created|starting)
-        if (( t >= timeout )); then
-          echo "[WARN] $name chưa running sau ${timeout}s (status=$st)."
-          return 1
-        fi
-        sleep 1; ((t++))
-        ;;
-      exited|dead|'')
-        echo "[ERR] $name status=$st. Logs:"
-        docker logs --since=2m "$name" || true
-        return 1
-        ;;
-      *)
-        sleep 1
-        ;;
-    esac
-  done
-}
-
-check_config() {
-  # $1: path to config.json
-  local cfg="$1"
-  docker run --rm \
-    --cap-add=NET_ADMIN --device /dev/net/tun \
-    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
-    ghcr.io/sagernet/sing-box:latest check -c /etc/sing-box/config.json
-}
-
-start_one() {
-  local idx="$1"
-  IFS=':' read -r ip port user pass <<<"$2"
-  local s="${SBOX_BASE}${idx}"
-  local cfg="sbox_${idx}.json"
-  local rsv="resolv_${idx}.conf"
-
-  echo "------------------------------------------------------------"
-  echo "[ROUTE $idx] SOCKS5: ${user}:${pass}@${ip}:${port}"
-
-  cleanup_one "$idx"
-  mk_sbox_config "$cfg" "$ip" "$port" "$user" "$pass"
-  printf "%s\n" "$RESOLV_CONTENT" > "$rsv"
-
-  # NEW: validate config trước khi chạy
-  if ! check_config "$cfg"; then
-    echo "[ERR] Config route $idx không hợp lệ. Bỏ qua route này."
-    return 0
-  fi
-
-  docker run -d --name "$s" --restart=always \
-    --cap-add=NET_ADMIN --device /dev/net/tun \
-    -v "$PWD/$cfg":/etc/sing-box/config.json:ro \
-    -v "$PWD/$rsv":/etc/resolv.conf:ro \
-    "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
-
-  # NEW: đợi sboxN chạy ổn định
-  if ! wait_running "$s" 25; then
-    echo "[ERR] $s không vào trạng thái running. Kiểm tra log ở trên."
-    return 0
-  fi
-
-  # Kiểm tra nhanh: test IP (không phụ thuộc DNS)
-  printf "[ROUTE %d] latency(IP): " "$idx"
-  docker run --rm --network=container:"$s" curlimages/curl:latest \
-    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-    https://1.1.1.1 || echo "FAIL"
-
-  # Kiểm tra qua domain (DNS DIRECT)
-  printf "[ROUTE %d] latency(DNS+TLS): " "$idx"
-  docker run --rm --network=container:"$s" curlimages/curl:latest \
-    -s -o /dev/null -w 'connect=%{time_connect}s ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-    https://www.cloudflare.com/cdn-cgi/trace || echo "FAIL"
-
-  echo "[ROUTE $idx] RUNNING: $s"
-  echo "→ Gắn app: docker run ... --network=container:${s} <image> ..."
-}
-
-
-status_all() {
-  local i=1
-  for _ in "${PROXIES[@]}"; do
-    local s="${SBOX_BASE}${i}"
-    if docker ps --format '{{.Names}}' | grep -qx "$s"; then
-      printf "[route%02d] " "$i"
-      docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'IP: connect=%{time_connect}s total=%{time_total}s  |  ' \
-        https://1.1.1.1
-      docker run --rm --network=container:"$s" curlimages/curl:latest \
-        -s -o /dev/null -w 'DNS+TLS: connect=%{time_connect}s total=%{time_total}s\n' \
-        https://www.cloudflare.com/cdn-cgi/trace
-    else
-      echo "[route$(printf %02d "$i")] stopped"
-    fi
-    ((i++))
-  done
-}
-
-down_all() {
-  echo "[CLEANUP] stopping all routes..."
-  local i=1
-  for _ in "${PROXIES[@]}"; do
-    cleanup_one "$i"
-    ((i++))
-  done
-  echo "[DONE]"
-}
-
-pull_images() {
-  docker pull "$IMG_SBOX" >/dev/null
-}
-
-# ===================== CLI =====================
-case "${1:-up}" in
-  up)
-    sysctl_optimize
-    pull_images
-    i=1
+    echo "[INFO] Dựng các cụm (Mỗi cụm: 1 Proxy + 1 TM)..."
+    echo "🐢 Nhịp độ: Chậm rãi, an toàn cho 4 CPU Core..."
+    
+    local i=1
     for spec in "${PROXIES[@]}"; do
-      start_one "$i" "$spec"
-      ((i++))
+        # Tách IP và PORT cực kỳ gọn gàng
+        local ip="${spec%:*}"
+        local port="${spec#*:}"
+        
+        local s_name="csbox${i}"
+        local tm_name="tm${i}"
+        
+        # Dọn xác container cũ sạch sẽ
+        docker rm -f "$s_name" "$tm_name" >/dev/null 2>&1 || true
+        
+        # --- [1] Proxy Sing-box ---
+        local s_cfg="$CONFIG_DIR/sbox_${i}.json"
+        mk_sbox_config "$s_cfg" "$ip" "$port"
+        
+        docker run -d --name "$s_name" --restart=unless-stopped \
+            --cap-add=NET_ADMIN --device /dev/net/tun \
+            --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
+            "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
+
+        # 🛑 CHỜ 1.0 GIÂY - Cho 4 CPU đủ thời gian ráp nối mạng TUN
+        sleep 1.0 
+
+        # --- [2] Traffmonetizer ---
+        docker run -d --name "$tm_name" --restart=unless-stopped \
+            --network="container:$s_name" --log-driver none \
+            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_farm_${i}" >/dev/null
+
+        # In tiến trình mỗi 20 cụm
+        if (( i % 20 == 0 )); then
+            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
+        fi
+        
+        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU trước khi lặp lại
+        sleep 0.5 
+        ((i++))
     done
-    echo
-    echo "✅ ĐÃ KHỞI TẠO ${#PROXIES[@]} ROUTES (mỗi route: sing-box TUN, KHÔNG DoH; DNS port 53 BYPASS DIRECT)."
-    echo "ℹ️  Host không đổi route; chỉ container nào gắn --network=container:sboxN mới đi qua proxy tương ứng."
-    ;;
-  status)
-    status_all
-    ;;
-  down)
-    down_all
-    ;;
-  *)
-    echo "Usage: $0 [up|status|down]"
-    exit 1
-    ;;
+    echo "====================================================="
+    echo "✅ HOÀN TẤT TRIỂN KHAI LÊN MÁY CHỦ!"
+    echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
+    echo "====================================================="
+}
+
+# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
+cmd_down() {
+    echo "🧹 Đang gỡ bỏ container (Chạy đa luồng an toàn cho 4 Core)..."
+    # Giảm từ -P 16 xuống -P 8 để tránh treo máy lúc xóa
+    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
+    echo "✅ Đã gỡ sạch sẽ container."
+}
+
+cmd_clean() {
+    cmd_down
+    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
+    sudo rm -rf "$CONFIG_DIR"/*.json || true
+    docker system prune -f >/dev/null 2>&1
+    echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
+}
+
+cmd_status() {
+    echo "📊 THỐNG KÊ HỆ THỐNG CỦA BẠN:"
+    echo "-----------------------------------"
+    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
+    echo "🐝 Traffmonetizer : $(docker ps | grep tm | wc -l) / ${#PROXIES[@]}"
+    echo "-----------------------------------"
+    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
+    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
+}
+
+# ===================== ROUTER ĐIỀU HƯỚNG =====================
+case "${1:-up}" in
+    up)     cmd_up ;;
+    down)   cmd_down ;;
+    clean)  cmd_clean ;;
+    status) cmd_status ;;
+    *) echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"; exit 1 ;;
 esac
