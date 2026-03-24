@@ -10,9 +10,17 @@ TOKEN_REPOCKET_EMAIL="nguyenvinhson000@gmail.com"
 TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
+TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 
 # DNS Cloudflare
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+
+# Marker file cho Proxyrack
+MARKER_FILE="/root/.proxyrack_registered_vinh"
+
+# Mảng lưu thông tin để gọi API Proxyrack
+declare -a PR_UUIDS
+declare -a PR_NAMES
 
 # Interface chính (Debian 12 DO thường là eth0)
 IFACE="eth0"
@@ -20,14 +28,17 @@ IFACE="eth0"
 # Image
 ARCH=$(uname -m)
 if [[ "$ARCH" == "aarch64" ]]; then
+  echo -e "\e[32m[INFO] Detected ARM64 CPU. Proxyrack tự động bỏ qua.\e[0m"
   IMG_TM="traffmonetizer/cli_v2:arm64v8"
 else
+  echo -e "\e[32m[INFO] Detected AMD64/x86 CPU. Proxyrack sẵn sàng.\e[0m"
   IMG_TM="traffmonetizer/cli_v2:latest"
 fi
 IMG_MYST="mysteriumnetwork/myst:latest"
 IMG_UR="techroy23/docker-urnetwork:latest"
 IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
+IMG_PR="proxyrack/pop:latest"
 
 # Logger
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
@@ -39,7 +50,8 @@ err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
 # ==========================================
 log "Update hệ thống & cài tools..."
 sudo apt-get update -q
-sudo apt-get install -y curl net-tools grep iptables
+# Bổ sung thêm jq và coreutils cho Proxyrack
+sudo apt-get install -y curl net-tools grep iptables jq coreutils
 
 if ! command -v docker &> /dev/null; then
   log "Cài Docker..."
@@ -115,6 +127,15 @@ fi
 # ==========================================
 log "🚀 Start Nodes..."
 
+# Kéo image song song cho nhanh
+for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
+  docker pull $img >/dev/null 2>&1 &
+done
+if [[ "$ARCH" != "aarch64" ]]; then
+  docker pull $IMG_PR >/dev/null 2>&1 &
+fi
+wait
+
 run_nodes() {
     # Thêm biến INDEX để xác định số thứ tự (1 hoặc 2) cho volume Mysterium
     local INDEX=$1
@@ -126,7 +147,7 @@ run_nodes() {
     docker run -d --network $NET --restart always --name tm_$SUFFIX $DNS_OPTS \
       $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
 
-    # Mysterium (SỬA LỖI: Dùng volume cố định myst-data1 / myst-data2)
+    # Mysterium (GIỮ NGUYÊN SCRIPT GỐC CỦA ÔNG)
     docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
       -p ${BIND_IP}:4449:4449 \
       --name myst_$SUFFIX -v myst-data${INDEX}:/var/lib/mysterium-node \
@@ -145,6 +166,22 @@ run_nodes() {
     docker run -d --network $NET --restart always $DNS_OPTS \
       --name rp_$SUFFIX \
       -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
+
+    # Proxyrack (Chỉ chạy khi không phải ARM)
+    if [[ "$ARCH" != "aarch64" ]]; then
+      # Băm IP ra UUID cố định & format lại tên
+      local PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+      local CLEAN_IP="${BIND_IP//./}"
+      local PR_NAME="ProxyrackNode${INDEX}IP${CLEAN_IP}"
+
+      docker run -d --network $NET --restart always $DNS_OPTS \
+        -e UUID="$PR_UUID" \
+        --name pr_$SUFFIX $IMG_PR >/dev/null
+
+      # Thêm vào mảng để gọi API
+      PR_UUIDS+=("$PR_UUID")
+      PR_NAMES+=("$PR_NAME")
+    fi
 }
 
 # Chạy Node 1 (Index 1 -> Volume myst-data1)
@@ -161,3 +198,40 @@ fi
 
 log "==== DONE ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# ==========================================
+# 7. GỌI API PROXYRACK
+# ==========================================
+if [ ${#PR_UUIDS[@]} -gt 0 ]; then
+    echo "------------------------------------------------------"
+    if [ -f "$MARKER_FILE" ]; then
+        log "✅ HỆ THỐNG GHI NHẬN: Đã đăng ký Proxyrack trước đó."
+        log "👉 Container đã nhận lại UUID cũ. BỎ QUA thời gian chờ và API!"
+    else
+        warn "⏳ Đang đợi 2 phút để thiết bị Proxyrack kết nối..."
+        for i in {120..1}; do
+            printf "\r⏳ Còn lại %3d giây..." "$i"
+            sleep 1
+        done
+        echo -e "\n"
+
+        log "🚀 Đang gọi API thêm thiết bị Proxyrack..."
+        for j in "${!PR_UUIDS[@]}"; do
+            UUID="${PR_UUIDS[$j]}"
+            NAME="${PR_NAMES[$j]}"
+            
+            log "Gửi đăng ký cho: $NAME"
+            
+            API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
+              -H "Api-Key: $TOKEN_PROXYRACK_API" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json" \
+              -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
+            
+            echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
+        done
+        
+        touch "$MARKER_FILE"
+        log "✅ Đã lưu cờ đánh dấu tại $MARKER_FILE"
+    fi
+fi
