@@ -2,63 +2,75 @@
 TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 MARKER_FILE="/root/.proxyrack_registered_vinh"
 
-echo "=== TOOL CỨU HỘ PROXYRACK ==="
+echo "=== TOOL CỨU HỘ PROXYRACK V2 (ANTI-RATE LIMIT) ==="
 
-# Lấy danh sách các container proxyrack đang chạy
+# 1. Khởi đầu lệch pha để tránh 50 máy cùng nã API một lúc
+DELAY=$((RANDOM % 60 + 1))
+echo "⏳ Chờ ngẫu nhiên $DELAY giây để xếp hàng gọi API..."
+sleep $DELAY
+
+# 2. Lấy danh sách container
 CONTAINERS=$(docker ps --format '{{.Names}}' | grep -i 'proxyrack')
 
 if [ -z "$CONTAINERS" ]; then
-    echo "❌ Không có container Proxyrack nào đang chạy trên máy này!"
+    echo "❌ Không tìm thấy container Proxyrack nào!"
     exit 0
 fi
 
 ALL_SUCCESS=true
 
 for container in $CONTAINERS; do
-    # Móc UUID trực tiếp từ ruột container đang chạy
+    # Móc UUID từ container
     UUID=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep '^UUID=' | cut -d= -f2 | tr -d '\r')
     
     if [ -n "$UUID" ]; then
-        # Lấy IP thật để đặt tên cho dễ nhìn
         IP=$(curl -s --max-time 5 https://api.ipify.org || echo "UnknownIP")
         CLEAN_IP="${IP//./}"
         NAME="Rescue_${container}_${CLEAN_IP}"
         
-        echo "🚀 Đang gửi lại API cho: $NAME"
+        echo "🚀 Đang xử lý: $NAME"
         SUCCESS=false
         
-        # Thử lại tối đa 6 lần (đủ chờ 2 phút để lách luật)
-        for attempt in {1..6}; do
+        # Thử lại tối đa 10 lần (kiên nhẫn hơn)
+        for attempt in {1..10}; do
             API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
               -H "Api-Key: $TOKEN_PROXYRACK_API" \
               -H "Content-Type: application/json" \
               -H "Accept: application/json" \
               -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
             
-            echo "Response: $API_RESPONSE"
-            
+            # Kiểm tra Success
             if echo "$API_RESPONSE" | grep -qE '"success":\s*true'; then
-                echo "✅ Đã add thành công!"
+                echo "✅ THÀNH CÔNG: Đã add lên Dashboard."
                 SUCCESS=true
                 break
+            # Kiểm tra Rate Limit
             elif echo "$API_RESPONSE" | grep -q 'limit exceeded'; then
-                echo "⏳ Kẹt API (Limit 5/min). Đang chờ 22 giây để lách luật (Lần $attempt/6)..."
-                sleep 22
-            else
-                echo "⚠️ Lỗi API khác (Có thể thiết bị đã có sẵn). Bỏ qua."
+                echo "⚠️ Bị chặn (5 req/min). Nghỉ 70 giây để reset..."
+                sleep 70
+            # Kiểm tra đã tồn tại
+            elif echo "$API_RESPONSE" | grep -qE 'already exists|already_exists'; then
+                echo "ℹ️ THÔNG BÁO: Thiết bị này đã có sẵn trên Dashboard rồi."
                 SUCCESS=true
+                break
+            else
+                echo "❓ Phản hồi lạ: $API_RESPONSE"
+                SUCCESS=true # Coi như xong để qua con khác
                 break
             fi
         done
         
-        if [ "$SUCCESS" = false ]; then
-            ALL_SUCCESS=false
-        fi
+        [ "$SUCCESS" = false ] && ALL_SUCCESS=false
     fi
+    # Nghỉ nhẹ 5s giữa các container trong cùng 1 máy cho chắc
+    sleep 5
 done
 
-# Cắm lại cờ nếu add xong hết để lần sau chạy cài đặt không bị delay nữa
+# 3. Chốt hạ
 if [ "$ALL_SUCCESS" = true ]; then
     touch "$MARKER_FILE"
-    echo "✅ Cứu hộ hoàn tất. Đã lưu cờ đánh dấu!"
+    echo "=========================================="
+    echo "✅ HOÀN TẤT: Toàn bộ đã lên mâm & đã cắm cờ!"
+else
+    echo "❌ CẢNH BÁO: Vẫn còn Node chưa add được. Hãy chạy lại script sau."
 fi
