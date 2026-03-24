@@ -1,0 +1,64 @@
+#!/bin/bash
+TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
+MARKER_FILE="/root/.proxyrack_registered_vinh"
+
+echo "=== TOOL CỨU HỘ PROXYRACK ==="
+
+# Lấy danh sách các container proxyrack đang chạy
+CONTAINERS=$(docker ps --format '{{.Names}}' | grep -i 'proxyrack')
+
+if [ -z "$CONTAINERS" ]; then
+    echo "❌ Không có container Proxyrack nào đang chạy trên máy này!"
+    exit 0
+fi
+
+ALL_SUCCESS=true
+
+for container in $CONTAINERS; do
+    # Móc UUID trực tiếp từ ruột container đang chạy
+    UUID=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep '^UUID=' | cut -d= -f2 | tr -d '\r')
+    
+    if [ -n "$UUID" ]; then
+        # Lấy IP thật để đặt tên cho dễ nhìn
+        IP=$(curl -s --max-time 5 https://api.ipify.org || echo "UnknownIP")
+        CLEAN_IP="${IP//./}"
+        NAME="Rescue_${container}_${CLEAN_IP}"
+        
+        echo "🚀 Đang gửi lại API cho: $NAME"
+        SUCCESS=false
+        
+        # Thử lại tối đa 6 lần (đủ chờ 2 phút để lách luật)
+        for attempt in {1..6}; do
+            API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
+              -H "Api-Key: $TOKEN_PROXYRACK_API" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json" \
+              -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
+            
+            echo "Response: $API_RESPONSE"
+            
+            if echo "$API_RESPONSE" | grep -qE '"success":\s*true'; then
+                echo "✅ Đã add thành công!"
+                SUCCESS=true
+                break
+            elif echo "$API_RESPONSE" | grep -q 'limit exceeded'; then
+                echo "⏳ Kẹt API (Limit 5/min). Đang chờ 22 giây để lách luật (Lần $attempt/6)..."
+                sleep 22
+            else
+                echo "⚠️ Lỗi API khác (Có thể thiết bị đã có sẵn). Bỏ qua."
+                SUCCESS=true
+                break
+            fi
+        done
+        
+        if [ "$SUCCESS" = false ]; then
+            ALL_SUCCESS=false
+        fi
+    fi
+done
+
+# Cắm lại cờ nếu add xong hết để lần sau chạy cài đặt không bị delay nữa
+if [ "$ALL_SUCCESS" = true ]; then
+    touch "$MARKER_FILE"
+    echo "✅ Cứu hộ hoàn tất. Đã lưu cờ đánh dấu!"
+fi
