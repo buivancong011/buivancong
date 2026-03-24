@@ -2,37 +2,37 @@
 TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 MARKER_FILE="/root/.proxyrack_registered_vinh"
 
-echo "=== RESCUE PROXYRACK V4: QUÉT SẠCH 2 NODE === "
+echo "=== RESCUE PROXYRACK V5: ĐÃ CẬP NHẬT THEO TÊN 'pr_node' === "
 
-# 1. Random delay 1-60s để dàn hàng ngang các VPS, tránh nghẽn API
+# 1. Random delay 1-60s để dàn hàng ngang tránh nghẽn API
 DELAY=$((RANDOM % 60 + 1))
-echo "⏳ Đang chờ hàng đợi $DELAY giây..."
+echo "⏳ Chờ hàng đợi $DELAY giây..."
 sleep $DELAY
 
-# Tìm tất cả container có tên proxyrack (thường là proxyrack1, proxyrack2 hoặc pr_main, pr_sub)
-CONTAINERS=$(docker ps --format '{{.Names}}' | grep -i 'proxyrack')
+# SỬA LỖI: Cập nhật grep để bắt được cả 'proxyrack' và 'pr_node'
+CONTAINERS=$(docker ps --format '{{.Names}}' | grep -iE 'proxyrack|pr_node')
 
 if [ -z "$CONTAINERS" ]; then
-    echo "❌ Không tìm thấy bất kỳ container Proxyrack nào đang chạy!"
+    echo "❌ Không tìm thấy container nào có tên 'proxyrack' hoặc 'pr_node'!"
     exit 0
 fi
 
 NUM_NODES=$(echo "$CONTAINERS" | wc -l)
-echo "🔎 Tìm thấy $NUM_NODES Node trên máy này. Bắt đầu xử lý..."
+echo "🔎 Tìm thấy $NUM_NODES Node trên máy này: $CONTAINERS"
 
 ALL_SUCCESS=true
 
 for container in $CONTAINERS; do
     echo "------------------------------------------"
-    # Móc UUID từ biến môi trường của container đó
+    # Móc UUID từ biến môi trường của container
     UUID=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep '^UUID=' | cut -d= -f2 | tr -d '\r')
     
     if [ -z "$UUID" ]; then
-        echo "⚠️  Không tìm thấy UUID cho $container. Bỏ qua."
+        echo "⚠️ Không tìm thấy UUID cho $container. Bỏ qua."
         continue
     fi
 
-    # Lấy IP Public của máy để đặt tên cho dễ quản lý trên Dashboard
+    # Lấy IP thật để đặt tên trên Dashboard
     IP=$(curl -s --max-time 10 https://api.ipify.org || echo "UnknownIP")
     NAME="Rescue_${container}_${IP//./}"
     
@@ -45,15 +45,15 @@ for container in $CONTAINERS; do
           -H "Accept: application/json" \
           -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
         
-        # --- KIỂM TRA PHẢN HỒI ---
+        # --- LOGIC KIỂM TRA PHẢN HỒI ---
         if echo "$API_RESPONSE" | grep -qE '"success":\s*true'; then
-            echo "✅ $container: Đã add mới thành công."
+            echo "✅ $container: Đăng ký MỚI thành công."
             break
         elif echo "$API_RESPONSE" | grep -qE "already been taken|already exists"; then
-            echo "ℹ️ $container: Đã có sẵn trên Dashboard."
+            echo "ℹ️ $container: Đã có sẵn (Already Exists/Taken)."
             break
         elif echo "$API_RESPONSE" | grep -q "Requests limit exceeded"; then
-            echo "⚠️ LIMIT: Đang kẹt 5req/min. Nghỉ 70 giây rồi nã lại..."
+            echo "⚠️ LIMIT: Đang kẹt 5req/min. Nghỉ 70 giây rồi thử lại..."
             sleep 70
             continue 
         else
@@ -61,11 +61,10 @@ for container in $CONTAINERS; do
             break
         fi
     done
-    # Nghỉ 5s giữa 2 Node trong cùng 1 máy để tránh tự mình làm nghẽn mình
-    sleep 5
+    sleep 5 # Nghỉ nhẹ giữa các node
 done
 
-# CHỈ CẮM CỜ KHI ĐÃ XỬ LÝ XONG TẤT CẢ CONTAINER
+# Chốt hạ: Cắm cờ để script cài đặt sau này không lôi nó ra đếm ngược 120s nữa
 touch "$MARKER_FILE"
 echo "=========================================="
-echo "✅ HOÀN TẤT: Đã xử lý xong $NUM_NODES Node!"
+echo "✅ HOÀN TẤT: Đã điểm danh xong $NUM_NODES Node!"
