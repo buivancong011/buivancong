@@ -12,19 +12,31 @@ RP_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 # UrNetwork
 UR_USER="nguyenvinhcao123@gmail.com"
 UR_PASS="CAOcao123CAO@"
+# Proxyrack
+TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 
-# ==== CẤU HÌNH DNS ====
+# ==== CẤU HÌNH DNS & TỐI ƯU ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-# Đã xóa cấu hình tắt log, hệ thống sẽ giữ lại 100% log mặc định
+MARKER_FILE="/root/.proxyrack_registered_vinh"
 
 # ==========================================
-# 2. HÀM LOG
+# 2. HÀM LOG & KIỂM TRA CPU
 # ==========================================
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+
+log "Đang kiểm tra kiến trúc CPU..."
+ARCH=$(uname -m)
+if [[ "$ARCH" == "aarch64" ]]; then
+  warn "Detected ARM64 CPU. Proxyrack sẽ tự động bị bỏ qua (chỉ hỗ trợ x86_64)."
+fi
 
 # ==========================================
-# 3. CÀI ĐẶT DOCKER
+# 3. CÀI ĐẶT DOCKER & PHỤ TRỢ
 # ==========================================
+log "Cài đặt các công cụ phụ trợ (jq, coreutils)..."
+sudo yum install -y -q jq coreutils curl >/dev/null 2>&1 || true
+
 if ! command -v docker &> /dev/null; then
   log "Đang cài đặt Docker..."
   sudo yum update -y -q
@@ -37,7 +49,8 @@ fi
 # 4. DỌN DẸP CONTAINER CŨ
 # ==========================================
 log "Dọn dẹp container cũ để tránh trùng lặp..."
-docker rm -f tm urnetwork antgain earnfm repocket >/dev/null 2>&1 || true
+# Đã bổ sung proxyrack vào danh sách xóa
+docker rm -f tm urnetwork antgain earnfm repocket proxyrack >/dev/null 2>&1 || true
 docker image prune -f >/dev/null 2>&1
 
 # ==========================================
@@ -49,11 +62,15 @@ docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
 docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
 docker pull repocket/repocket:latest >/dev/null 2>&1 &
 
+if [[ "$ARCH" != "aarch64" ]]; then
+  docker pull proxyrack/pop:latest >/dev/null 2>&1 &
+fi
+
 wait # Đợi tất cả tải xong
 log "Tải ảnh hoàn tất."
 
 # ==========================================
-# 6. KHỞI CHẠY CONTAINER (FULL 4 APPS + DNS + GIỮ NGUYÊN LOG)
+# 6. KHỞI CHẠY CONTAINER (FULL 5 APPS + GIỮ NGUYÊN LOG)
 # ==========================================
 log "🚀 Khởi chạy các ứng dụng cày tiền..."
 
@@ -77,8 +94,51 @@ docker run -d --name repocket --restart always $DNS_OPTS \
   -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
   repocket/repocket:latest
 
+# 5. Proxyrack
+if [[ "$ARCH" != "aarch64" ]]; then
+  # Lấy IP Public để băm ra UUID cố định
+  PUBLIC_IP=$(curl -s --max-time 10 https://api.ipify.org || echo "UNKNOWN_IP")
+  PR_UUID=$(echo -n "${PUBLIC_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+  CLEAN_IP="${PUBLIC_IP//./}"
+  PR_NAME="ProxyrackNode1IP${CLEAN_IP}"
+
+  docker run -d --name proxyrack --restart always $DNS_OPTS \
+    -e UUID="$PR_UUID" \
+    proxyrack/pop:latest
+fi
+
 # ==========================================
-# 7. HOÀN TẤT
+# 7. GỌI API PROXYRACK (CƠ CHẾ CẮM CỜ)
 # ==========================================
+if [[ "$ARCH" != "aarch64" ]]; then
+  echo "------------------------------------------------------"
+  if [ -f "$MARKER_FILE" ]; then
+      log "✅ Đã đăng ký Proxyrack từ trước (Tìm thấy cờ). Bỏ qua bước chờ và gọi API!"
+  else
+      warn "⏳ Đang đợi 2 phút để Proxyrack kết nối máy chủ lần đầu..."
+      for i in {120..1}; do
+          printf "\r⏳ Còn lại %3d giây..." "$i"
+          sleep 1
+      done
+      echo -e "\n"
+
+      log "🚀 Đang gọi API thêm thiết bị lên Dashboard Proxyrack..."
+      API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
+        -H "Api-Key: $TOKEN_PROXYRACK_API" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
+        -d "{\"device_id\":\"$PR_UUID\",\"device_name\":\"$PR_NAME\"}")
+      
+      echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
+      
+      touch "$MARKER_FILE"
+      log "✅ Đã lưu cờ đánh dấu tại $MARKER_FILE"
+  fi
+fi
+
+# ==========================================
+# 8. HOÀN TẤT
+# ==========================================
+echo "------------------------------------------------------"
 log "==== CÀI ĐẶT THÀNH CÔNG ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
