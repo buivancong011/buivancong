@@ -2,62 +2,70 @@
 TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 MARKER_FILE="/root/.proxyrack_registered_vinh"
 
-echo "=== RESCUE PROXYRACK V3: CHỈ RETRY KHI LIMIT === "
+echo "=== RESCUE PROXYRACK V4: QUÉT SẠCH 2 NODE === "
 
-# 1. Random delay 1-60s để dàn hàng ngang 50 con VPS, tránh nghẽn cổ chai API
+# 1. Random delay 1-60s để dàn hàng ngang các VPS, tránh nghẽn API
 DELAY=$((RANDOM % 60 + 1))
-echo "⏳ Chờ ngẫu nhiên $DELAY giây để xếp hàng..."
+echo "⏳ Đang chờ hàng đợi $DELAY giây..."
 sleep $DELAY
 
+# Tìm tất cả container có tên proxyrack (thường là proxyrack1, proxyrack2 hoặc pr_main, pr_sub)
 CONTAINERS=$(docker ps --format '{{.Names}}' | grep -i 'proxyrack')
-[ -z "$CONTAINERS" ] && { echo "❌ Không tìm thấy container!"; exit 0; }
 
-ALL_DONE=true
+if [ -z "$CONTAINERS" ]; then
+    echo "❌ Không tìm thấy bất kỳ container Proxyrack nào đang chạy!"
+    exit 0
+fi
+
+NUM_NODES=$(echo "$CONTAINERS" | wc -l)
+echo "🔎 Tìm thấy $NUM_NODES Node trên máy này. Bắt đầu xử lý..."
+
+ALL_SUCCESS=true
 
 for container in $CONTAINERS; do
+    echo "------------------------------------------"
+    # Móc UUID từ biến môi trường của container đó
     UUID=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep '^UUID=' | cut -d= -f2 | tr -d '\r')
     
-    if [ -n "$UUID" ]; then
-        IP=$(curl -s --max-time 10 https://api.ipify.org || echo "UnknownIP")
-        NAME="Rescue_${container}_${IP//./}"
-        
-        echo "🚀 Đang check: $container ($UUID)"
-        
-        while true; do
-            API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
-              -H "Api-Key: $TOKEN_PROXYRACK_API" \
-              -H "Content-Type: application/json" \
-              -H "Accept: application/json" \
-              -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
-            
-            # --- LOGIC LỌC LỖI THÔNG MINH ---
-            
-            # TRƯỜNG HỢP 1: THÀNH CÔNG
-            if echo "$API_RESPONSE" | grep -qE '"success":\s*true'; then
-                echo "✅ OK: Đã add mới thành công."
-                break
-
-            # TRƯỜNG HỢP 2: ĐÃ CÓ TRÊN DASHBOARD (Taken/Exists) -> COI NHƯ XONG
-            elif echo "$API_RESPONSE" | grep -qE "already been taken|already exists"; then
-                echo "ℹ️ SKIP: Thiết bị này đã có trên Dashboard rồi."
-                break
-
-            # TRƯỜNG HỢP 3: BỊ GIỚI HẠN (Limit Exceeded) -> ĐỢI VÀ CHẠY LẠI
-            elif echo "$API_RESPONSE" | grep -q "Requests limit exceeded"; then
-                echo "⚠️ LIMIT: Đang kẹt 5req/min. Nghỉ 70s rồi thử lại ngay..."
-                sleep 70
-                continue # Tiếp tục vòng lặp while để thử lại con này
-
-            # TRƯỜNG HỢP 4: LỖI KHÁC
-            else
-                echo "❓ LỖI LẠ: $API_RESPONSE. Bỏ qua để sang node khác."
-                break
-            fi
-        done
+    if [ -z "$UUID" ]; then
+        echo "⚠️  Không tìm thấy UUID cho $container. Bỏ qua."
+        continue
     fi
-    sleep 3 # Nghỉ nhẹ giữa các container trên cùng 1 máy
+
+    # Lấy IP Public của máy để đặt tên cho dễ quản lý trên Dashboard
+    IP=$(curl -s --max-time 10 https://api.ipify.org || echo "UnknownIP")
+    NAME="Rescue_${container}_${IP//./}"
+    
+    echo "🚀 Đang xử lý: $container | UUID: ${UUID:0:8}..."
+    
+    while true; do
+        API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
+          -H "Api-Key: $TOKEN_PROXYRACK_API" \
+          -H "Content-Type: application/json" \
+          -H "Accept: application/json" \
+          -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
+        
+        # --- KIỂM TRA PHẢN HỒI ---
+        if echo "$API_RESPONSE" | grep -qE '"success":\s*true'; then
+            echo "✅ $container: Đã add mới thành công."
+            break
+        elif echo "$API_RESPONSE" | grep -qE "already been taken|already exists"; then
+            echo "ℹ️ $container: Đã có sẵn trên Dashboard."
+            break
+        elif echo "$API_RESPONSE" | grep -q "Requests limit exceeded"; then
+            echo "⚠️ LIMIT: Đang kẹt 5req/min. Nghỉ 70 giây rồi nã lại..."
+            sleep 70
+            continue 
+        else
+            echo "❓ Phản hồi lạ: $API_RESPONSE"
+            break
+        fi
+    done
+    # Nghỉ 5s giữa 2 Node trong cùng 1 máy để tránh tự mình làm nghẽn mình
+    sleep 5
 done
 
-# Cắm cờ để script Cài Đặt lần sau không lôi con này ra đếm ngược nữa
+# CHỈ CẮM CỜ KHI ĐÃ XỬ LÝ XONG TẤT CẢ CONTAINER
 touch "$MARKER_FILE"
-echo "✅ Hoàn tất cứu hộ cho máy chủ này!"
+echo "=========================================="
+echo "✅ HOÀN TẤT: Đã xử lý xong $NUM_NODES Node!"
