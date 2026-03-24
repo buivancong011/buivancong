@@ -2,75 +2,62 @@
 TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 MARKER_FILE="/root/.proxyrack_registered_vinh"
 
-echo "=== TOOL CỨU HỘ PROXYRACK V2 (ANTI-RATE LIMIT) ==="
+echo "=== RESCUE PROXYRACK V3: CHỈ RETRY KHI LIMIT === "
 
-# 1. Khởi đầu lệch pha để tránh 50 máy cùng nã API một lúc
+# 1. Random delay 1-60s để dàn hàng ngang 50 con VPS, tránh nghẽn cổ chai API
 DELAY=$((RANDOM % 60 + 1))
-echo "⏳ Chờ ngẫu nhiên $DELAY giây để xếp hàng gọi API..."
+echo "⏳ Chờ ngẫu nhiên $DELAY giây để xếp hàng..."
 sleep $DELAY
 
-# 2. Lấy danh sách container
 CONTAINERS=$(docker ps --format '{{.Names}}' | grep -i 'proxyrack')
+[ -z "$CONTAINERS" ] && { echo "❌ Không tìm thấy container!"; exit 0; }
 
-if [ -z "$CONTAINERS" ]; then
-    echo "❌ Không tìm thấy container Proxyrack nào!"
-    exit 0
-fi
-
-ALL_SUCCESS=true
+ALL_DONE=true
 
 for container in $CONTAINERS; do
-    # Móc UUID từ container
     UUID=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" | grep '^UUID=' | cut -d= -f2 | tr -d '\r')
     
     if [ -n "$UUID" ]; then
-        IP=$(curl -s --max-time 5 https://api.ipify.org || echo "UnknownIP")
-        CLEAN_IP="${IP//./}"
-        NAME="Rescue_${container}_${CLEAN_IP}"
+        IP=$(curl -s --max-time 10 https://api.ipify.org || echo "UnknownIP")
+        NAME="Rescue_${container}_${IP//./}"
         
-        echo "🚀 Đang xử lý: $NAME"
-        SUCCESS=false
+        echo "🚀 Đang check: $container ($UUID)"
         
-        # Thử lại tối đa 10 lần (kiên nhẫn hơn)
-        for attempt in {1..10}; do
+        while true; do
             API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
               -H "Api-Key: $TOKEN_PROXYRACK_API" \
               -H "Content-Type: application/json" \
               -H "Accept: application/json" \
               -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
             
-            # Kiểm tra Success
+            # --- LOGIC LỌC LỖI THÔNG MINH ---
+            
+            # TRƯỜNG HỢP 1: THÀNH CÔNG
             if echo "$API_RESPONSE" | grep -qE '"success":\s*true'; then
-                echo "✅ THÀNH CÔNG: Đã add lên Dashboard."
-                SUCCESS=true
+                echo "✅ OK: Đã add mới thành công."
                 break
-            # Kiểm tra Rate Limit
-            elif echo "$API_RESPONSE" | grep -q 'limit exceeded'; then
-                echo "⚠️ Bị chặn (5 req/min). Nghỉ 70 giây để reset..."
+
+            # TRƯỜNG HỢP 2: ĐÃ CÓ TRÊN DASHBOARD (Taken/Exists) -> COI NHƯ XONG
+            elif echo "$API_RESPONSE" | grep -qE "already been taken|already exists"; then
+                echo "ℹ️ SKIP: Thiết bị này đã có trên Dashboard rồi."
+                break
+
+            # TRƯỜNG HỢP 3: BỊ GIỚI HẠN (Limit Exceeded) -> ĐỢI VÀ CHẠY LẠI
+            elif echo "$API_RESPONSE" | grep -q "Requests limit exceeded"; then
+                echo "⚠️ LIMIT: Đang kẹt 5req/min. Nghỉ 70s rồi thử lại ngay..."
                 sleep 70
-            # Kiểm tra đã tồn tại
-            elif echo "$API_RESPONSE" | grep -qE 'already exists|already_exists'; then
-                echo "ℹ️ THÔNG BÁO: Thiết bị này đã có sẵn trên Dashboard rồi."
-                SUCCESS=true
-                break
+                continue # Tiếp tục vòng lặp while để thử lại con này
+
+            # TRƯỜNG HỢP 4: LỖI KHÁC
             else
-                echo "❓ Phản hồi lạ: $API_RESPONSE"
-                SUCCESS=true # Coi như xong để qua con khác
+                echo "❓ LỖI LẠ: $API_RESPONSE. Bỏ qua để sang node khác."
                 break
             fi
         done
-        
-        [ "$SUCCESS" = false ] && ALL_SUCCESS=false
     fi
-    # Nghỉ nhẹ 5s giữa các container trong cùng 1 máy cho chắc
-    sleep 5
+    sleep 3 # Nghỉ nhẹ giữa các container trên cùng 1 máy
 done
 
-# 3. Chốt hạ
-if [ "$ALL_SUCCESS" = true ]; then
-    touch "$MARKER_FILE"
-    echo "=========================================="
-    echo "✅ HOÀN TẤT: Toàn bộ đã lên mâm & đã cắm cờ!"
-else
-    echo "❌ CẢNH BÁO: Vẫn còn Node chưa add được. Hãy chạy lại script sau."
-fi
+# Cắm cờ để script Cài Đặt lần sau không lôi con này ra đếm ngược nữa
+touch "$MARKER_FILE"
+echo "✅ Hoàn tất cứu hộ cho máy chủ này!"
