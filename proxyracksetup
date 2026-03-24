@@ -20,15 +20,6 @@ MARKER_FILE="/root/.proxyrack_registered_vinh"
 declare -a PR_UUIDS
 declare -a PR_NAMES
 
-# Hàm log
-log() { echo -e "\e[32m[INFO] $1\e[0m"; }
-warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
-err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
-
-echo "======================================================"
-echo "🚀 BẮT ĐẦU QUÁ TRÌNH TRIỂN KHAI HỆ THỐNG CÀY TIỀN"
-echo "======================================================"
-
 # ==========================================
 # 2. CHỌN IMAGE & PHÂN TÁCH KIẾN TRÚC (CPU)
 # ==========================================
@@ -47,23 +38,29 @@ IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
 IMG_PR="proxyrack/pop:latest"
 
+# Hàm log
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
+
 # ==========================================
-# 3. CHUẨN BỊ MÔI TRƯỜNG & DOCKER
+# 3. CHUẨN BỊ & DỌN DẸP
 # ==========================================
-log "Dọn dẹp hệ thống và cài đặt công cụ phụ trợ..."
+log "Dọn dẹp hệ thống..."
 timeout 60 sudo yum remove -y squid httpd-tools >/dev/null 2>&1 || true
-sudo yum update -y -q >/dev/null 2>&1 || true
-sudo yum install -y -q curl net-tools grep iptables iproute jq coreutils >/dev/null 2>&1 || true
+# Cài thêm jq và coreutils cho Proxyrack
+sudo yum install -y -q jq coreutils >/dev/null 2>&1 || true
 
 if ! command -v docker &> /dev/null; then
   log "Cài đặt Docker..."
+  sudo yum update -y -q
   sudo yum install -y -q docker
   sudo systemctl enable --now docker
 fi
 
-log "Dọn dẹp container và network cũ..."
-if [ -n "$(sudo docker ps -aq)" ]; then sudo docker rm -f $(sudo docker ps -aq) >/dev/null 2>&1 || true; fi
-sudo docker network prune -f >/dev/null 2>&1
+log "Dọn dẹp container cũ..."
+if [ -n "$(docker ps -aq)" ]; then docker rm -f $(docker ps -aq) >/dev/null 2>&1; fi
+docker network prune -f >/dev/null 2>&1
 
 # ==========================================
 # 4. BẮT IP THEO CƠ CHẾ ENX0
@@ -74,7 +71,7 @@ IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute enX0 | awk '{gsub(
 IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic enX0 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
 
 if [ -z "$IP_ALLA" ] || [ -z "$IP_ALLB" ]; then 
-    err "Không lấy được IP trên enX0! Hãy kiểm tra lại môi trường AWS."
+    err "Không lấy được IP trên enX0! Hãy kiểm tra lệnh: ip addr show dev enX0"
 fi
 
 log "👉 IP Bắt được: A=$IP_ALLA | B=$IP_ALLB"
@@ -84,10 +81,10 @@ log "👉 IP Bắt được: A=$IP_ALLA | B=$IP_ALLB"
 # ==========================================
 ensure_network() {
   local NET=$1; local SUB=$2
-  if sudo docker network inspect "$NET" >/dev/null 2>&1; then
-      sudo docker network rm "$NET" >/dev/null
+  if docker network inspect "$NET" >/dev/null 2>&1; then
+      docker network rm "$NET" >/dev/null
   fi
-  sudo docker network create "$NET" --driver bridge --subnet "$SUB" >/dev/null
+  docker network create "$NET" --driver bridge --subnet "$SUB" >/dev/null
 }
 
 ensure_network "my_network_1" "192.168.33.0/24"
@@ -99,15 +96,15 @@ sudo iptables -t nat -D POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_
 sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source ${IP_ALLA}
 sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source ${IP_ALLB}
 
-log "⏳ Chờ 3s cập nhật mạng..."
-sleep 3
+log "⏳ Chờ 5s cập nhật mạng..."
+sleep 5
 
 # ==========================================
 # 6. KIỂM TRA IP PUBLIC THỰC TẾ
 # ==========================================
 get_public_ip() {
     local NET=$1
-    sudo docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org || echo "LỖI"
+    docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
 }
 
 log "🕵️ Đang xác thực IP Public thực tế..."
@@ -117,66 +114,60 @@ PUB_IP_2=$(get_public_ip "my_network_2")
 log "   Check 1: Source $IP_ALLA -> Exit: [$PUB_IP_1]"
 log "   Check 2: Source $IP_ALLB -> Exit: [$PUB_IP_2]"
 
-if [ "$PUB_IP_1" == "LỖI" ] || [ "$PUB_IP_2" == "LỖI" ]; then err "Lỗi kết nối ra ngoài internet!"; fi
-if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then warn "⚠️ CẢNH BÁO: Trùng IP Public. Hai mạng đang ra cùng một IP ngoài."; fi
+if [ -z "$PUB_IP_1" ] || [ -z "$PUB_IP_2" ]; then err "Lỗi kết nối ra ngoài internet!"; fi
+if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then err "LỖI: Trùng IP Public."; fi
 
 # ==========================================
-# 7. KHỞI CHẠY NODES (GIỮ NGUYÊN 100% LOG)
+# 7. KHỞI CHẠY NODES (GIỮ NGUYÊN LOG BÌNH THƯỜNG)
 # ==========================================
 log "🚀 Đang Pull images (Song song)..."
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
-  sudo docker pull $img >/dev/null 2>&1 &
+  docker pull $img >/dev/null 2>&1 &
 done
 if [[ "$ARCH" != "aarch64" ]]; then
-  sudo docker pull $IMG_PR >/dev/null 2>&1 &
+  docker pull $IMG_PR >/dev/null 2>&1 &
 fi
 wait
 
 run_node_group() {
   local ID=$1; local NET="my_network_$1"; local BIND_IP=$2
   
-  log "  -> Đang thiết lập Node Cụm $ID (IP: $BIND_IP)..."
-
   # Traffmonetizer
-  sudo docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
+  docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
     $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium (Khai báo UDP chuẩn cho B2B Traffic)
-  local UDP_START=$(( 10000 + (ID - 1) * 20 ))
-  local UDP_END=$(( UDP_START + 10 ))
-  sudo docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
-    -p ${BIND_IP}:4449:4449/tcp \
-    -p ${BIND_IP}:${UDP_START}-${UDP_END}:${UDP_START}-${UDP_END}/udp \
+  # Mysterium (GIỮ NGUYÊN NHƯ SCRIPT GỐC CỦA ÔNG)
+  docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
+    -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
-    --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions \
-    --udp.ports=${UDP_START}:${UDP_END} >/dev/null
+    --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
   
   # UrNetwork
-  sudo docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
+  docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
     --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
     -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
   
   # EarnFM
-  sudo docker run -d --network $NET --restart always $DNS_OPTS \
+  docker run -d --network $NET --restart always $DNS_OPTS \
     -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
   
   # Repocket
-  sudo docker run -d --network $NET --restart always $DNS_OPTS \
+  docker run -d --network $NET --restart always $DNS_OPTS \
     --name repocket$ID \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 
-  # Proxyrack (Chỉ chạy khi CPU là AMD/Intel)
+  # Proxyrack (Chỉ chạy khi không phải ARM)
   if [[ "$ARCH" != "aarch64" ]]; then
-    # Băm IP thành UUID cố định & Xóa dấu chấm trong tên thiết bị
+    # Băm IP ra UUID cố định & format lại tên
     local PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
     local CLEAN_IP="${BIND_IP//./}"
     local PR_NAME="ProxyrackNode${ID}IP${CLEAN_IP}"
 
-    sudo docker run -d --network $NET --restart always $DNS_OPTS \
+    docker run -d --network $NET --restart always $DNS_OPTS \
       -e UUID="$PR_UUID" \
       --name proxyrack$ID $IMG_PR >/dev/null
 
-    # Thêm vào mảng toàn cục để gọi API
+    # Thêm vào mảng để gọi API
     PR_UUIDS+=("$PR_UUID")
     PR_NAMES+=("$PR_NAME")
   fi
@@ -185,26 +176,26 @@ run_node_group() {
 run_node_group 1 "$IP_ALLA"
 run_node_group 2 "$IP_ALLB"
 
-log "✅ HOÀN TẤT KHỞI CHẠY CONTAINER"
-sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+log "==== DONE STARTING CONTAINERS - Vinh Cao ===="
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # ==========================================
-# 8. GỌI API PROXYRACK (CƠ CHẾ CẮM CỜ THÔNG MINH)
+# 8. GỌI API PROXYRACK
 # ==========================================
 if [ ${#PR_UUIDS[@]} -gt 0 ]; then
     echo "------------------------------------------------------"
     if [ -f "$MARKER_FILE" ]; then
-        log "✅ HỆ THỐNG GHI NHẬN: Server này đã được đăng ký Proxyrack trước đó."
-        log "👉 Container đã tự động nhận lại UUID cũ. BỎ QUA thời gian chờ và API!"
+        log "✅ HỆ THỐNG GHI NHẬN: Đã đăng ký Proxyrack trước đó."
+        log "👉 Container đã nhận lại UUID cũ. BỎ QUA thời gian chờ và API!"
     else
-        warn "⏳ Đang đợi 2 phút để thiết bị Proxyrack kết nối máy chủ lần đầu tiên..."
+        warn "⏳ Đang đợi 2 phút để thiết bị Proxyrack kết nối..."
         for i in {120..1}; do
             printf "\r⏳ Còn lại %3d giây..." "$i"
             sleep 1
         done
         echo -e "\n"
 
-        log "🚀 Đang gọi API thêm thiết bị lên Dashboard Proxyrack..."
+        log "🚀 Đang gọi API thêm thiết bị Proxyrack..."
         for j in "${!PR_UUIDS[@]}"; do
             UUID="${PR_UUIDS[$j]}"
             NAME="${PR_NAMES[$j]}"
@@ -220,12 +211,7 @@ if [ ${#PR_UUIDS[@]} -gt 0 ]; then
             echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
         done
         
-        # Cắm cờ để các lần script dọn dẹp/chạy lại sau này chạy chớp nhoáng
         touch "$MARKER_FILE"
         log "✅ Đã lưu cờ đánh dấu tại $MARKER_FILE"
     fi
 fi
-
-echo "======================================================"
-echo "🎉 XIN CHÚC MỪNG: HỆ THỐNG FULL 6 APPS ĐÃ SẴN SÀNG CÀY TIỀN!"
-echo "======================================================"
