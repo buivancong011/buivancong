@@ -1,0 +1,139 @@
+#!/bin/bash
+set -e
+
+# ==========================================
+# 1. CẤU HÌNH API KEY PROXYRACK
+# ==========================================
+TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
+
+# ==== TỐI ƯU MẠNG ====
+DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+IFACE="eth0"
+
+# Mảng lưu trữ thông tin Proxyrack để gọi API sau 2 phút
+declare -a PR_UUIDS
+declare -a PR_NAMES
+
+# Logger
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
+
+# ==========================================
+# 2. KIỂM TRA CPU (CHỐT CHẶN ARM)
+# ==========================================
+log "Đang kiểm tra kiến trúc CPU máy chủ..."
+ARCH=$(uname -m)
+
+if [[ "$ARCH" != "x86_64" && "$ARCH" != "amd64" ]]; then
+    err "❌ Phát hiện kiến trúc CPU: $ARCH. Proxyrack CHỈ chạy được trên máy chủ dùng chip AMD/Intel (x86_64)."
+fi
+
+log "✅ Kiến trúc CPU: $ARCH. Chuẩn bài, tiếp tục cài đặt..."
+
+# ==========================================
+# 3. CHUẨN BỊ MÔI TRƯỜNG & DOCKER
+# ==========================================
+log "Đang cài đặt các công cụ cần thiết..."
+sudo apt-get update -q
+sudo apt-get install -y curl net-tools grep iptables iproute2 jq coreutils
+
+if ! command -v docker &> /dev/null; then
+    log "Đang cài đặt Docker..."
+    curl -fsSL https://get.docker.com | sh
+    sudo systemctl enable --now docker
+fi
+
+# ==========================================
+# 4. QUÉT IP & TẠO NETWORK (MULTI-IP)
+# ==========================================
+log "Đang quét danh sách IP trên interface $IFACE..."
+mapfile -t ALL_IPS < <(ip -o -4 addr show dev $IFACE | awk '{print $4}' | cut -d/ -f1)
+TOTAL_IPS=${#ALL_IPS[@]}
+
+if [ "$TOTAL_IPS" -eq 0 ]; then err "Không tìm thấy IP nào trên $IFACE!"; fi
+
+log "Đang dọn dẹp các container Proxyrack cũ..."
+if [ -n "$(docker ps -aq --filter "name=^pr_")" ]; then 
+    docker rm -f $(docker ps -aq --filter "name=^pr_") >/dev/null 2>&1 || true
+fi
+
+log "Thiết lập định tuyến IP (SNAT)..."
+for i in "${!ALL_IPS[@]}"; do
+    INDEX=$((i+1))
+    IP="${ALL_IPS[$i]}"
+    SUBNET="192.168.10${INDEX}.0/24"
+    NET_NAME="node_net_${INDEX}"
+
+    docker network create "$NET_NAME" --driver bridge --subnet "$SUBNET" >/dev/null 2>&1 || true
+    sudo iptables -t nat -I POSTROUTING -s "$SUBNET" -j SNAT --to-source "$IP" 2>/dev/null || true
+done
+sleep 2
+
+# ==========================================
+# 5. KHỞI CHẠY PROXYRACK (GIỮ 100% LOG)
+# ==========================================
+log "🚀 Đang kích hoạt Proxyrack trên $TOTAL_IPS IP..."
+
+for i in "${!ALL_IPS[@]}"; do
+    INDEX=$((i+1))
+    NET="node_net_${INDEX}"
+    BIND_IP="${ALL_IPS[$i]}"
+    
+    # Băm IP ra UUID chuẩn 64 ký tự Hex để cố định thiết bị
+    PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+    
+    # Thay dấu chấm trong IP thành rỗng: 198.51.100.10 -> 1985110010
+    CLEAN_IP="${BIND_IP//./}"
+    # Ghép chuỗi viết liền hoàn toàn
+    PR_NAME="ProxyrackNode${INDEX}IP${CLEAN_IP}"
+    
+    log "  -> Chạy Proxyrack Node $INDEX (IP: $BIND_IP) | UUID: ${PR_UUID:0:8}..."
+
+    docker run -d --network $NET --restart always $DNS_OPTS \
+      -e UUID="$PR_UUID" \
+      --name pr_$INDEX proxyrack/pop:latest >/dev/null
+
+    # Lưu thông tin vào mảng để dùng gọi API
+    PR_UUIDS+=("$PR_UUID")
+    PR_NAMES+=("$PR_NAME")
+done
+
+log "✅ Container đã khởi chạy thành công!"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | grep "proxyrack" || true
+
+# ==========================================
+# 6. GỌI API PROXYRACK (ĐỢI ĐÚNG 2 PHÚT)
+# ==========================================
+if [ ${#PR_UUIDS[@]} -gt 0 ]; then
+    echo ""
+    warn "⏳ YÊU CẦU TỪ HỆ THỐNG: Đang đợi 2 phút để thiết bị kết nối vào máy chủ Proxyrack..."
+    warn "Vui lòng KHÔNG đóng cửa sổ Terminal lúc này!"
+    
+    # Bộ đếm ngược 120s hiển thị trực quan
+    for i in {120..1}; do
+        printf "\r⏳ Còn lại %3d giây..." "$i"
+        sleep 1
+    done
+    echo -e "\n"
+
+    log "🚀 Đang gọi API thêm thiết bị lên Dashboard Proxyrack..."
+    for j in "${!PR_UUIDS[@]}"; do
+        UUID="${PR_UUIDS[$j]}"
+        NAME="${PR_NAMES[$j]}"
+        
+        log "Đang gửi đăng ký cho: $NAME"
+        
+        API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
+          -H "Api-Key: $TOKEN_PROXYRACK_API" \
+          -H "Content-Type: application/json" \
+          -H "Accept: application/json" \
+          -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
+        
+        # In JSON ra màn hình bằng jq
+        echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
+    done
+fi
+
+echo ""
+log "🎉 HOÀN TẤT CÀI ĐẶT VÀ ADD DEVICE PROXYRACK!"
