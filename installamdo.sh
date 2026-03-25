@@ -60,7 +60,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # ==== 2.5. CẤU HÌNH TỐI ƯU (SYSCTL & SWAP) ====
-log "Cấu hình bộ nhớ đệm mạng (4MB), BBR và Swappiness (15)..."
+log "Cấu hình bộ nhớ đệm mạng, BBR và Swappiness..."
 sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
 net.core.rmem_max=4194304
 net.core.wmem_max=4194304
@@ -82,9 +82,8 @@ else
 fi
 
 # ==========================================
-# 3. LẤY IP (THEO CÁCH CỦA BẠN - IP BRIEF)
+# 3. LẤY IP
 # ==========================================
-# Lệnh này lấy dòng chứa eth0, cột 3 là IP A, cột 4 là IP B (bỏ qua subnet mask)
 IP_ALLA=$(/sbin/ip -4 -br addr show scope global $IFACE | awk '{gsub(/\/.*/,"",$3); print $3}')
 IP_ALLB=$(/sbin/ip -4 -br addr show scope global $IFACE | awk '{gsub(/\/.*/,"",$4); print $4}')
 
@@ -96,7 +95,7 @@ else
 fi
 
 if [ -z "$IP_ALLB" ]; then
-    warn "⚠️  Chỉ tìm thấy 1 IP. Script sẽ chạy chế độ 1 luồng (hoặc 2 luồng chung 1 IP)."
+    warn "⚠️  Chỉ tìm thấy 1 IP. Chạy 2 luồng chung 1 IP."
     IP_ALLB=$IP_ALLA
 else
     log "IP B (Phụ):   $IP_ALLB"
@@ -115,42 +114,17 @@ ensure_network() {
 ensure_network "my_network_1" "192.168.33.0/24"
 ensure_network "my_network_2" "192.168.34.0/24"
 
-log "Cấu hình SNAT (IP Masquerade)..."
-# Xóa rule cũ
+log "Cấu hình SNAT..."
 sudo iptables -t nat -F POSTROUTING
-
-# Rule SNAT: Ép traffic từ subnet ra đúng source IP đã lấy được
 sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source $IP_ALLA
 sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source $IP_ALLB
-
-sleep 2
-
-# ==========================================
-# 5. CHECK IP OUTPUT (KIỂM TRA THỰC TẾ)
-# ==========================================
-get_public_ip() {
-    local NET=$1
-    docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
-}
-
-log "🕵️ Check IP Public đầu ra..."
-PUB_1=$(get_public_ip "my_network_1")
-PUB_2=$(get_public_ip "my_network_2")
-
-log "👉 Node 1 (IP $IP_ALLA) -> Public: $PUB_1"
-log "👉 Node 2 (IP $IP_ALLB) -> Public: $PUB_2"
-
-if [ "$PUB_1" == "$PUB_2" ] && [ "$IP_ALLA" != "$IP_ALLB" ]; then
-    warn "⚠️  CẢNH BÁO: IP Output đang trùng nhau ($PUB_1)."
-    warn "Nguyên nhân: DigitalOcean có thể đang NAT IP phụ $IP_ALLB qua IP chính."
-fi
 
 # ==========================================
 # 6. KHỞI CHẠY NODE
 # ==========================================
 log "🚀 Start Nodes..."
 
-# Kéo image song song cho nhanh
+# Kéo image song song
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
   docker pull $img >/dev/null 2>&1 &
 done
@@ -160,7 +134,6 @@ fi
 wait
 
 run_nodes() {
-    # Thêm biến INDEX để xác định số thứ tự (1 hoặc 2) cho volume Mysterium
     local INDEX=$1
     local NET=$2
     local BIND_IP=$3
@@ -170,7 +143,7 @@ run_nodes() {
     docker run -d --network $NET --restart always --name tm_$SUFFIX $DNS_OPTS \
       $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
 
-    # Mysterium (GIỮ NGUYÊN SCRIPT GỐC CỦA ÔNG)
+    # Mysterium
     docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
       -p ${BIND_IP}:4449:4449 \
       --name myst_$SUFFIX -v myst-data${INDEX}:/var/lib/mysterium-node \
@@ -190,34 +163,33 @@ run_nodes() {
       --name rp_$SUFFIX \
       -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 
-    # Proxyrack (Chỉ chạy khi không phải ARM)
+    # Proxyrack (CHẾ ĐỘ HYBRID MỚI)
     if [[ "$ARCH" != "aarch64" ]]; then
-      # Băm IP ra UUID cố định & format lại tên
-      local PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+      local PR_UUID=""
       local CLEAN_IP="${BIND_IP//./}"
       local PR_NAME="ProxyrackNode${INDEX}IP${CLEAN_IP}"
+
+      if [ -f "$MARKER_FILE" ]; then
+          # MÁY CŨ: Dùng công thức cũ để giữ Dashboard
+          PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+      else
+          # MÁY MỚI: Dùng công thức mới (IP + MAC) để chống trùng lặp
+          local MAC_ADDR=$(ip link show dev $IFACE 2>/dev/null | awk '/ether/ {print $2}')
+          if [ -z "$MAC_ADDR" ]; then MAC_ADDR="NOMAC"; fi
+          PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+      fi
 
       docker run -d --network $NET --restart always $DNS_OPTS \
         -e UUID="$PR_UUID" \
         --name pr_$SUFFIX $IMG_PR >/dev/null
 
-      # Thêm vào mảng để gọi API
       PR_UUIDS+=("$PR_UUID")
       PR_NAMES+=("$PR_NAME")
     fi
 }
 
-# Chạy Node 1 (Index 1 -> Volume myst-data1)
 run_nodes 1 "my_network_1" "$IP_ALLA" "main"
-
-# Chạy Node 2 (Index 2 -> Volume myst-data2)
-if [ -n "$IP_ALLB" ] && [ "$IP_ALLB" != "$IP_ALLA" ]; then
-    run_nodes 2 "my_network_2" "$IP_ALLB" "sub"
-elif [ "$IP_ALLB" == "$IP_ALLA" ]; then
-    # Trường hợp 1 IP chạy 2 node
-    log "Chạy node 2 trên cùng IP chính..."
-    run_nodes 2 "my_network_2" "$IP_ALLA" "sub"
-fi
+run_nodes 2 "my_network_2" "$IP_ALLB" "sub"
 
 log "==== DONE ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
@@ -228,33 +200,28 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 if [ ${#PR_UUIDS[@]} -gt 0 ]; then
     echo "------------------------------------------------------"
     if [ -f "$MARKER_FILE" ]; then
-        log "✅ HỆ THỐNG GHI NHẬN: Đã đăng ký Proxyrack trước đó."
-        log "👉 Container đã nhận lại UUID cũ. BỎ QUA thời gian chờ và API!"
+        log "✅ HỆ THỐNG GHI NHẬN: Máy cũ, giữ nguyên UUID cũ."
     else
-        warn "⏳ Đang đợi 2 phút để thiết bị Proxyrack kết nối..."
+        warn "⏳ Đang đợi 2 phút để thiết bị kết nối Proxyrack..."
         for i in {120..1}; do
             printf "\r⏳ Còn lại %3d giây..." "$i"
             sleep 1
         done
         echo -e "\n"
 
-        log "🚀 Đang gọi API thêm thiết bị Proxyrack..."
+        log "🚀 Gọi API đăng ký thiết bị mới..."
         for j in "${!PR_UUIDS[@]}"; do
             UUID="${PR_UUIDS[$j]}"
             NAME="${PR_NAMES[$j]}"
-            
-            log "Gửi đăng ký cho: $NAME"
-            
+            log "Gửi đăng ký: $NAME"
             API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
               -H "Api-Key: $TOKEN_PROXYRACK_API" \
               -H "Content-Type: application/json" \
               -H "Accept: application/json" \
               -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
-            
             echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
         done
-        
         touch "$MARKER_FILE"
-        log "✅ Đã lưu cờ đánh dấu tại $MARKER_FILE"
+        log "✅ Đã lưu cờ đánh dấu máy mới tại $MARKER_FILE"
     fi
 fi
