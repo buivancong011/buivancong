@@ -82,12 +82,12 @@ else
 fi
 
 # ==========================================
-# 3. LẤY IP
+# 3. LẤY IP (IP PUBLIC HIỂN THỊ TRONG VPS)
 # ==========================================
 IP_ALLA=$(/sbin/ip -4 -br addr show scope global $IFACE | awk '{gsub(/\/.*/,"",$3); print $3}')
 IP_ALLB=$(/sbin/ip -4 -br addr show scope global $IFACE | awk '{gsub(/\/.*/,"",$4); print $4}')
 
-log "--- KẾT QUẢ QUÉT IP ---"
+log "--- KẾT QUẢ QUÉT IP NỘI BỘ ---"
 if [ -z "$IP_ALLA" ]; then 
     err "Không tìm thấy IP nào trên $IFACE!"
 else
@@ -114,10 +114,33 @@ ensure_network() {
 ensure_network "my_network_1" "192.168.33.0/24"
 ensure_network "my_network_2" "192.168.34.0/24"
 
-log "Cấu hình SNAT..."
+log "Cấu hình SNAT (IP Masquerade)..."
 sudo iptables -t nat -F POSTROUTING
 sudo iptables -t nat -I POSTROUTING -s 192.168.33.0/24 -j SNAT --to-source $IP_ALLA
 sudo iptables -t nat -I POSTROUTING -s 192.168.34.0/24 -j SNAT --to-source $IP_ALLB
+
+# ==========================================
+# 5. CHECK IP OUTPUT (CƠ CHẾ KIỂM TRA GIỐNG AWS)
+# ==========================================
+get_public_ip() {
+    local NET=$1
+    # Dùng image curl nhỏ gọn để test IP đầu ra của network đó
+    docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org || echo "Error"
+}
+
+log "🕵️ Đang kiểm tra IP Public thực tế của từng cụm..."
+PUB_1=$(get_public_ip "my_network_1")
+PUB_2=$(get_public_ip "my_network_2")
+
+log "👉 Cụm 1 (Cấu hình $IP_ALLA) -> Thực tế đi ra: $PUB_1"
+log "👉 Cụm 2 (Cấu hình $IP_ALLB) -> Thực tế đi ra: $PUB_2"
+
+if [ "$PUB_1" == "$PUB_2" ] && [ "$IP_ALLA" != "$IP_ALLB" ]; then
+    warn "⚠️ CẢNH BÁO: Cả 2 network đang đi chung một IP Public ($PUB_1)!"
+    warn "Hãy kiểm tra lại xem VPS của bạn có thực sự hỗ trợ Multi-IP Public hay không."
+elif [ "$PUB_1" != "Error" ] && [ "$PUB_2" != "Error" ]; then
+    log "✅ TUYỆT VỜI: Mỗi cụm mạng đã thoát ra bằng một IP riêng biệt."
+fi
 
 # ==========================================
 # 6. KHỞI CHẠY NODE
