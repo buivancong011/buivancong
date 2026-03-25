@@ -20,6 +20,11 @@ MARKER_FILE="/root/.proxyrack_registered_vinh"
 declare -a PR_UUIDS
 declare -a PR_NAMES
 
+# Hàm log
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
+
 # ==========================================
 # 2. CHỌN IMAGE & PHÂN TÁCH KIẾN TRÚC (CPU)
 # ==========================================
@@ -38,11 +43,6 @@ IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
 IMG_PR="proxyrack/pop:latest"
 
-# Hàm log
-log() { echo -e "\e[32m[INFO] $1\e[0m"; }
-warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
-err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
-
 # ==========================================
 # 3. CHUẨN BỊ & DỌN DẸP
 # ==========================================
@@ -58,20 +58,47 @@ if ! command -v docker &> /dev/null; then
   sudo systemctl enable --now docker
 fi
 
+# ==== 3.5. CẤU HÌNH TỐI ƯU (SYSCTL & SWAP) ====
+log "Cấu hình bộ nhớ đệm mạng (4MB), BBR và Swappiness (15)..."
+sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
+net.core.rmem_max=4194304
+net.core.wmem_max=4194304
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+vm.swappiness=10
+EOF
+sudo sysctl -p /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null 2>&1 || true
+
+log "Cấu hình Swap 2GB..."
+if [ ! -f /swapfile ]; then
+    sudo fallocate -l 2G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+else
+    log "Swap file đã tồn tại, bỏ qua bước tạo mới."
+fi
+
 log "Dọn dẹp container cũ..."
 if [ -n "$(docker ps -aq)" ]; then docker rm -f $(docker ps -aq) >/dev/null 2>&1; fi
 docker network prune -f >/dev/null 2>&1
 
 # ==========================================
-# 4. BẮT IP THEO CƠ CHẾ ENX0
+# 4. BẮT IP THÔNG MINH (TỰ ĐỘNG TÌM INTERFACE)
 # ==========================================
-log "Đang bắt IP trên interface enX0..."
+log "Đang tự động dò tìm Interface mạng chính..."
+# Tìm interface đang có default route (thường là ens5 hoặc eth0)
+MAIN_IFACE=$(ip route show default | awk '/default/ {print $5}')
 
-IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute enX0 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
-IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic enX0 | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
+if [ -z "$MAIN_IFACE" ]; then err "Không tìm thấy Interface mạng chính!"; fi
+log "Đã tìm thấy Interface: $MAIN_IFACE"
+
+IP_ALLA=$(/sbin/ip -4 -o addr show scope global noprefixroute $MAIN_IFACE | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
+IP_ALLB=$(/sbin/ip -4 -o addr show scope global dynamic $MAIN_IFACE | awk '{gsub(/\/.*/,"",$4); print $4}' | head -n 1)
 
 if [ -z "$IP_ALLA" ] || [ -z "$IP_ALLB" ]; then 
-    err "Không lấy được IP trên enX0! Hãy kiểm tra lệnh: ip addr show dev enX0"
+    err "Không lấy đủ 2 IP trên $MAIN_IFACE! AWS chưa cấp đủ secondary IP?"
 fi
 
 log "👉 IP Bắt được: A=$IP_ALLA | B=$IP_ALLB"
@@ -115,10 +142,10 @@ log "   Check 1: Source $IP_ALLA -> Exit: [$PUB_IP_1]"
 log "   Check 2: Source $IP_ALLB -> Exit: [$PUB_IP_2]"
 
 if [ -z "$PUB_IP_1" ] || [ -z "$PUB_IP_2" ]; then err "Lỗi kết nối ra ngoài internet!"; fi
-if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then err "LỖI: Trùng IP Public."; fi
+if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then err "LỖI: Trùng IP Public. AWS chưa gán Elastic IP thứ 2?"; fi
 
 # ==========================================
-# 7. KHỞI CHẠY NODES (GIỮ NGUYÊN LOG BÌNH THƯỜNG)
+# 7. KHỞI CHẠY NODES
 # ==========================================
 log "🚀 Đang Pull images (Song song)..."
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
@@ -136,7 +163,7 @@ run_node_group() {
   docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
     $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium (GIỮ NGUYÊN NHƯ SCRIPT GỐC CỦA ÔNG)
+  # Mysterium
   docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
     -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
