@@ -38,7 +38,7 @@ IMG_MYST="mysteriumnetwork/myst:latest"
 IMG_UR="techroy23/docker-urnetwork:latest"
 IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
-IMG_PR="techroy23/docker-proxyrack:latest"
+IMG_PR="proxyrack/pop:latest"
 
 # Logger
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
