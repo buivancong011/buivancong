@@ -59,6 +59,28 @@ if ! command -v docker &> /dev/null; then
   sudo systemctl enable --now docker
 fi
 
+# ==== 2.5. CẤU HÌNH TỐI ƯU (SYSCTL & SWAP) ====
+log "Cấu hình bộ nhớ đệm mạng (4MB), BBR và Swappiness (15)..."
+sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
+net.core.rmem_max=4194304
+net.core.wmem_max=4194304
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+vm.swappiness=10
+EOF
+sudo sysctl -p /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null 2>&1 || true
+
+log "Cấu hình Swap 2GB..."
+if [ ! -f /swapfile ]; then
+    sudo fallocate -l 2G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+else
+    log "Swap file đã tồn tại, bỏ qua bước tạo mới."
+fi
+
 # ==========================================
 # 3. LẤY IP (THEO CÁCH CỦA BẠN - IP BRIEF)
 # ==========================================
@@ -107,7 +129,8 @@ sleep 2
 # 5. CHECK IP OUTPUT (KIỂM TRA THỰC TẾ)
 # ==========================================
 get_public_ip() {
-    docker run --rm --network "$1" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
+    local NET=$1
+    docker run --rm --network "$NET" $DNS_OPTS curlimages/curl:latest -s --max-time 10 https://api.ipify.org
 }
 
 log "🕵️ Check IP Public đầu ra..."
