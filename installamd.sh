@@ -59,7 +59,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # ==== 3.5. CẤU HÌNH TỐI ƯU (SYSCTL & SWAP) ====
-log "Cấu hình bộ nhớ đệm mạng (4MB), BBR và Swappiness (15)..."
+log "Cấu hình bộ nhớ đệm mạng (4MB), BBR và Swappiness (10)..."
 sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
 net.core.rmem_max=4194304
 net.core.wmem_max=4194304
@@ -185,10 +185,21 @@ run_node_group() {
 
   # Proxyrack (Chỉ chạy khi không phải ARM)
   if [[ "$ARCH" != "aarch64" ]]; then
-    # Băm IP ra UUID cố định & format lại tên
-    local PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+    local PR_UUID=""
     local CLEAN_IP="${BIND_IP//./}"
     local PR_NAME="ProxyrackNode${ID}IP${CLEAN_IP}"
+
+    # ==== CƠ CHẾ HYBRID UUID (BẢO VỆ MÁY CŨ, TỐI ƯU MÁY MỚI) ====
+    if [ -f "$MARKER_FILE" ]; then
+        # TRƯỜNG HỢP 1: MÁY CŨ (Đã có marker file) -> Dùng công thức cũ
+        PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+    else
+        # TRƯỜNG HỢP 2: MÁY MỚI HOÀN TOÀN -> Dùng MAC Address
+        local MAC_ADDR=$(ip link show dev $MAIN_IFACE 2>/dev/null | awk '/ether/ {print $2}')
+        if [ -z "$MAC_ADDR" ]; then MAC_ADDR="NOMAC"; fi
+        PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+    fi
+    # ============================================================
 
     docker run -d --network $NET --restart always $DNS_OPTS \
       -e UUID="$PR_UUID" \
