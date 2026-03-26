@@ -1,53 +1,60 @@
 #!/bin/bash
-set -e
+# Không dùng set -e ở đây để ta chủ động kiểm soát lỗi từng bước
+# set -e
 
 # ==============================================================================
-# 0. TIẾP NHẬN IP ĐẦU VÀO (Không giới hạn số lượng IP)
+# 0. TIẾP NHẬN IP ĐẦU VÀO & FIX MTU (Dành riêng cho AWS/GCP)
 # ==============================================================================
 OLD_IPS=("$@")
 if [ ${#OLD_IPS[@]} -eq 0 ]; then
     echo "❌ LỖI: Thiếu IP đầu vào!"
-    echo "👉 Cú pháp: ./restore.sh <IP_CŨ_1> [IP_CŨ_2] [IP_CŨ_3]..."
-    echo "👉 Ví dụ: ./restore.sh 157.245.20.29 178.128.205.190"
     exit 1
 fi
 
-echo "🚀 ĐANG KHỞI CHẠY HỆ THỐNG KHÔI PHỤC UNIVERSAL CHO ${#OLD_IPS[@]} IP..."
+# Hạ MTU xuống 1500 để tránh lỗi nghẽn mạng "curl (23)" trên AWS
+sudo ip link set dev eth0 mtu 1500 >/dev/null 2>&1 || true
+
+echo "🚀 ĐANG KHỞI CHẠY HỆ THỐNG KHÔI PHỤC VÔ CỰC CHO ${#OLD_IPS[@]} IP..."
 
 # ==============================================================================
-# 1. CẤU HÌNH TOKEN (Đã cập nhật Token mới nhất của ông)
+# 1. CẤU HÌNH TOKEN (⚠️ CẦN CẬP NHẬT TOKEN MỚI TẠI ĐÂY)
 # ==============================================================================
-MY_TOKEN='{"access_token":"ya29.a0Aa7MYipPua2ueD5gwhKx21SbvDby1XSOvA2gDFpkojVFvqjb2aZFrdJI6Z8rw-XPWpOgHTHjSjlqkr8fuzL8PI7i_e7DtILZJ4dqMDHpkG4DPdI5sP5MD0EtteCljIOTArma0bTxd9EWf52zZN-4EJg5Gv7dhJReDcBmf0leN5_8XVXQB5HZzsTuh3dFNi0wHos-siEaCgYKAbQSARISFQHGX2Mif6156UG6LOPE68XXnrooFw0206","token_type":"Bearer","refresh_token":"1//0eKQU7F6B5L2MCgYIARAAGA4SNwF-L9IrKWAmODKTp9pWSVNs2kMK0QkzEYrVPFze57Hd3WyenHbshJWKSTRGjnbtdcfzRYquHx8","expiry":"2026-03-27T05:16:39.1956408+07:00"}'
+# Lưu ý: Token ya29... cũ của ông đã hết hạn. Hãy dán Token mới vào đây.
+MY_TOKEN='{"access_token":"ya29.a0Aa7MYipPua2ueD5gwhKx21SbvDby1XSOvA2gDFpkojVFvqjb2aZFrdJI6Z8rw-XPWpOgHTHjSjlqkr8fuzL8PI7i_e7DtILZJ4dqMDHpkG4DPdI5sP5MD0EtteCljIOTArma0bTxd9EWf52zZN-4EJg5Gv7dhJReDcBmf0leN5_8XVXQB5HZzsTuh3dFNi0wHos-siEaCgYKAbQSARISFQHGX2Mif6156UG6LOPE68XXnrooFw0206","token_type":"Bearer","refresh_token":"1//0eKQU7F6B5L2MCgYIARAAGA4SNwF-L9IrKWAmODKTp9pWSVNs2kMK0QkzEYrVPFze57Hd3WyenHbshJWKSTRGjnbtdcfzRYquHx8","expiry":"2026-03-27T07:00:00.000Z"}'
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
 TEMP_DIR="/root/restore_temp"
 
 # ==========================================
-# 2. TỰ ĐỘNG NHẬN DIỆN OS & CÀI ĐẶT TOOLS
+# 2. TỰ ĐỘNG NHẬN DIỆN OS & CÀI ĐẶT TOOLS (Fix AWS Conflict)
 # ==========================================
+echo "[+] Đang kiểm tra và cài đặt công cụ cần thiết..."
+
 if command -v apt-get &> /dev/null; then
-    echo "[+] Phát hiện Debian/Ubuntu. Đang cài tools..."
     export DEBIAN_FRONTEND=noninteractive
     sudo apt-get update -qq >/dev/null 2>&1
-    sudo apt-get install -y -q unzip curl grep >/dev/null 2>&1
+    sudo apt-get install -y -q unzip curl grep util-linux >/dev/null 2>&1 || true
+elif command -v dnf &> /dev/null; then
+    # Fix AWS 2023: Ưu tiên dùng --allowerasing để xử lý curl-minimal
+    sudo dnf install -y -q unzip curl grep util-linux --skip-broken --allowerasing >/dev/null 2>&1 || true
 elif command -v yum &> /dev/null; then
-    echo "[+] Phát hiện RHEL (Amazon Linux/Alibaba). Đang cài tools..."
-    sudo yum install -y -q unzip curl grep >/dev/null 2>&1
-else
-    echo "❌ Không nhận diện được OS. Dừng script!"
-    exit 1
+    sudo yum install -y -q unzip curl grep util-linux >/dev/null 2>&1 || true
 fi
 
+# Cài Rclone (Dùng -fsSL để theo redirect chuẩn của GitHub/Rclone)
 if ! command -v rclone &> /dev/null; then
-    curl -s https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+    echo "[+] Đang cài đặt Rclone..."
+    curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null 2>&1 || true
 fi
 
+# Cài Docker
 if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
-    sudo systemctl enable --now docker
+    echo "[+] Đang cài đặt Docker..."
+    curl -fsSL https://get.docker.com | sh >/dev/null 2>&1 || true
+    sudo systemctl enable --now docker >/dev/null 2>&1 || true
 fi
 
 # ==========================================
-# 3. KHỞI TẠO CẤU HÌNH RCLONE
+# 3. KHỞI TẠO CẤU HÌNH RCLONE & CHECK TOKEN
 # ==========================================
 mkdir -p /root/.config/rclone
 cat << EOF > /root/.config/rclone/rclone.conf
@@ -58,76 +65,75 @@ token = $MY_TOKEN
 EOF
 mkdir -p "$TEMP_DIR"
 
+# Kiểm tra Token sống/chết (Bước này cực kỳ quan trọng)
 if ! rclone lsd gdrive: >/dev/null 2>&1; then
-    echo "❌ LỖI: Token Google Drive lỗi hoặc đã hết hạn. Hãy cập nhật Token!"
+    echo "--------------------------------------------------------"
+    echo "❌ LỖI CHÍ MẠNG: Token Google Drive đã HẾT HẠN hoặc SAI!"
+    echo "👉 Hãy chạy 'rclone authorize drive' trên máy cá nhân để lấy Token mới."
+    echo "👉 Sau đó cập nhật vào biến MY_TOKEN trong script này."
+    echo "--------------------------------------------------------"
     exit 1
 fi
 
 # ==========================================
-# 4. HÀM KHÔI PHỤC THÔNG MINH (TỰ NHẬN DIỆN VOLUME)
+# 4. HÀM KHÔI PHỤC THÔNG MINH
 # ==========================================
 restore_process() {
     local TARGET_IP=$1
     echo "--------------------------------------------------------"
     echo "🔍 Đang tìm bản Backup mới nhất cho IP: $TARGET_IP"
 
-    # Lấy file mới nhất chứa IP này trên Google Drive
+    # Lấy file mới nhất
     FILE_NAME=$(rclone lsf "$RCLONE_REMOTE" --files-only | grep "$TARGET_IP" | sort -r | head -n 1)
 
     if [ -z "$FILE_NAME" ]; then
-        echo "❌ LỖI: Không tìm thấy file backup nào cho IP $TARGET_IP trên Drive!"
-        return 1 # Bỏ qua IP này và chạy tiếp IP khác
+        echo "❌ LỖI: Không tìm thấy file backup nào cho IP $TARGET_IP."
+        return 1
     fi
 
     echo "📥 Đã tìm thấy: $FILE_NAME"
 
-    # ==========================================
-    # CƠ CHẾ ĐỌC NÃO FILE: HỖ TRỢ CẢ FILE CŨ LẪN MỚI
-    # Tự động tìm đúng Volume (myst-data1, myst-data2...)
-    # ==========================================
+    # Nhận diện Volume đích
     if echo "$FILE_NAME" | grep -q "MainNode"; then
         VOL_NAME="myst-data"
     elif echo "$FILE_NAME" | grep -qE "(Node|myst)[0-9]+"; then
-        # Bóc tách con số từ chuỗi NodeX hoặc mystX (VD: myst2 -> lấy số 2)
         ID_NUM=$(echo "$FILE_NAME" | grep -oE "(Node|myst)[0-9]+" | grep -oE "[0-9]+")
         VOL_NAME="myst-data${ID_NUM}"
     else
-        VOL_NAME="myst-data" # Mặc định an toàn
+        VOL_NAME="myst-data"
     fi
 
     echo "🎯 Đích đến dự kiến: Docker Volume [$VOL_NAME]"
     
-    # Tải file về máy
+    # Tải file
     echo "☁️  Đang tải từ Google Drive..."
     if ! rclone copyto "$RCLONE_REMOTE/$FILE_NAME" "$TEMP_DIR/temp_backup.tar"; then
         echo "❌ LỖI: Tải file thất bại."
         return 1
     fi
 
-    # Tạo volume Docker mới cứng để khôi phục "vô trùng"
+    # Khôi phục Volume
     echo "♻️  Đang xả nén dữ liệu vào $VOL_NAME..."
     docker volume rm "$VOL_NAME" >/dev/null 2>&1 || true
     docker volume create "$VOL_NAME" >/dev/null 2>&1
     
-    # Xả nén bằng Alpine
     if ! docker run --rm -v "$VOL_NAME":/data -v "$TEMP_DIR":/backup alpine tar xf "/backup/temp_backup.tar" -C /data; then
          echo "❌ LỖI: Bung nén thất bại."
          return 1
     fi
 
     rm -f "$TEMP_DIR/temp_backup.tar"
-    echo "✅ Khôi phục THÀNH CÔNG cho IP $TARGET_IP vào $VOL_NAME!"
+    echo "✅ THÀNH CÔNG: IP $TARGET_IP -> $VOL_NAME"
 }
 
 # ==========================================
-# 5. VÒNG LẶP THỰC THI CHO TẤT CẢ IP
+# 5. VÒNG LẶP THỰC THI
 # ==========================================
-echo "Bắt đầu tiến trình..."
 for IP in "${OLD_IPS[@]}"; do
-    restore_process "$IP" || echo "⚠️ Đã bỏ qua khôi phục cho $IP do có lỗi."
+    restore_process "$IP" || echo "⚠️ Đã bỏ qua khôi phục cho $IP."
 done
 
-# Dọn dẹp rác
+# Dọn dẹp
 rm -rf "$TEMP_DIR"
 echo "========================================================"
-echo "🎉 TOÀN BỘ TIẾN TRÌNH RESTORE ĐÃ HOÀN TẤT TRỌN VẸN!"
+echo "🎉 TOÀN BỘ TIẾN TRÌNH RESTORE ĐÃ HOÀN TẤT!"
