@@ -10,22 +10,25 @@ MY_TOKEN='{"access_token":"ya29.a0Aa7MYipPua2ueD5gwhKx21SbvDby1XSOvA2gDFpkojVFvq
 echo "🚀 ĐANG KHỞI CHẠY HỆ THỐNG BACKUP VÍ MYSTERIUM (CHẠY 1 LẦN)..."
 
 # ==========================================
-# 1. TỰ ĐỘNG NHẬN DIỆN OS & CÀI ĐẶT TOOLS
-# ==========================================
+# --- 1. TỰ ĐỘNG NHẬN DIỆN OS & CÀI ĐẶT TOOLS (Bản chuẩn Vô Cực) ---
+echo "[+] Đang kiểm tra và cài đặt công cụ cần thiết..."
+
 if command -v apt-get &> /dev/null; then
-    echo "[+] Phát hiện Debian/Ubuntu. Đang cài tools..."
+    # Dành cho Debian 12, Ubuntu, Kali... (Cực kỳ mượt)
     export DEBIAN_FRONTEND=noninteractive
     sudo apt-get update -qq >/dev/null 2>&1
     sudo apt-get install -y -q unzip curl grep util-linux >/dev/null 2>&1
+
+elif command -v dnf &> /dev/null; then
+    # Dành cho Amazon Linux 2023, Fedora (Trị dứt điểm lỗi Conflict Curl)
+    sudo dnf install -y -q unzip grep util-linux --skip-broken >/dev/null 2>&1
+
 elif command -v yum &> /dev/null; then
-    echo "[+] Phát hiện RHEL (Amazon Linux/Alibaba). Đang cài tools..."
-    sudo yum install -y -q unzip curl grep util-linux >/dev/null 2>&1
-else
-    echo "❌ Không nhận diện được OS. Dừng script!"
-    exit 1
+    # Dành cho Amazon Linux 2, CentOS, RHEL 7/8
+    sudo yum install -y -q unzip grep util-linux >/dev/null 2>&1
 fi
 
-# Cài đặt Rclone nếu chưa có
+# Cài Rclone nếu chưa có (Dùng curl đã có sẵn trên mọi máy)
 if ! command -v rclone &> /dev/null; then
     echo "[+] Đang cài đặt Rclone..."
     curl -s https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
