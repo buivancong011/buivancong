@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# ⚠️ CẤU HÌNH TOKEN (Dùng chung cho mọi máy chủ)
+# ⚠️ CẤU HÌNH TOKEN GOOGLE DRIVE (Dùng chung cho mọi máy chủ)
 # ==============================================================================
 MY_TOKEN='{"access_token":"ya29.a0ATkoCc7ankqGNauZI5ba2fhwxEU6Bxu2kdHhfKbfDb2Mg2A2XoM5uXAvO3yjCIav-wgmxmv7OD76FHFVhqEeo-Es5wp-Pa_-QhjUDAnwQhzeH--T9dWC33OGWDfcPts-QQJd29saLOZ-jW_1VxCKzePbpdAG3OXkXdW8SKTySzH_s7EV6QqqeKg0PgZ85fJR0EKUBNIaCgYKARESARISFQHGX2MiBcHKKR3o_G3gFqSHzOg1zQ0206","token_type":"Bearer","refresh_token":"1//0e5e8ZmSOBcRLCgYIARAAGA4SNwF-L9Irxzx21n-zPpq_Ls-_Pzb93QsnZUDSxi_Vspvfpogmh8bHeXDq4ZAaZTarsEk3E0WvITQ","expiry":"2026-03-22T03:54:15.1115498+07:00"}'
 # ==============================================================================
@@ -49,7 +49,7 @@ EOF
 echo "----------------------------------------------------------------"
 echo "📦 BẮT ĐẦU QUÉT VÀ ĐÓNG GÓI DỮ LIỆU NODE..."
 
-# Tối ưu I/O và CPU (chống lag máy)
+# Tối ưu I/O và CPU (chống lag máy cho VPS 1 Core)
 renice -n 19 -p $$ >/dev/null 2>&1 || true
 ionice -c 3 -p $$ >/dev/null 2>&1 || true
 
@@ -69,14 +69,19 @@ for VOL in $MYST_VOLUMES; do
     # Bóc tách ID (Ví dụ: myst-data3 -> ID=3. myst-data -> ID rỗng)
     ID=${VOL#myst-data}
     
-    # Kỹ thuật Fallback Mạng để bắt IP Public
+    # ==========================================
+    # CƠ CHẾ ĐỊNH TUYẾN MẠNG & TÊN FILE CHUẨN XÁC
+    # ==========================================
     if [ -z "$ID" ]; then
+        # Dành cho máy 1 Node (Linode)
         NET="bridge"
-        SUFFIX="MainNode"
+        SUFFIX="MainNode"  # Tạo file dạng: IP_MainNode_Date.tar
     else
+        # Dành cho máy Đa Node (AWS, UpCloud, DO, Azure...)
         NET="my_network_$ID"
-        SUFFIX="Node$ID"
-        # Nếu mạng riêng bị xóa/lỗi, lùi về mạng bridge
+        SUFFIX="myst$ID"   # Tạo file dạng: IP_myst1_Date.tar (Khớp 100% tên cũ)
+        
+        # Fallback: Nếu mạng riêng bị xóa/lỗi, lùi về mạng bridge mặc định
         if ! docker network inspect "$NET" >/dev/null 2>&1; then
             NET="bridge"
         fi
@@ -94,10 +99,10 @@ for VOL in $MYST_VOLUMES; do
         echo "   🌐 Đã lấy được IP Public: $PUBLIC_IP"
     fi
     
-    # Format File: IP_NodeID_NgayThang.tar (Ví dụ: 165.245.164.87_Node1_2026-03-27.tar)
+    # Format File chuẩn tương thích ngược
     FILENAME="${PUBLIC_IP}_${SUFFIX}_$(date +%F).tar"
     
-    # Đóng gói TAR (Không nén)
+    # Đóng gói TAR (Không nén để giảm tải CPU)
     echo "   📦 Đang đóng gói dữ liệu thành: $FILENAME"
     docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar cf "/backup/$FILENAME" -C /data .
     
