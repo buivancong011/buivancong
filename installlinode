@@ -12,9 +12,10 @@ UR_USER="nguyenvinhcao123@gmail.com"
 UR_PASS="CAOcao123CAO@"
 TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 
-# ==== CẤU HÌNH DNS & TỐI ƯU ====
+# ==== CẤU HÌNH DNS & MARKERS ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-MARKER_FILE="/root/.proxyrack_registered_vinh"
+MARKER_V1="/root/.proxyrack_registered_vinh"   # Cờ máy cũ (V1)
+MARKER_V2="/root/.proxyrack_v2_mac_vinh"       # Cờ máy mới (V2)
 
 # ==========================================
 # 2. HÀM LOG & KIỂM TRA MÔI TRƯỜNG
@@ -41,7 +42,6 @@ if ! command -v docker &> /dev/null; then
   log "Đang cài đặt Docker bản mới nhất..."
   curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
   sudo systemctl enable --now docker
-  log "Docker đã sẵn sàng."
 fi
 
 # ==========================================
@@ -82,61 +82,38 @@ docker pull mysteriumnetwork/myst:latest >/dev/null 2>&1 &
 docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
 docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
 docker pull repocket/repocket:latest >/dev/null 2>&1 &
-
-if [[ "$ARCH" != "aarch64" ]]; then
-  docker pull proxyrack/pop:latest >/dev/null 2>&1 &
-fi
-
+[[ "$ARCH" != "aarch64" ]] && docker pull proxyrack/pop:latest >/dev/null 2>&1 &
 wait
-log "Tải ảnh hoàn tất."
 
 # ==========================================
 # 7. KHỞI CHẠY CONTAINER (FULL TÀI NGUYÊN)
 # ==========================================
-log "🚀 Khởi chạy các ứng dụng cày tiền (Mạng Bridge Mặc định)..."
+log "🚀 Khởi chạy các ứng dụng cày tiền..."
 
-# 1. Traffmonetizer
-docker run -d --restart always --name tm $DNS_OPTS \
-  traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+docker run -d --restart always --name tm $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+docker run -d --restart unless-stopped --cap-add NET_ADMIN $DNS_OPTS -p 4449:4449 --name myst -v myst-data:/var/lib/mysterium-node mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
+docker run -d --name earnfm --restart always $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
+docker run -d --name repocket --restart always $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
 
-# 2. Mysterium (Mapping thẳng Port 4449 và giữ Volume myst-data)
-docker run -d --restart unless-stopped --cap-add NET_ADMIN $DNS_OPTS \
-  -p 4449:4449 \
-  --name myst -v myst-data:/var/lib/mysterium-node \
-  mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
-
-# 3. UrNetwork
-docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS \
-  -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" \
-  techroy23/docker-urnetwork:latest >/dev/null
-
-# 4. EarnFM
-docker run -d --name earnfm --restart always $DNS_OPTS \
-  -e EARNFM_TOKEN="$TOKEN_EARNFM" \
-  earnfm/earnfm-client:latest >/dev/null
-
-# 5. Repocket
-docker run -d --name repocket --restart always $DNS_OPTS \
-  -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
-  repocket/repocket:latest >/dev/null
-
-# 6. Proxyrack
+# --- LOGIC SỬA ĐỔI RIÊNG CHO PROXYRACK ---
 if [[ "$ARCH" != "aarch64" ]]; then
-  PUBLIC_IP=$(curl -s --max-time 10 https://api.ipify.org || echo "FAIL")
-  
-  if [ "$PUBLIC_IP" == "FAIL" ]; then
-      MAIN_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -n 1)
-      MAC_ADDR=$(ip link show dev $MAIN_IFACE 2>/dev/null | awk '/ether/ {print $2}')
-      PR_UUID=$(echo -n "${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-      PR_NAME="ProxyrackNode_MAC_${MAC_ADDR//:/}"
-  else
+  # Lấy thông tin cơ bản
+  MAIN_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -n 1)
+  MAC_ADDR=$(cat /sys/class/net/$MAIN_IFACE/address 2>/dev/null || echo "NOMAC")
+  PUBLIC_IP=$(curl -s --max-time 10 https://api.ipify.org || echo "UNKNOWN")
+  PR_NAME="PR_Node_${PUBLIC_IP//./}"
+
+  # Rẽ nhánh băm UUID theo yêu cầu
+  if [ -f "$MARKER_V2" ]; then
+      PR_UUID=$(echo -n "${PUBLIC_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+  elif [ -f "$MARKER_V1" ]; then
       PR_UUID=$(echo -n "${PUBLIC_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-      PR_NAME="ProxyrackNode_IP_${PUBLIC_IP//./}"
+  else
+      PR_UUID=$(echo -n "${PUBLIC_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
   fi
 
-  docker run -d --name proxyrack --restart always $DNS_OPTS \
-    -e UUID="$PR_UUID" \
-    proxyrack/pop:latest >/dev/null
+  docker run -d --name proxyrack --restart always $DNS_OPTS -e UUID="$PR_UUID" proxyrack/pop:latest >/dev/null
 fi
 
 # ==========================================
@@ -144,21 +121,20 @@ fi
 # ==========================================
 if [[ "$ARCH" != "aarch64" ]]; then
   echo "------------------------------------------------------"
-  if [ -f "$MARKER_FILE" ]; then
-      log "✅ Đã đăng ký Proxyrack từ trước. Bỏ qua gọi API!"
+  if [ -f "$MARKER_V1" ] || [ -f "$MARKER_V2" ]; then
+      log "✅ Đã đăng ký Proxyrack (V1/V2). Bỏ qua gọi API!"
   else
       warn "⏳ Đang đợi 2 phút để Proxyrack kết nối..."
       for i in {120..1}; do printf "\r⏳ Còn lại %3d giây..." "$i"; sleep 1; done; echo ""
 
-      log "🚀 Gửi đăng ký: $PR_NAME"
+      log "🚀 Gửi đăng ký: $PR_NAME (UUID: $PR_UUID)"
       curl -s -X POST https://peer.proxyrack.com/api/device/add \
         -H "Api-Key: $TOKEN_PROXYRACK_API" \
         -H "Content-Type: application/json" \
-        -H "Accept: application/json" \
         -d "{\"device_id\":\"$PR_UUID\",\"device_name\":\"$PR_NAME\"}" > /dev/null 2>&1 || true
       
-      touch "$MARKER_FILE"
-      log "✅ Đã lưu cờ đánh dấu tại $MARKER_FILE"
+      touch "$MARKER_V2"
+      log "✅ Đã lưu cờ đánh dấu V2 (MAC) tại $MARKER_V2"
   fi
 fi
 
