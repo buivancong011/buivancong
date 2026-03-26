@@ -1,108 +1,115 @@
 #!/bin/bash
+set -e
 
 # ==============================================================================
-# ⚠️ CẤU HÌNH TOKEN (Dùng lại Token của bạn)
+# ⚠️ CẤU HÌNH TOKEN (Dùng chung cho mọi máy chủ)
 # ==============================================================================
 MY_TOKEN='{"access_token":"ya29.a0ATkoCc7ankqGNauZI5ba2fhwxEU6Bxu2kdHhfKbfDb2Mg2A2XoM5uXAvO3yjCIav-wgmxmv7OD76FHFVhqEeo-Es5wp-Pa_-QhjUDAnwQhzeH--T9dWC33OGWDfcPts-QQJd29saLOZ-jW_1VxCKzePbpdAG3OXkXdW8SKTySzH_s7EV6QqqeKg0PgZ85fJR0EKUBNIaCgYKARESARISFQHGX2MiBcHKKR3o_G3gFqSHzOg1zQ0206","token_type":"Bearer","refresh_token":"1//0e5e8ZmSOBcRLCgYIARAAGA4SNwF-L9Irxzx21n-zPpq_Ls-_Pzb93QsnZUDSxi_Vspvfpogmh8bHeXDq4ZAaZTarsEk3E0WvITQ","expiry":"2026-03-22T03:54:15.1115498+07:00"}'
 # ==============================================================================
 
-echo "🚀 ĐANG CỐI ƯU HÓA HỆ THỐNG BACKUP CHO DEBIAN 12..."
+echo "🚀 ĐANG KHỞI CHẠY HỆ THỐNG BACKUP VÍ MYSTERIUM (CHẠY 1 LẦN)..."
 
-# 1. Cài đặt môi trường (Debian 12 cần cài thêm vài gói)
-sudo apt-get update -qq >/dev/null 2>&1
-sudo apt-get install -y unzip curl grep >/dev/null 2>&1
-
-# Cài Rclone (Nếu chưa có)
-if ! command -v rclone &> /dev/null; then
-    curl https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+# ==========================================
+# 1. TỰ ĐỘNG NHẬN DIỆN OS & CÀI ĐẶT TOOLS
+# ==========================================
+if command -v apt-get &> /dev/null; then
+    echo "[+] Phát hiện Debian/Ubuntu. Đang cài tools..."
+    export DEBIAN_FRONTEND=noninteractive
+    sudo apt-get update -qq >/dev/null 2>&1
+    sudo apt-get install -y -q unzip curl grep util-linux >/dev/null 2>&1
+elif command -v yum &> /dev/null; then
+    echo "[+] Phát hiện RHEL (Amazon Linux/Alibaba). Đang cài tools..."
+    sudo yum install -y -q unzip curl grep util-linux >/dev/null 2>&1
+else
+    echo "❌ Không nhận diện được OS. Dừng script!"
+    exit 1
 fi
 
-# 2. Nạp cấu hình Rclone
-mkdir -p /root/.config/rclone
-cat << EOF > /root/.config/rclone/rclone.conf
+# Cài đặt Rclone nếu chưa có
+if ! command -v rclone &> /dev/null; then
+    echo "[+] Đang cài đặt Rclone..."
+    curl -s https://rclone.org/install.sh | sudo bash >/dev/null 2>&1
+fi
+
+# ==========================================
+# 2. KHỞI TẠO CẤU HÌNH RCLONE
+# ==========================================
+RCLONE_CONF_DIR="/root/.config/rclone"
+mkdir -p "$RCLONE_CONF_DIR"
+cat << EOF > "$RCLONE_CONF_DIR/rclone.conf"
 [gdrive]
 type = drive
 scope = drive
 token = $MY_TOKEN
 EOF
 
-# Kiểm tra Token sống hay chết
-if ! rclone lsd gdrive: >/dev/null 2>&1; then
-    echo "❌ CẢNH BÁO: Token có vẻ đã hết hạn hoặc lỗi. Vui lòng cập nhật Token mới!"
-    # Script vẫn tiếp tục tạo file để bạn sửa token sau
-fi
+# ==========================================
+# 3. THỰC THI LỆNH BACKUP TRỰC TIẾP
+# ==========================================
+echo "----------------------------------------------------------------"
+echo "📦 BẮT ĐẦU QUÉT VÀ ĐÓNG GÓI DỮ LIỆU NODE..."
 
-# 3. Tạo Script Backup thông minh (auto_backup.sh)
-cat << 'EOF' > /root/auto_backup.sh
-#!/bin/bash
+# Tối ưu I/O và CPU (chống lag máy)
+renice -n 19 -p $$ >/dev/null 2>&1 || true
+ionice -c 3 -p $$ >/dev/null 2>&1 || true
 
-# --- 1. TỐI ƯU TÀI NGUYÊN (QUAN TRỌNG) ---
-# Giảm ưu tiên CPU xuống mức thấp nhất
-renice -n 19 -p $$ >/dev/null 2>&1
-# Giảm ưu tiên ổ cứng (Chỉ đọc ghi khi ổ cứng rảnh) - Giúp Node không bị lag
-ionice -c 3 -p $$ >/dev/null 2>&1
-
-# --- 2. CẤU HÌNH ---
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
 LOCAL_TEMP="/root/tmp_backup"
-RETENTION_DAYS="7d"  # Xóa file cũ hơn 7 ngày
-
 mkdir -p "$LOCAL_TEMP"
 
-backup_node() {
-    local ID=$1
-    local VOL="myst-data$ID"      # Tên volume cố định như bạn yêu cầu
-    local NET="my_network_$ID"    # Network tương ứng
+# Quét động toàn bộ volume Mysterium
+MYST_VOLUMES=$(docker volume ls -q | grep -E "^myst-data[0-9]*$")
+
+if [ -z "$MYST_VOLUMES" ]; then
+    echo "⚠️ Không tìm thấy Volume Mysterium nào để Backup."
+    exit 0
+fi
+
+for VOL in $MYST_VOLUMES; do
+    # Bóc tách ID (Ví dụ: myst-data3 -> ID=3. myst-data -> ID rỗng)
+    ID=${VOL#myst-data}
     
-    # Kiểm tra Volume có tồn tại không
-    if ! docker volume inspect "$VOL" >/dev/null 2>&1; then
-        echo "⚠️  Không tìm thấy Volume $VOL. Bỏ qua."
-        return
+    # Kỹ thuật Fallback Mạng để bắt IP Public
+    if [ -z "$ID" ]; then
+        NET="bridge"
+        SUFFIX="MainNode"
+    else
+        NET="my_network_$ID"
+        SUFFIX="Node$ID"
+        # Nếu mạng riêng bị xóa/lỗi, lùi về mạng bridge
+        if ! docker network inspect "$NET" >/dev/null 2>&1; then
+            NET="bridge"
+        fi
     fi
 
-    echo "📦 [Node $ID] Đang xử lý volume $VOL..."
+    echo "👉 Đang xử lý: $VOL (Sử dụng mạng: $NET)"
 
-    # Lấy IP Public (Dùng alpine + wget cho nhẹ, thay vì curlimages nặng nề)
-    PUBLIC_IP=$(docker run --rm --network "$NET" alpine wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null)
+    # BẮT IP PUBLIC CHUẨN XÁC QUA API.IPIFY.ORG
+    PUBLIC_IP=$(docker run --rm --network "$NET" alpine wget -qO- --timeout=10 https://api.ipify.org 2>/dev/null || echo "")
     
-    # Nếu không lấy được IP thì đặt tên là Unknown
-    if [ -z "$PUBLIC_IP" ]; then PUBLIC_IP="Unknown_IP"; fi
+    if [ -z "$PUBLIC_IP" ]; then
+        echo "   ⚠️ CẢNH BÁO: Không thể lấy IP Public cho $VOL. Gắn mác UnknownIP."
+        PUBLIC_IP="UnknownIP"
+    else
+        echo "   🌐 Đã lấy được IP Public: $PUBLIC_IP"
+    fi
     
-    # Đặt tên file chuẩn để script Restore nhận diện được
-    # Format: IP_mystID_Ngày.tar
-    FILENAME="${PUBLIC_IP}_myst${ID}_$(date +%F).tar"
+    # Format File: IP_NodeID_NgayThang.tar (Ví dụ: 165.245.164.87_Node1_2026-03-27.tar)
+    FILENAME="${PUBLIC_IP}_${SUFFIX}_$(date +%F).tar"
     
-    # Đóng gói (TAR - Không nén để giảm tải CPU tối đa)
-    # Dùng alpine map volume vào để tar
+    # Đóng gói TAR (Không nén)
+    echo "   📦 Đang đóng gói dữ liệu thành: $FILENAME"
     docker run --rm -v "$VOL":/data:ro -v "$LOCAL_TEMP":/backup alpine tar cf "/backup/$FILENAME" -C /data .
     
-    # Upload lên Google Drive
-    if rclone copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"; then
-         echo "   ✅ Upload thành công: $FILENAME"
+    # Đẩy lên Google Drive
+    echo "   ☁️  Đang Upload lên Google Drive..."
+    if rclone --config "$RCLONE_CONF_DIR/rclone.conf" copy "$LOCAL_TEMP/$FILENAME" "$RCLONE_REMOTE"; then
+         echo "   ✅ Upload THÀNH CÔNG!"
          rm -f "$LOCAL_TEMP/$FILENAME"
     else
-         echo "   ❌ Upload thất bại: $FILENAME"
+         echo "   ❌ Upload THẤT BẠI!"
     fi
-}
+    echo "-------------------------------------"
+done
 
-echo "--- BẮT ĐẦU BACKUP $(date) ---"
-
-# Chạy backup cho Node 1 và Node 2
-backup_node 1
-backup_node 2
-
-echo "🎉 HOÀN TẤT!"
-EOF
-
-# Cấp quyền thực thi
-chmod +x /root/auto_backup.sh
-
-# 5. Chạy thử ngay lập tức
-echo "----------------------------------------------------------------"
-echo "⏳ Đang chạy thử backup lần đầu (Vui lòng đợi)..."
-/root/auto_backup.sh
-
-echo "----------------------------------------------------------------"
-echo "✅ CÀI ĐẶT HOÀN TẤT!"
-echo "👉 Kiểm tra log: cat /var/log/myst_backup.log"
-echo "👉 Chạy thủ công: /root/auto_backup.sh"
+echo "🎉 TOÀN BỘ QUÁ TRÌNH BACKUP ĐÃ HOÀN TẤT TRỌN VẸN!"
