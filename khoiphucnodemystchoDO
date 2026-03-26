@@ -20,7 +20,7 @@ echo "🚀 ĐANG KHỞI CHẠY HỆ THỐNG KHÔI PHỤC VÔ CỰC CHO ${#OLD_IP
 # 1. CẤU HÌNH TOKEN (⚠️ CẦN CẬP NHẬT TOKEN MỚI TẠI ĐÂY)
 # ==============================================================================
 # Lưu ý: Token ya29... cũ của ông đã hết hạn. Hãy dán Token mới vào đây.
-MY_TOKEN='{"access_token":"ya29.a0Aa7MYipPua2ueD5gwhKx21SbvDby1XSOvA2gDFpkojVFvqjb2aZFrdJI6Z8rw-XPWpOgHTHjSjlqkr8fuzL8PI7i_e7DtILZJ4dqMDHpkG4DPdI5sP5MD0EtteCljIOTArma0bTxd9EWf52zZN-4EJg5Gv7dhJReDcBmf0leN5_8XVXQB5HZzsTuh3dFNi0wHos-siEaCgYKAbQSARISFQHGX2Mif6156UG6LOPE68XXnrooFw0206","token_type":"Bearer","refresh_token":"1//0eKQU7F6B5L2MCgYIARAAGA4SNwF-L9IrKWAmODKTp9pWSVNs2kMK0QkzEYrVPFze57Hd3WyenHbshJWKSTRGjnbtdcfzRYquHx8","expiry":"2026-03-27T07:00:00.000Z"}'
+MY_TOKEN='{"access_token":"ya29.a0Aa7MYiq_0SNXg-lbThJd2FJL5afYMsVPflZIDJf-koUD7u5FTe5K56939A-7AkBDl5ErLKKL8-vGLWxyw7Li3Lps4J1d3sKvdRTS1izsT7S2fYMklQyM5mi2EbJq22dBV0dJoYaT9mYn6mUWEsXj_jp4jbRjXtwkcwKPBQXamrFKC7qYvAxfGEChZ5lFlspSqQB81SYaCgYKAZ8SARISFQHGX2Mijp0iGlCTXqgnWsFSMbjA4A0206","token_type":"Bearer","refresh_token":"1//0gCOCZaF_zxa7CgYIARAAGBASNwF-L9Ir3ls8a1GO3c4AGRtorM7sOyYQv7Oi-WaIJU2lEwcb5Qs02JYqApxK8XL2wBmJ_ZBrQDY","expiry":"2026-03-27T06:46:01.8854681+07:00"}'
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
 TEMP_DIR="/root/restore_temp"
 
