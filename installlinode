@@ -1,0 +1,170 @@
+#!/bin/bash
+set -e  # Dừng ngay nếu có lỗi nghiêm trọng
+
+# ==========================================
+# 1. CẤU HÌNH TÀI KHOẢN (SỬA 1 LẦN DÙNG CHUNG)
+# ==========================================
+TOKEN_TM="/PfkwR8qQMfbsCMrSaaDhsX96E9w2PeHH2bcGeyFBno="
+TOKEN_EARNFM="50f04bbe-94d9-4f6a-82b9-b40016bd4bbb"
+RP_EMAIL="nguyenvinhson000@gmail.com"
+RP_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
+UR_USER="nguyenvinhcao123@gmail.com"
+UR_PASS="CAOcao123CAO@"
+TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
+
+# ==== CẤU HÌNH DNS & TỐI ƯU ====
+DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+MARKER_FILE="/root/.proxyrack_registered_vinh"
+
+# ==========================================
+# 2. HÀM LOG & KIỂM TRA MÔI TRƯỜNG
+# ==========================================
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
+
+log "Đang kiểm tra kiến trúc CPU..."
+ARCH=$(uname -m)
+if [[ "$ARCH" == "aarch64" ]]; then
+  warn "Detected ARM64 CPU. Proxyrack sẽ tự động bị bỏ qua."
+fi
+
+# ==========================================
+# 3. CHUẨN BỊ DEBIAN 12 & CÀI ĐẶT PHỤ TRỢ
+# ==========================================
+log "Nhận diện Hệ điều hành và cài đặt tools..."
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update -q
+sudo apt-get install -y -q jq coreutils curl iproute2 iptables >/dev/null 2>&1
+
+if ! command -v docker &> /dev/null; then
+  log "Đang cài đặt Docker bản mới nhất..."
+  curl -fsSL https://get.docker.com | sh >/dev/null 2>&1
+  sudo systemctl enable --now docker
+  log "Docker đã sẵn sàng."
+fi
+
+# ==========================================
+# 4. TỐI ƯU HIỆU SUẤT (BBR & SWAP)
+# ==========================================
+log "Tối ưu mạng (BBR) và Swappiness..."
+sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
+net.core.rmem_max=4194304
+net.core.wmem_max=4194304
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+vm.swappiness=10
+EOF
+sudo sysctl -p /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null 2>&1 || true
+
+log "Cấu hình Swap 2GB chống tràn RAM..."
+if [ ! -f /swapfile ]; then
+    sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+
+# ==========================================
+# 5. DỌN DẸP CONTAINER CŨ
+# ==========================================
+log "Dọn dẹp container cũ..."
+docker rm -f tm myst urnetwork earnfm repocket proxyrack >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1
+
+# ==========================================
+# 6. KÉO IMAGE (SONG SONG)
+# ==========================================
+log "Đang tải Images..."
+docker pull traffmonetizer/cli_v2:latest >/dev/null 2>&1 &
+docker pull mysteriumnetwork/myst:latest >/dev/null 2>&1 &
+docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
+docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
+docker pull repocket/repocket:latest >/dev/null 2>&1 &
+
+if [[ "$ARCH" != "aarch64" ]]; then
+  docker pull proxyrack/pop:latest >/dev/null 2>&1 &
+fi
+
+wait
+log "Tải ảnh hoàn tất."
+
+# ==========================================
+# 7. KHỞI CHẠY CONTAINER (FULL TÀI NGUYÊN)
+# ==========================================
+log "🚀 Khởi chạy các ứng dụng cày tiền (Mạng Bridge Mặc định)..."
+
+# 1. Traffmonetizer
+docker run -d --restart always --name tm $DNS_OPTS \
+  traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+
+# 2. Mysterium (Mapping thẳng Port 4449 và giữ Volume myst-data)
+docker run -d --restart unless-stopped --cap-add NET_ADMIN $DNS_OPTS \
+  -p 4449:4449 \
+  --name myst -v myst-data:/var/lib/mysterium-node \
+  mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
+
+# 3. UrNetwork
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS \
+  -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" \
+  techroy23/docker-urnetwork:latest >/dev/null
+
+# 4. EarnFM
+docker run -d --name earnfm --restart always $DNS_OPTS \
+  -e EARNFM_TOKEN="$TOKEN_EARNFM" \
+  earnfm/earnfm-client:latest >/dev/null
+
+# 5. Repocket
+docker run -d --name repocket --restart always $DNS_OPTS \
+  -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" \
+  repocket/repocket:latest >/dev/null
+
+# 6. Proxyrack
+if [[ "$ARCH" != "aarch64" ]]; then
+  PUBLIC_IP=$(curl -s --max-time 10 https://api.ipify.org || echo "FAIL")
+  
+  if [ "$PUBLIC_IP" == "FAIL" ]; then
+      MAIN_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -n 1)
+      MAC_ADDR=$(ip link show dev $MAIN_IFACE 2>/dev/null | awk '/ether/ {print $2}')
+      PR_UUID=$(echo -n "${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+      PR_NAME="ProxyrackNode_MAC_${MAC_ADDR//:/}"
+  else
+      PR_UUID=$(echo -n "${PUBLIC_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
+      PR_NAME="ProxyrackNode_IP_${PUBLIC_IP//./}"
+  fi
+
+  docker run -d --name proxyrack --restart always $DNS_OPTS \
+    -e UUID="$PR_UUID" \
+    proxyrack/pop:latest >/dev/null
+fi
+
+# ==========================================
+# 8. GỌI API PROXYRACK
+# ==========================================
+if [[ "$ARCH" != "aarch64" ]]; then
+  echo "------------------------------------------------------"
+  if [ -f "$MARKER_FILE" ]; then
+      log "✅ Đã đăng ký Proxyrack từ trước. Bỏ qua gọi API!"
+  else
+      warn "⏳ Đang đợi 2 phút để Proxyrack kết nối..."
+      for i in {120..1}; do printf "\r⏳ Còn lại %3d giây..." "$i"; sleep 1; done; echo ""
+
+      log "🚀 Gửi đăng ký: $PR_NAME"
+      curl -s -X POST https://peer.proxyrack.com/api/device/add \
+        -H "Api-Key: $TOKEN_PROXYRACK_API" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json" \
+        -d "{\"device_id\":\"$PR_UUID\",\"device_name\":\"$PR_NAME\"}" > /dev/null 2>&1 || true
+      
+      touch "$MARKER_FILE"
+      log "✅ Đã lưu cờ đánh dấu tại $MARKER_FILE"
+  fi
+fi
+
+# ==========================================
+# 9. HOÀN TẤT
+# ==========================================
+echo "------------------------------------------------------"
+log "==== CÀI ĐẶT THÀNH CÔNG CHO LINODE - VINH CAO ===="
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
