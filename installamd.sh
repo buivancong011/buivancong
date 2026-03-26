@@ -30,10 +30,10 @@ err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
 # ==========================================
 ARCH=$(uname -m)
 if [[ "$ARCH" == "aarch64" ]]; then
-  echo -e "\e[32m[INFO] Detected ARM64 CPU (Graviton). Proxyrack sẽ tự động bị bỏ qua.\e[0m"
+  echo -e "\e[32m[INFO] Detected ARM64 CPU. Proxyrack sẽ bị bỏ qua.\e[0m"
   IMG_TM="traffmonetizer/cli_v2:arm64v8"
 else
-  echo -e "\e[32m[INFO] Detected AMD64/x86 CPU. Proxyrack đã sẵn sàng.\e[0m"
+  echo -e "\e[32m[INFO] Detected AMD64/x86 CPU (t2/t3a). Proxyrack đã sẵn sàng.\e[0m"
   IMG_TM="traffmonetizer/cli_v2:latest"
 fi
 
@@ -44,11 +44,10 @@ IMG_REPO="repocket/repocket:latest"
 IMG_PR="proxyrack/pop:latest"
 
 # ==========================================
-# 3. CHUẨN BỊ & DỌN DẸP
+# 3. CHUẨN BỊ & DỌN DẸP HỆ THỐNG
 # ==========================================
 log "Dọn dẹp hệ thống..."
 timeout 60 sudo yum remove -y squid httpd-tools >/dev/null 2>&1 || true
-# Cài thêm jq và coreutils cho Proxyrack
 sudo yum install -y -q jq coreutils >/dev/null 2>&1 || true
 
 if ! command -v docker &> /dev/null; then
@@ -58,8 +57,8 @@ if ! command -v docker &> /dev/null; then
   sudo systemctl enable --now docker
 fi
 
-# ==== 3.5. CẤU HÌNH TỐI ƯU (SYSCTL & SWAP) ====
-log "Cấu hình bộ nhớ đệm mạng (4MB), BBR và Swappiness (10)..."
+# ==== CẤU HÌNH TỐI ƯU (SYSCTL & SWAP CHO AL2023) ====
+log "Cấu hình bộ nhớ đệm mạng, BBR và Swappiness..."
 sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
 net.core.rmem_max=4194304
 net.core.wmem_max=4194304
@@ -69,9 +68,9 @@ vm.swappiness=10
 EOF
 sudo sysctl -p /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null 2>&1 || true
 
-log "Cấu hình Swap 2GB..."
+log "Cấu hình Swap 2GB (Tương thích XFS/AL2023)..."
 if [ ! -f /swapfile ]; then
-    sudo fallocate -l 2G /swapfile
+    sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
     sudo chmod 600 /swapfile
     sudo mkswap /swapfile
     sudo swapon /swapfile
@@ -80,7 +79,7 @@ else
     log "Swap file đã tồn tại, bỏ qua bước tạo mới."
 fi
 
-log "Dọn dẹp container cũ..."
+log "Dọn dẹp container & network cũ..."
 if [ -n "$(docker ps -aq)" ]; then docker rm -f $(docker ps -aq) >/dev/null 2>&1; fi
 docker network prune -f >/dev/null 2>&1
 
@@ -88,8 +87,7 @@ docker network prune -f >/dev/null 2>&1
 # 4. BẮT IP THÔNG MINH (TỰ ĐỘNG TÌM INTERFACE)
 # ==========================================
 log "Đang tự động dò tìm Interface mạng chính..."
-# Tìm interface đang có default route (thường là ens5 hoặc eth0)
-MAIN_IFACE=$(ip route show default | awk '/default/ {print $5}')
+MAIN_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -n 1)
 
 if [ -z "$MAIN_IFACE" ]; then err "Không tìm thấy Interface mạng chính!"; fi
 log "Đã tìm thấy Interface: $MAIN_IFACE"
@@ -141,8 +139,12 @@ PUB_IP_2=$(get_public_ip "my_network_2")
 log "   Check 1: Source $IP_ALLA -> Exit: [$PUB_IP_1]"
 log "   Check 2: Source $IP_ALLB -> Exit: [$PUB_IP_2]"
 
-if [ -z "$PUB_IP_1" ] || [ -z "$PUB_IP_2" ]; then err "Lỗi kết nối ra ngoài internet!"; fi
-if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then err "LỖI: Trùng IP Public. AWS chưa gán Elastic IP thứ 2?"; fi
+if [ -z "$PUB_IP_1" ] || [ -z "$PUB_IP_2" ]; then 
+    err "❌ LỖI: Không lấy được IP Public (Mất mạng hoặc Timeout)."
+fi
+if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then 
+    err "❌ LỖI: Trùng IP Public. AWS chưa gán Elastic IP thứ 2?"
+fi
 
 # ==========================================
 # 7. KHỞI CHẠY NODES
@@ -189,23 +191,18 @@ run_node_group() {
     local CLEAN_IP="${BIND_IP//./}"
     local PR_NAME="ProxyrackNode${ID}IP${CLEAN_IP}"
 
-    # ==== CƠ CHẾ HYBRID UUID (BẢO VỆ MÁY CŨ, TỐI ƯU MÁY MỚI) ====
     if [ -f "$MARKER_FILE" ]; then
-        # TRƯỜNG HỢP 1: MÁY CŨ (Đã có marker file) -> Dùng công thức cũ
         PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
     else
-        # TRƯỜNG HỢP 2: MÁY MỚI HOÀN TOÀN -> Dùng MAC Address
         local MAC_ADDR=$(ip link show dev $MAIN_IFACE 2>/dev/null | awk '/ether/ {print $2}')
         if [ -z "$MAC_ADDR" ]; then MAC_ADDR="NOMAC"; fi
         PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
     fi
-    # ============================================================
 
     docker run -d --network $NET --restart always $DNS_OPTS \
       -e UUID="$PR_UUID" \
       --name proxyrack$ID $IMG_PR >/dev/null
 
-    # Thêm vào mảng để gọi API
     PR_UUIDS+=("$PR_UUID")
     PR_NAMES+=("$PR_NAME")
   fi
