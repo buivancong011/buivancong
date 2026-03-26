@@ -17,7 +17,7 @@ echo "🚀 ĐANG KHỞI CHẠY HỆ THỐNG KHÔI PHỤC UNIVERSAL CHO ${#OLD_IP
 # ==============================================================================
 # 1. CẤU HÌNH TOKEN (Đã cập nhật Token mới nhất của ông)
 # ==============================================================================
-MY_TOKEN='{"access_token":"ya29.a0ATkoCc7ankqGNauZI5ba2fhwxEU6Bxu2kdHhfKbfDb2Mg2A2XoM5uXAvO3yjCIav-wgmxmv7OD76FHFVhqEeo-Es5wp-Pa_-QhjUDAnwQhzeH--T9dWC33OGWDfcPts-QQJd29saLOZ-jW_1VxCKzePbpdAG3OXkXdW8SKTySzH_s7EV6QqqeKg0PgZ85fJR0EKUBNIaCgYKARESARISFQHGX2MiBcHKKR3o_G3gFqSHzOg1zQ0206","token_type":"Bearer","refresh_token":"1//0e5e8ZmSOBcRLCgYIARAAGA4SNwF-L9Irxzx21n-zPpq_Ls-_Pzb93QsnZUDSxi_Vspvfpogmh8bHeXDq4ZAaZTarsEk3E0WvITQ","expiry":"2026-03-22T03:54:15.1115498+07:00"}'
+MY_TOKEN='{"access_token":"ya29.a0Aa7MYipPua2ueD5gwhKx21SbvDby1XSOvA2gDFpkojVFvqjb2aZFrdJI6Z8rw-XPWpOgHTHjSjlqkr8fuzL8PI7i_e7DtILZJ4dqMDHpkG4DPdI5sP5MD0EtteCljIOTArma0bTxd9EWf52zZN-4EJg5Gv7dhJReDcBmf0leN5_8XVXQB5HZzsTuh3dFNi0wHos-siEaCgYKAbQSARISFQHGX2Mif6156UG6LOPE68XXnrooFw0206","token_type":"Bearer","refresh_token":"1//0eKQU7F6B5L2MCgYIARAAGA4SNwF-L9IrKWAmODKTp9pWSVNs2kMK0QkzEYrVPFze57Hd3WyenHbshJWKSTRGjnbtdcfzRYquHx8","expiry":"2026-03-27T05:16:39.1956408+07:00"}'
 RCLONE_REMOTE="gdrive:Mysterium_Backups"
 TEMP_DIR="/root/restore_temp"
 
