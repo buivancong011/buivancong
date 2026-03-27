@@ -1,0 +1,5 @@
+#!/bin/bash
+# Script khởi động lại hệ thống ngay lập tức
+
+echo "Hệ thống sẽ khởi động lại trong giây lát..."
+sudo reboot
