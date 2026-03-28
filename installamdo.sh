@@ -10,15 +10,9 @@ TOKEN_REPOCKET_EMAIL="nguyenvinhson000@gmail.com"
 TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
-TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 
-# ==== CẤU HÌNH TỐI ƯU & MARKERS ====
+# ==== CẤU HÌNH TỐI ƯU ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-MARKER_V1="/root/.proxyrack_registered_vinh"
-MARKER_V2="/root/.proxyrack_v2_mac_vinh"
-
-declare -a PR_UUIDS
-declare -a PR_NAMES
 
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
 warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
@@ -30,9 +24,9 @@ err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
 ARCH=$(uname -m)
 log "Đang kiểm tra kiến trúc CPU..."
 if [[ "$ARCH" == "aarch64" ]]; then
-    warn "Detected ARM64. Proxyrack sẽ bị bỏ qua."
+    log "Detected ARM64."
 else
-    log "Detected AMD64. Proxyrack sẵn sàng."
+    log "Detected AMD64."
 fi
 
 # ==========================================
@@ -111,13 +105,12 @@ if [ "$PUB_IP_1" == "$PUB_IP_2" ]; then
 fi
 
 # ==========================================
-# 7. KHỞI CHẠY NODES (AWS STYLE)
+# 7. KHỞI CHẠY NODES (AWS STYLE - NO PROXYRACK)
 # ==========================================
 log "🚀 Đang Pull images (Song song)..."
 for img in "traffmonetizer/cli_v2:latest" "mysteriumnetwork/myst:latest" "techroy23/docker-urnetwork:latest" "earnfm/earnfm-client:latest" "repocket/repocket:latest"; do
     docker pull $img >/dev/null 2>&1 &
 done
-[[ "$ARCH" != "aarch64" ]] && docker pull proxyrack/pop:latest >/dev/null 2>&1 &
 wait
 
 run_node_group() {
@@ -129,20 +122,6 @@ run_node_group() {
     docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" techroy23/docker-urnetwork:latest >/dev/null
     docker run -d --network $NET --restart always $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID earnfm/earnfm-client:latest >/dev/null
     docker run -d --network $NET --restart always $DNS_OPTS --name repocket$ID -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" repocket/repocket:latest >/dev/null
-
-    if [[ "$ARCH" != "aarch64" ]]; then
-        local MAC_ADDR=$(cat /sys/class/net/$MAIN_IFACE/address 2>/dev/null || echo "NOMAC")
-        local PR_UUID=""
-        if [ -f "$MARKER_V2" ]; then
-            PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-        elif [ -f "$MARKER_V1" ]; then
-            PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-        else
-            PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-        fi
-        docker run -d --network $NET --restart always $DNS_OPTS -e UUID="$PR_UUID" --name proxyrack$ID proxyrack/pop:latest >/dev/null
-        PR_UUIDS+=("$PR_UUID"); PR_NAMES+=("PRNode${ID}_${BIND_IP//./}")
-    fi
 }
 
 run_node_group 1 "$IP_ALLA"
@@ -150,24 +129,3 @@ run_node_group 2 "$IP_ALLB"
 
 log "==== DONE STARTING CONTAINERS - Vinh Cao ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# ==========================================
-# 8. API PROXYRACK
-# ==========================================
-if [ ${#PR_UUIDS[@]} -gt 0 ]; then
-    echo "------------------------------------------------------"
-    if [ -f "$MARKER_V1" ] || [ -f "$MARKER_V2" ]; then
-        log "✅ Đã đăng ký (V1/V2). Bỏ qua thời gian chờ."
-    else
-        warn "⏳ Đang đợi 2 phút để thiết bị Proxyrack kết nối..."
-        for i in {120..1}; do printf "\r⏳ Còn lại %3d giây..." "$i"; sleep 1; done; echo ""
-        for j in "${!PR_UUIDS[@]}"; do
-            log "Đăng ký API cho: ${PR_NAMES[$j]}"
-            curl -s -X POST https://peer.proxyrack.com/api/device/add \
-              -H "Api-Key: $TOKEN_PROXYRACK_API" -H "Content-Type: application/json" \
-              -d "{\"device_id\":\"${PR_UUIDS[$j]}\",\"device_name\":\"${PR_NAMES[$j]}\"}" >/dev/null
-        done
-        touch "$MARKER_V2"
-        log "✅ Đã lưu cờ đánh dấu thế hệ mới."
-    fi
-fi
