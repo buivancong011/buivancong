@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+log() { echo -e "\e[32m[INFO] $1\e[0m"; }
+warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
+
+log "🔍 Đang rà soát hệ thống để tìm các node Proxyrack..."
+
+# 1. Tìm tất cả các container đang chạy image proxyrack
+PR_CONTAINERS=$(docker ps -a -q --filter ancestor=proxyrack/pop:latest)
+
+if [ -n "$PR_CONTAINERS" ]; then
+    log "🛑 Đang dừng các container Proxyrack..."
+    docker stop $PR_CONTAINERS >/dev/null 2>&1
+    
+    log "🗑️ Đang xóa vĩnh viễn container Proxyrack..."
+    docker rm -f $PR_CONTAINERS >/dev/null 2>&1
+    log "✅ Đã tiêu diệt xong các node Proxyrack!"
+else
+    warn "Không tìm thấy container Proxyrack nào. Có vẻ máy này đã sạch."
+fi
+
+# 2. Xóa Docker Image của Proxyrack để giải phóng ổ cứng
+if docker images | grep -q "proxyrack/pop"; then
+    log "🧹 Đang dọn dẹp Docker Image của Proxyrack..."
+    docker rmi -f proxyrack/pop:latest >/dev/null 2>&1 || true
+    log "✅ Đã giải phóng dung lượng rác."
+fi
+
+# 3. Xóa các file marker đánh dấu đăng ký của ông Cao
+log "📝 Đang xóa các file cấu hình cũ..."
+rm -f /root/.proxyrack_registered_vinh
+rm -f /root/.proxyrack_v2_mac_vinh
+
+log "==== 🟢 HOÀN TẤT DỌN DẸP ===="
+log "Tình trạng các Nodes MMO an toàn còn lại đang cày tiền:"
+echo "--------------------------------------------------------"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
