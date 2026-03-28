@@ -10,16 +10,9 @@ TOKEN_REPOCKET_EMAIL="nguyenvinhson000@gmail.com"
 TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
-TOKEN_PROXYRACK_API="KK3M5OBY1TDBZ97KMJBBYKIV4PE9DIKUXIERYWVA"
 
-# ==== CẤU HÌNH TỐI ƯU & MARKERS ====
+# ==== CẤU HÌNH TỐI ƯU ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-MARKER_FILE="/root/.proxyrack_registered_vinh"   # Cờ máy cũ (V1)
-MARKER_V2="/root/.proxyrack_v2_mac_vinh"        # Cờ máy mới (V2)
-
-# Mảng lưu thông tin để gọi API Proxyrack
-declare -a PR_UUIDS
-declare -a PR_NAMES
 
 # Hàm log
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
@@ -31,10 +24,10 @@ err() { echo -e "\e[31m[ERROR] $1\e[0m"; exit 1; }
 # ==========================================
 ARCH=$(uname -m)
 if [[ "$ARCH" == "aarch64" ]]; then
-  echo -e "\e[32m[INFO] Detected ARM64 CPU. Proxyrack sẽ bị bỏ qua.\e[0m"
+  echo -e "\e[32m[INFO] Detected ARM64 CPU.\e[0m"
   IMG_TM="traffmonetizer/cli_v2:arm64v8"
 else
-  echo -e "\e[32m[INFO] Detected AMD64/x86 CPU (t2/t3a). Proxyrack đã sẵn sàng.\e[0m"
+  echo -e "\e[32m[INFO] Detected AMD64/x86 CPU (t2/t3a).\e[0m"
   IMG_TM="traffmonetizer/cli_v2:latest"
 fi
 
@@ -42,7 +35,6 @@ IMG_MYST="mysteriumnetwork/myst:latest"
 IMG_UR="techroy23/docker-urnetwork:latest"
 IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
-IMG_PR="proxyrack/pop:latest"
 
 # ==========================================
 # 3. CHUẨN BỊ & DỌN DẸP HỆ THỐNG
@@ -154,9 +146,6 @@ log "🚀 Đang Pull images (Song song)..."
 for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
   docker pull $img >/dev/null 2>&1 &
 done
-if [[ "$ARCH" != "aarch64" ]]; then
-  docker pull $IMG_PR >/dev/null 2>&1 &
-fi
 wait
 
 run_node_group() {
@@ -185,34 +174,6 @@ run_node_group() {
   docker run -d --network $NET --restart always $DNS_OPTS \
     --name repocket$ID \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
-
-  # Proxyrack (Chỉ chạy khi không phải ARM)
-  if [[ "$ARCH" != "aarch64" ]]; then
-    local PR_UUID=""
-    local CLEAN_IP="${BIND_IP//./}"
-    local PR_NAME="ProxyrackNode${ID}IP${CLEAN_IP}"
-
-    # --- SỬA LOGIC UUID TẠI ĐÂY ---
-    if [ -f "$MARKER_V2" ]; then
-        # Máy mới: Đã có cờ V2 -> Dùng MAC + IP
-        local MAC_ADDR=$(cat /sys/class/net/$MAIN_IFACE/address)
-        PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-    elif [ -f "$MARKER_FILE" ]; then
-        # Máy cũ: Có cờ V1 -> Chỉ dùng IP
-        PR_UUID=$(echo -n "${BIND_IP}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-    else
-        # Lần đầu: Dùng MAC + IP làm chuẩn mới
-        local MAC_ADDR=$(cat /sys/class/net/$MAIN_IFACE/address)
-        PR_UUID=$(echo -n "${BIND_IP}-${MAC_ADDR}-Proxyrack-Vinh" | sha256sum | awk '{print toupper($1)}')
-    fi
-
-    docker run -d --network $NET --restart always $DNS_OPTS \
-      -e UUID="$PR_UUID" \
-      --name proxyrack$ID $IMG_PR >/dev/null
-
-    PR_UUIDS+=("$PR_UUID")
-    PR_NAMES+=("$PR_NAME")
-  fi
 }
 
 run_node_group 1 "$IP_ALLA"
@@ -220,42 +181,3 @@ run_node_group 2 "$IP_ALLB"
 
 log "==== DONE STARTING CONTAINERS - Vinh Cao ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# ==========================================
-# 8. GỌI API PROXYRACK
-# ==========================================
-if [ ${#PR_UUIDS[@]} -gt 0 ]; then
-    echo "------------------------------------------------------"
-    # Kiểm tra nếu đã có bất kỳ file cờ nào (V1 hoặc V2)
-    if [ -f "$MARKER_FILE" ] || [ -f "$MARKER_V2" ]; then
-        log "✅ HỆ THỐNG GHI NHẬN: Đã đăng ký Proxyrack trước đó."
-        log "👉 Container đã nhận lại UUID cũ. BỎ QUA thời gian chờ và API!"
-    else
-        warn "⏳ Đang đợi 2 phút để thiết bị Proxyrack kết nối..."
-        for i in {120..1}; do
-            printf "\r⏳ Còn lại %3d giây..." "$i"
-            sleep 1
-        done
-        echo -e "\n"
-
-        log "🚀 Đang gọi API thêm thiết bị Proxyrack..."
-        for j in "${!PR_UUIDS[@]}"; do
-            UUID="${PR_UUIDS[$j]}"
-            NAME="${PR_NAMES[$j]}"
-            
-            log "Gửi đăng ký cho: $NAME"
-            
-            API_RESPONSE=$(curl -s -X POST https://peer.proxyrack.com/api/device/add \
-              -H "Api-Key: $TOKEN_PROXYRACK_API" \
-              -H "Content-Type: application/json" \
-              -H "Accept: application/json" \
-              -d "{\"device_id\":\"$UUID\",\"device_name\":\"$NAME\"}")
-            
-            echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
-        done
-        
-        # Đăng ký xong lần đầu thì tạo cờ V2 để khóa cơ chế MAC
-        touch "$MARKER_V2"
-        log "✅ Đã lưu cờ đánh dấu thế hệ mới tại $MARKER_V2"
-    fi
-fi
