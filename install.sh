@@ -11,6 +11,10 @@ TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
 
+# ==== CẤU HÌNH BITPING ====
+EMAIL_BITPING="nguyenvinhcao123@gmail.com"
+PASS_BITPING="nguyenvinhcao123@gmail.com"
+
 # ==== CẤU HÌNH TỐI ƯU (CHỈ DNS) ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
 
@@ -28,6 +32,7 @@ IMG_MYST="mysteriumnetwork/myst:latest"
 IMG_UR="techroy23/docker-urnetwork:latest"
 IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
+IMG_BITPING="bitping/bitpingd:latest"
 
 # ==== HÀM LOG ====
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
@@ -146,7 +151,7 @@ fi
 # ==========================================
 log "🚀 Mạng OK. Đang Pull images và khởi chạy nodes..."
 
-for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
+for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO" "$IMG_BITPING"; do
   docker pull $img >/dev/null 2>&1 &
 done
 wait
@@ -158,10 +163,11 @@ run_node_group() {
   docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
     $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium
+  # Mysterium (Đã thêm giới hạn log 10MB)
   docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
     -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
+    --log-opt max-size=10m --log-opt max-file=3 \
     --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
 
   # UrNetwork
@@ -177,10 +183,19 @@ run_node_group() {
   docker run -d --network $NET --restart always $DNS_OPTS \
     --name repocket$ID \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
+
+  # Bitping (Cấy thêm với giới hạn log 10MB và tách Volume)
+  docker run -d --network $NET --restart unless-stopped $DNS_OPTS \
+    --name bitping$ID \
+    -v bitping_data$ID:/root/.bitpingd \
+    --log-opt max-size=10m --log-opt max-file=3 \
+    -e BITPING_EMAIL="$EMAIL_BITPING" \
+    -e BITPING_PASSWORD="$PASS_BITPING" \
+    $IMG_BITPING >/dev/null
 }
 
 run_node_group 1 "$IP_PRIVATE_A"
 run_node_group 2 "$IP_PRIVATE_B"
 
-log "==== HOÀN TẤT TRIỂN KHAI CHO AWS T4G ===="
+log "==== HOÀN TẤT TRIỂN KHAI CHO AWS ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
