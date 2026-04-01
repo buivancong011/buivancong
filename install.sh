@@ -147,7 +147,7 @@ else
 fi
 
 # ==========================================
-# 6. KHỞI CHẠY NODES MMO (KHÔNG PROXYRACK)
+# 6. KHỞI CHẠY NODES MMO
 # ==========================================
 log "🚀 Mạng OK. Đang Pull images và khởi chạy nodes..."
 
@@ -161,9 +161,10 @@ run_node_group() {
   
   # Traffmonetizer
   docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
+    --log-opt max-size=10m --log-opt max-file=3 \
     $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium (Đã thêm giới hạn log 10MB)
+  # Mysterium
   docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
     -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
@@ -173,18 +174,22 @@ run_node_group() {
   # UrNetwork
   docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
     --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
+    --log-opt max-size=10m --log-opt max-file=3 \
     -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
 
   # EarnFM
   docker run -d --network $NET --restart always $DNS_OPTS \
-    -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
+    --name earnfm$ID \
+    --log-opt max-size=10m --log-opt max-file=3 \
+    -e EARNFM_TOKEN="$TOKEN_EARNFM" $IMG_EARN >/dev/null
 
   # Repocket
   docker run -d --network $NET --restart always $DNS_OPTS \
     --name repocket$ID \
+    --log-opt max-size=10m --log-opt max-file=3 \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
 
-  # Bitping (Cấy thêm với giới hạn log 10MB và tách Volume)
+  # Bitping
   docker run -d --network $NET --restart unless-stopped $DNS_OPTS \
     --name bitping$ID \
     -v bitping_data$ID:/root/.bitpingd \
@@ -197,5 +202,5 @@ run_node_group() {
 run_node_group 1 "$IP_PRIVATE_A"
 run_node_group 2 "$IP_PRIVATE_B"
 
-log "==== HOÀN TẤT TRIỂN KHAI CHO AWS ===="
+log "==== HOÀN TẤT TRIỂN KHAI CHO AWS T4G ===="
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
