@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "[INFO] Bắt đầu cấu hình Mysterium..."
+
+echo "[INFO] Đang ép luật zero-stake cho myst..."
+docker exec myst myst config set payments.zero-stake-unsettled-amount 1 || true
+sleep 2
+
+echo "[INFO] Đang khởi động lại myst để áp dụng cấu hình..."
+docker restart myst
+
+echo "[DONE] Setup Myst hoàn tất ✅"
