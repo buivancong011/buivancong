@@ -11,6 +11,10 @@ TOKEN_REPOCKET_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 USER_UR="nguyenvinhcao123@gmail.com"
 PASS_UR="CAOcao123CAO@"
 
+# ==== CẤU HÌNH BITPING ====
+EMAIL_BITPING="nguyenvinhcao123@gmail.com"
+PASS_BITPING="nguyenvinhcao123@gmail.com"
+
 # ==== CẤU HÌNH TỐI ƯU ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
 
@@ -35,6 +39,7 @@ IMG_MYST="mysteriumnetwork/myst:latest"
 IMG_UR="techroy23/docker-urnetwork:latest"
 IMG_EARN="earnfm/earnfm-client:latest"
 IMG_REPO="repocket/repocket:latest"
+IMG_BITPING="bitping/bitpingd:latest"
 
 # ==========================================
 # 3. CHUẨN BỊ & DỌN DẸP HỆ THỐNG
@@ -143,7 +148,7 @@ fi
 # 7. KHỞI CHẠY NODES
 # ==========================================
 log "🚀 Đang Pull images (Song song)..."
-for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO"; do
+for img in "$IMG_TM" "$IMG_MYST" "$IMG_UR" "$IMG_EARN" "$IMG_REPO" "$IMG_BITPING"; do
   docker pull $img >/dev/null 2>&1 &
 done
 wait
@@ -151,29 +156,44 @@ wait
 run_node_group() {
   local ID=$1; local NET="my_network_$1"; local BIND_IP=$2
   
-  # Traffmonetizer
+  # Traffmonetizer (Kèm Log)
   docker run -d --network $NET --restart always --name tm$ID $DNS_OPTS \
+    --log-opt max-size=10m --log-opt max-file=3 \
     $IMG_TM start accept --token "$TOKEN_TM" >/dev/null
   
-  # Mysterium
+  # Mysterium (Kèm Log)
   docker run -d --network $NET --cap-add NET_ADMIN $DNS_OPTS \
     -p ${BIND_IP}:4449:4449 \
     --name myst$ID -v myst-data$ID:/var/lib/mysterium-node \
+    --log-opt max-size=10m --log-opt max-file=3 \
     --restart unless-stopped $IMG_MYST service --agreed-terms-and-conditions >/dev/null
   
-  # UrNetwork
+  # UrNetwork (Kèm Log)
   docker run -d --network $NET --restart always --cap-add NET_ADMIN $DNS_OPTS \
     --name urnetwork$ID -v ur_data$ID:/var/lib/vnstat \
+    --log-opt max-size=10m --log-opt max-file=3 \
     -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" $IMG_UR >/dev/null
   
-  # EarnFM
+  # EarnFM (Kèm Log)
   docker run -d --network $NET --restart always $DNS_OPTS \
-    -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$ID $IMG_EARN >/dev/null
+    --name earnfm$ID \
+    --log-opt max-size=10m --log-opt max-file=3 \
+    -e EARNFM_TOKEN="$TOKEN_EARNFM" $IMG_EARN >/dev/null
   
-  # Repocket
+  # Repocket (Kèm Log)
   docker run -d --network $NET --restart always $DNS_OPTS \
     --name repocket$ID \
+    --log-opt max-size=10m --log-opt max-file=3 \
     -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" $IMG_REPO >/dev/null
+
+  # Bitping (Mới thêm - Kèm Log & Volume chuẩn)
+  docker run -d --network $NET --restart unless-stopped $DNS_OPTS \
+    --name bitping$ID \
+    -v bitping_data$ID:/root/.bitpingd \
+    --log-opt max-size=10m --log-opt max-file=3 \
+    -e BITPING_EMAIL="$EMAIL_BITPING" \
+    -e BITPING_PASSWORD="$PASS_BITPING" \
+    $IMG_BITPING >/dev/null
 }
 
 run_node_group 1 "$IP_ALLA"
