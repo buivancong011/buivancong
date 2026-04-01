@@ -11,8 +11,13 @@ RP_API="cad6dcce-d038-4727-969b-d996ed80d3ef"
 UR_USER="nguyenvinhcao123@gmail.com"
 UR_PASS="CAOcao123CAO@"
 
-# ==== CẤU HÌNH DNS ====
+# ==== CẤU HÌNH BITPING ====
+EMAIL_BITPING="nguyenvinhcao123@gmail.com"
+PASS_BITPING="nguyenvinhcao123@gmail.com"
+
+# ==== CẤU HÌNH DNS & LOG ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
+LOG_OPTS="--log-opt max-size=10m --log-opt max-file=3"
 
 # ==========================================
 # 2. HÀM LOG & KIỂM TRA MÔI TRƯỜNG
@@ -64,7 +69,7 @@ fi
 # 5. DỌN DẸP CONTAINER CŨ
 # ==========================================
 log "Dọn dẹp container cũ..."
-docker rm -f tm myst urnetwork earnfm repocket >/dev/null 2>&1 || true
+docker rm -f tm myst urnetwork earnfm repocket bitping >/dev/null 2>&1 || true
 docker image prune -f >/dev/null 2>&1
 
 # ==========================================
@@ -76,6 +81,7 @@ docker pull mysteriumnetwork/myst:latest >/dev/null 2>&1 &
 docker pull techroy23/docker-urnetwork:latest >/dev/null 2>&1 &
 docker pull earnfm/earnfm-client:latest >/dev/null 2>&1 &
 docker pull repocket/repocket:latest >/dev/null 2>&1 &
+docker pull bitping/bitpingd:latest >/dev/null 2>&1 &
 wait
 
 # ==========================================
@@ -83,11 +89,12 @@ wait
 # ==========================================
 log "🚀 Khởi chạy các ứng dụng cày tiền..."
 
-docker run -d --restart always --name tm $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
-docker run -d --restart unless-stopped --cap-add NET_ADMIN $DNS_OPTS -p 4449:4449 --name myst -v myst-data:/var/lib/mysterium-node mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
-docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
-docker run -d --name earnfm --restart always $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
-docker run -d --name repocket --restart always $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
+docker run -d --restart always --name tm $LOG_OPTS $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+docker run -d --restart unless-stopped --cap-add NET_ADMIN $LOG_OPTS $DNS_OPTS -p 4449:4449 --name myst -v myst-data:/var/lib/mysterium-node mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $LOG_OPTS $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
+docker run -d --name earnfm --restart always $LOG_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
+docker run -d --name repocket --restart always $LOG_OPTS $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
+docker run -d --name bitping --restart unless-stopped $LOG_OPTS $DNS_OPTS -v bitping_data:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
 
 # ==========================================
 # 8. HOÀN TẤT
