@@ -17,8 +17,8 @@ PASS_BITPING="nguyenvinhcao123@gmail.com"
 
 # ==== CẤU HÌNH TỐI ƯU DOCKER ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-# Giới hạn log tối đa 30MB mỗi container (3 file x 10MB) để chống đầy ổ cứng
-LOG_OPTS="--log-opt max-size=10m --log-opt max-file=3"
+# Giới hạn log 10MB (2 file x 5MB) + Mở khóa 1 triệu kết nối đồng thời cho mỗi app
+DOCKER_OPTS="--log-opt max-size=5m --log-opt max-file=2 --ulimit nofile=1048576:1048576"
 
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
 warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
@@ -39,13 +39,19 @@ log "Dọn dẹp & cài đặt tools cho Debian/Ubuntu..."
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update -qq && sudo apt-get install -y -q jq coreutils curl iproute2 iptables >/dev/null 2>&1 || true
 
-log "Cấu hình tối ưu BBR, Swappiness..."
+log "Cấu hình tối ưu Kernel (BBR, Conntrack 1 Triệu, TCP Reuse, Swappiness)..."
 sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
 net.core.rmem_max=4194304
 net.core.wmem_max=4194304
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 vm.swappiness=10
+
+net.netfilter.nf_conntrack_max=1048576
+net.netfilter.nf_conntrack_tcp_timeout_established=86400
+net.ipv4.tcp_tw_reuse=1
+net.ipv4.tcp_fin_timeout=15
+net.ipv4.ip_local_port_range=1024 65535
 EOF
 sudo sysctl -p /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null 2>&1 || true
 
@@ -130,7 +136,7 @@ done
 log "🎉 TUYỆT VỜI: Toàn bộ $TOTAL_IPS cụm đã tách IP Public thành công và độc lập 100%!"
 
 # ==========================================
-# 7. KHỞI CHẠY NODES (TÍCH HỢP LOG_OPTS & AUTO VOLUME)
+# 7. KHỞI CHẠY NODES (TÍCH HỢP DOCKER_OPTS VÀ ULIIMIT)
 # ==========================================
 log "🚀 Đang Pull images (Song song)..."
 for img in "traffmonetizer/cli_v2:latest" "mysteriumnetwork/myst:latest" "techroy23/docker-urnetwork:latest" "earnfm/earnfm-client:latest" "repocket/repocket:latest" "bitping/bitpingd:latest"; do
@@ -142,22 +148,22 @@ run_nodes() {
     local INDEX=$1; local NET=$2; local BIND_IP=$3
     
     # Traffmonetizer
-    docker run -d --network $NET --restart always $LOG_OPTS --name tm$INDEX $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+    docker run -d --network $NET --restart always $DOCKER_OPTS --name tm$INDEX $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
     
     # Mysterium
-    docker run -d --network $NET --cap-add NET_ADMIN $LOG_OPTS $DNS_OPTS -p ${BIND_IP}:4449:4449 --name myst$INDEX -v myst-data$INDEX:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
+    docker run -d --network $NET --cap-add NET_ADMIN $DOCKER_OPTS $DNS_OPTS -p ${BIND_IP}:4449:4449 --name myst$INDEX -v myst-data$INDEX:/var/lib/mysterium-node --restart unless-stopped mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
     
     # UrNetwork
-    docker run -d --network $NET --restart always --cap-add NET_ADMIN $LOG_OPTS $DNS_OPTS --name urnetwork$INDEX -v ur_data$INDEX:/var/lib/vnstat -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" techroy23/docker-urnetwork:latest >/dev/null
+    docker run -d --network $NET --restart always --cap-add NET_ADMIN $DOCKER_OPTS $DNS_OPTS --name urnetwork$INDEX -v ur_data$INDEX:/var/lib/vnstat -e USER_AUTH="$USER_UR" -e PASSWORD="$PASS_UR" techroy23/docker-urnetwork:latest >/dev/null
     
     # EarnFM
-    docker run -d --network $NET --restart always $LOG_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$INDEX earnfm/earnfm-client:latest >/dev/null
+    docker run -d --network $NET --restart always $DOCKER_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" --name earnfm$INDEX earnfm/earnfm-client:latest >/dev/null
     
     # Repocket
-    docker run -d --network $NET --restart always $LOG_OPTS $DNS_OPTS --name repocket$INDEX -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" repocket/repocket:latest >/dev/null
+    docker run -d --network $NET --restart always $DOCKER_OPTS $DNS_OPTS --name repocket$INDEX -e RP_EMAIL="$TOKEN_REPOCKET_EMAIL" -e RP_API_KEY="$TOKEN_REPOCKET_API" repocket/repocket:latest >/dev/null
 
     # Bitping
-    docker run -d --network $NET --restart unless-stopped $LOG_OPTS $DNS_OPTS --name bitping$INDEX -v bitping_data$INDEX:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
+    docker run -d --network $NET --restart unless-stopped $DOCKER_OPTS $DNS_OPTS --name bitping$INDEX -v bitping_data$INDEX:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
 }
 
 for i in "${!ALL_IPS[@]}"; do
