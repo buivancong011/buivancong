@@ -15,9 +15,10 @@ UR_PASS="CAOcao123CAO@"
 EMAIL_BITPING="nguyenvinhcao123@gmail.com"
 PASS_BITPING="nguyenvinhcao123@gmail.com"
 
-# ==== CẤU HÌNH DNS & LOG ====
+# ==== CẤU HÌNH DNS & DOCKER OPTS (LOG + LIMIT) ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-LOG_OPTS="--log-opt max-size=10m --log-opt max-file=3"
+# Giới hạn log 30MB + Mở khóa 1 triệu kết nối cho mỗi container
+DOCKER_OPTS="--log-opt max-size=10m --log-opt max-file=3 --ulimit nofile=1048576:1048576"
 
 # ==========================================
 # 2. HÀM LOG & KIỂM TRA MÔI TRƯỜNG
@@ -49,15 +50,21 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # ==========================================
-# 4. TỐI ƯU HIỆU SUẤT (BBR & SWAP)
+# 4. TỐI ƯU HIỆU SUẤT (BBR, KERNEL & SWAP)
 # ==========================================
-log "Tối ưu mạng (BBR) và Swappiness..."
+log "Tối ưu mạng (BBR, Conntrack 1 Triệu) và Swappiness..."
 sudo tee /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null <<EOF
 net.core.rmem_max=4194304
 net.core.wmem_max=4194304
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 vm.swappiness=10
+
+net.netfilter.nf_conntrack_max=1048576
+net.netfilter.nf_conntrack_tcp_timeout_established=86400
+net.ipv4.tcp_tw_reuse=1
+net.ipv4.tcp_fin_timeout=15
+net.ipv4.ip_local_port_range=1024 65535
 EOF
 sudo sysctl -p /etc/sysctl.d/99-mmo-node-tuning.conf >/dev/null 2>&1 || true
 
@@ -90,15 +97,15 @@ wait
 log "Tải ảnh hoàn tất."
 
 # ==========================================
-# 7. KHỞI CHẠY CONTAINER (CÓ GIỚI HẠN LOG)
+# 7. KHỞI CHẠY CONTAINER (FULL CẤU HÌNH TỐI ƯU)
 # ==========================================
 log "🚀 Khởi chạy các ứng dụng cày tiền..."
 
-docker run -d --restart always --name tm $LOG_OPTS $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
-docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $LOG_OPTS $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
-docker run -d --name earnfm --restart always $LOG_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
-docker run -d --name repocket --restart always $LOG_OPTS $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
-docker run -d --name bitping --restart unless-stopped $LOG_OPTS $DNS_OPTS -v bitping_data:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
+docker run -d --restart always --name tm $DOCKER_OPTS $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DOCKER_OPTS $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
+docker run -d --name earnfm --restart always $DOCKER_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
+docker run -d --name repocket --restart always $DOCKER_OPTS $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
+docker run -d --name bitping --restart unless-stopped $DOCKER_OPTS $DNS_OPTS -v bitping_data:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
 
 # ==========================================
 # 8. HOÀN TẤT
