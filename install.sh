@@ -66,9 +66,9 @@ net.core.wmem_max=4194304
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 vm.swappiness=10
-fs.file-max=1048576
+
 net.netfilter.nf_conntrack_max=1048576
-net.netfilter.nf_conntrack_tcp_timeout_established=600
+net.netfilter.nf_conntrack_tcp_timeout_established=86400
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_fin_timeout=15
 net.ipv4.ip_local_port_range=1024 65535
