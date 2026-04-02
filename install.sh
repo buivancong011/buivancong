@@ -15,8 +15,8 @@ PASS_BITPING="nguyenvinhcao123@gmail.com"
 
 # ==== CẤU HÌNH TỐI ƯU DOCKER TỔNG HỢP ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
-# Giới hạn log 30MB + Mở khóa 1 triệu kết nối đồng thời cho mỗi app
-DOCKER_OPTS="--log-opt max-size=10m --log-opt max-file=3 --ulimit nofile=1048576:1048576"
+# Giới hạn log 10MB + Mở khóa 1 triệu kết nối đồng thời cho mỗi app
+DOCKER_OPTS="--log-opt max-size=5m --log-opt max-file=2 --ulimit nofile=1048576:1048576"
 
 # ==== TỰ ĐỘNG CHỌN IMAGE THEO CPU ====
 ARCH=$(uname -m)
