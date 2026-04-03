@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# ==========================================
+# CÀI ĐẶT MÀU SẮC CHO LOG
+# ==========================================
+GREEN='\e[32m'
+YELLOW='\e[33m'
+CYAN='\e[36m'
+RED='\e[31m'
+NC='\e[0m' # No Color
+
+echo -e "${CYAN}======================================================================${NC}"
+echo -e "${YELLOW}🌟 BÁO CÁO TRẠNG THÁI DOCKER CONTAINERS 🌟${NC}"
+echo -e "${CYAN}======================================================================${NC}"
+
+# ==========================================
+# 1. THỐNG KÊ TỔNG QUAN
+# ==========================================
+# Đếm số lượng container
+TOTAL=$(docker ps -a -q | wc -l)
+RUNNING=$(docker ps -q | wc -l)
+STOPPED=$(docker ps -a -f status=exited -q | wc -l)
+
+echo -e "${GREEN}[INFO] TỔNG QUAN HỆ THỐNG:${NC}"
+echo -e "  ▶ Đang hoạt động (Running) : ${GREEN}$RUNNING${NC}"
+echo -e "  ▶ Đã dừng (Stopped/Exited) : ${RED}$STOPPED${NC}"
+echo -e "  ▶ Tổng cộng (Total)        : $TOTAL container\n"
+
+if [ "$TOTAL" -eq 0 ]; then
+    echo -e "${YELLOW}[WARN] Không có container nào trên hệ thống!${NC}"
+    exit 0
+fi
+
+# ==========================================
+# 2. KIỂM TRA MỨC TIÊU THỤ TÀI NGUYÊN (CPU/RAM/MẠNG)
+# ==========================================
+echo -e "${GREEN}[INFO] TIÊU THỤ TÀI NGUYÊN HIỆN TẠI (CPU/RAM/NETWORK):${NC}"
+# Lệnh stats --no-stream sẽ lấy mẫu 1 lần rồi dừng, không bị treo terminal
+docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}"
+
+echo ""
+
+# ==========================================
+# 3. KIỂM TRA TRẠNG THÁI VÀ UPTIME
+# ==========================================
+echo -e "${GREEN}[INFO] THỜI GIAN SỐNG (UPTIME) & PORT:${NC}"
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+echo -e "${CYAN}======================================================================${NC}"
+echo -e "${GREEN}✅ Hoàn tất kiểm tra hệ thống!${NC}"
