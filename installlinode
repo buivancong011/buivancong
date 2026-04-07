@@ -92,16 +92,21 @@ docker pull bitping/bitpingd:latest >/dev/null 2>&1 &
 wait
 
 # ==========================================
-# 7. KHỞI CHẠY CONTAINER (FULL TÀI NGUYÊN)
+# 7. KHỞI CHẠY CONTAINER (FULL TÀI NGUYÊN - NETWORK HOST)
 # ==========================================
-log "🚀 Khởi chạy các ứng dụng cày tiền..."
+log "🚀 Khởi chạy các ứng dụng cày tiền với --network=host..."
 
-docker run -d --restart always --name tm $DOCKER_OPTS $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
-docker run -d --restart unless-stopped --cap-add NET_ADMIN $DOCKER_OPTS $DNS_OPTS -p 4449:4449 --name myst -v myst-data:/var/lib/mysterium-node mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
-docker run -d --name urnetwork --restart always --cap-add NET_ADMIN $DOCKER_OPTS $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
-docker run -d --name earnfm --restart always $DOCKER_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
-docker run -d --name repocket --restart always $DOCKER_OPTS $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
-docker run -d --name bitping --restart unless-stopped $DOCKER_OPTS $DNS_OPTS -v bitping_data:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
+docker run -d --restart always --name tm --network=host $DOCKER_OPTS $DNS_OPTS traffmonetizer/cli_v2:latest start accept --token "$TOKEN_TM" >/dev/null
+
+docker run -d --restart unless-stopped --cap-add NET_ADMIN --network=host $DOCKER_OPTS $DNS_OPTS --name myst -v myst-data:/var/lib/mysterium-node mysteriumnetwork/myst:latest service --agreed-terms-and-conditions >/dev/null
+
+docker run -d --name urnetwork --restart always --cap-add NET_ADMIN --network=host $DOCKER_OPTS $DNS_OPTS -v ur_data:/var/lib/vnstat -e USER_AUTH="$UR_USER" -e PASSWORD="$UR_PASS" techroy23/docker-urnetwork:latest >/dev/null
+
+docker run -d --name earnfm --restart always --network=host $DOCKER_OPTS $DNS_OPTS -e EARNFM_TOKEN="$TOKEN_EARNFM" earnfm/earnfm-client:latest >/dev/null
+
+docker run -d --name repocket --restart always --network=host $DOCKER_OPTS $DNS_OPTS -e RP_EMAIL="$RP_EMAIL" -e RP_API_KEY="$RP_API" repocket/repocket:latest >/dev/null
+
+docker run -d --name bitping --restart unless-stopped --network=host $DOCKER_OPTS $DNS_OPTS -v bitping_data:/root/.bitpingd -e BITPING_EMAIL="$EMAIL_BITPING" -e BITPING_PASSWORD="$PASS_BITPING" bitping/bitpingd:latest >/dev/null
 
 # ==========================================
 # 8. HOÀN TẤT
