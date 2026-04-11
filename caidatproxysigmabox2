@@ -2,58 +2,58 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách SOCKS5 KHÔNG PASS (Chỉ có IP:Port)
+# Dán danh sách SOCKS5 CÓ PASS (Cấu trúc: IP:Port:User:Pass)
 PROXIES=(
-"195.63.21.62:1339"
-"195.63.21.164:1339"
-"195.63.22.157:1339"
-"195.63.22.224:1339"
-"217.181.84.10:1339"
-"217.181.84.216:1339"
-"217.181.85.188:1339"
-"217.181.85.6:1339"
-"217.181.86.21:1339"
-"217.181.86.223:1339"
-"195.63.27.122:1339"
-"195.63.27.92:1339"
-"195.63.27.172:1339"
-"195.63.27.109:1339"
-"195.63.28.104:1339"
-"195.63.28.193:1339"
-"195.63.28.110:1339"
-"195.63.28.132:1339"
-"195.63.29.68:1339"
-"195.63.29.144:1339"
-"195.63.29.41:1339"
-"195.63.29.223:1339"
-"195.63.30.180:1339"
-"195.63.30.192:1339"
-"195.63.30.58:1339"
-"195.63.30.64:1339"
-"217.181.87.144:1339"
-"217.181.87.238:1339"
-"217.181.87.155:1339"
-"217.181.88.225:1339"
-"217.181.88.129:1339"
-"217.181.88.116:1339"
-"217.181.89.22:1339"
-"217.181.89.115:1339"
-"217.181.89.181:1339"
-"217.181.80.176:1339"
-"217.181.80.148:1339"
-"217.181.80.39:1339"
-"217.181.81.19:1339"
-"217.181.81.245:1339"
-"217.181.82.82:1339"
-"217.181.82.49:1339"
-"217.181.83.33:1339"
-"217.181.83.193:1339"
-"195.63.16.23:1339"
-"195.63.16.2:1339"
-"195.63.17.207:1339"
-"195.63.17.235:1339"
-"195.63.18.20:1339"
-"195.63.18.175:1339"
+"195.63.21.62:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.21.164:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.22.157:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.22.224:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.84.10:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.84.216:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.85.188:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.85.6:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.86.21:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.86.223:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.27.122:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.27.92:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.27.172:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.27.109:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.28.104:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.28.193:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.28.110:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.28.132:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.29.68:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.29.144:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.29.41:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.29.223:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.30.180:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.30.192:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.30.58:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.30.64:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.87.144:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.87.238:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.87.155:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.88.225:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.88.129:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.88.116:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.89.22:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.89.115:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.89.181:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.80.176:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.80.148:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.80.39:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.81.19:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.81.245:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.82.82:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.82.49:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.83.33:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.83.193:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.16.23:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.16.2:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.17.207:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.17.235:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.18.20:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.18.175:1339:phieWyqf:nV3bp2WgfaJ81th"
 
 
 )
@@ -67,11 +67,11 @@ IMG_TM="traffmonetizer/cli_v2:latest"
 IMG_TITAN="nguyenvinhcao123/titanacc4nguyenvinhson:latest"
 
 # Thư mục lưu trữ tĩnh
-CONFIG_DIR="/opt/upcloud_combo_nopass_farm"
+CONFIG_DIR="/opt/upcloud_combo_auth_farm"
 
 # ===================== 2. TỐI ƯU KERNEL (DÀNH CHO 4 CORE) =====================
 setup_system() {
-    echo "⚙️ [INFO] Tối ưu hóa Kernel cho hệ thống Combo (TM + Titan) SOCKS5 No-Pass..."
+    echo "⚙️ [INFO] Tối ưu hóa Kernel cho hệ thống Combo (TM + Titan) SOCKS5 CÓ PASS..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
@@ -99,9 +99,9 @@ EOF
     fi
 }
 
-# ===================== 3. HÀM TẠO FILE MẠNG SING-BOX (BỎ USER/PASS) =====================
+# ===================== 3. HÀM TẠO FILE MẠNG SING-BOX (THÊM USER/PASS) =====================
 mk_sbox_config() {
-    local cfg="$1" ip="$2" port="$3"
+    local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
@@ -119,7 +119,9 @@ mk_sbox_config() {
       "type": "socks", 
       "server": "${ip}", 
       "server_port": ${port}, 
-      "version": "5"
+      "version": "5",
+      "username": "${user}",
+      "password": "${pass}"
     },
     { "tag": "direct", "type": "direct" }
   ],
@@ -141,9 +143,11 @@ cmd_up() {
     
     local i=1
     for spec in "${PROXIES[@]}"; do
-        # Tách IP và Port siêu nhanh
-        local ip="${spec%:*}"
-        local port="${spec#*:}"
+        # Tách 4 khúc: IP, Port, User, Pass
+        local ip=$(echo "$spec" | cut -d':' -f1)
+        local port=$(echo "$spec" | cut -d':' -f2)
+        local user=$(echo "$spec" | cut -d':' -f3)
+        local pass=$(echo "$spec" | cut -d':' -f4)
         
         local s_name="csbox${i}"
         local tm_name="tm${i}"
@@ -154,7 +158,9 @@ cmd_up() {
         
         # --- [1] Bật hầm Proxy Sing-box ---
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
-        mk_sbox_config "$s_cfg" "$ip" "$port"
+        
+        # Truyền đủ 5 biến vào cấu hình
+        mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
         
         docker run -d --name "$s_name" --restart=unless-stopped \
             --cap-add=NET_ADMIN --device /dev/net/tun \
@@ -166,7 +172,7 @@ cmd_up() {
 
         # --- [2] Nhét TM vào hầm ---
         docker run -d --name "$tm_name" --restart=unless-stopped \
-            --network="container:$s_name" \
+            --network="container:$s_name" --log-driver none \
             "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_combo_${i}" >/dev/null
 
         # --- [3] Nhét Titan vào cùng hầm đó ---
@@ -191,7 +197,7 @@ cmd_up() {
         ((i++))
     done
     echo "====================================================="
-    echo "✅ HOÀN TẤT! CỖ MÁY IN TIỀN KÉP (NO-PASS) ĐÃ SẴN SÀNG!"
+    echo "✅ HOÀN TẤT! CỖ MÁY IN TIỀN KÉP (CÓ PASS) ĐÃ SẴN SÀNG!"
     echo "====================================================="
 }
 
