@@ -166,7 +166,7 @@ cmd_up() {
 
         # --- [2] Nhét TM vào hầm ---
         docker run -d --name "$tm_name" --restart=unless-stopped \
-            --network="container:$s_name" --log-driver none \
+            --network="container:$s_name" \
             "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_combo_${i}" >/dev/null
 
         # --- [3] Nhét Titan vào cùng hầm đó ---
