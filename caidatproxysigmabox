@@ -2,58 +2,58 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách SOCKS5 KHÔNG PASS (Chỉ có IP:Port)
+# Dán danh sách SOCKS5 CÓ PASS (Cấu trúc: IP:Port:User:Pass)
 PROXIES=(
-"217.181.79.226:1339"
-"217.181.71.186:1339"
-"217.181.68.101:1339"
-"217.181.78.119:1339"
-"217.181.77.68:1339"
-"217.181.74.130:1339"
-"217.181.72.183:1339"
-"217.181.64.131:1339"
-"217.181.72.158:1339"
-"217.181.74.230:1339"
-"217.181.66.182:1339"
-"217.181.73.21:1339"
-"217.181.68.167:1339"
-"217.181.76.110:1339"
-"217.181.74.173:1339"
-"195.63.2.197:1339"
-"195.63.12.24:1339"
-"195.63.13.235:1339"
-"195.63.14.78:1339"
-"195.63.14.157:1339"
-"195.63.2.118:1339"
-"195.63.8.222:1339"
-"195.63.11.122:1339"
-"195.63.2.170:1339"
-"195.63.8.27:1339"
-"195.63.9.8:1339"
-"195.63.6.131:1339"
-"195.63.3.82:1339"
-"195.63.11.172:1339"
-"195.63.4.247:1339"
-"195.63.23.3:1339"
-"195.63.23.27:1339"
-"195.63.23.150:1339"
-"195.63.24.24:1339"
-"195.63.24.212:1339"
-"195.63.25.103:1339"
-"195.63.25.249:1339"
-"195.63.26.0:1339"
-"195.63.26.226:1339"
-"217.181.93.6:1339"
-"217.181.93.74:1339"
-"217.181.94.7:1339"
-"217.181.94.171:1339"
-"217.181.95.125:1339"
-"217.181.95.105:1339"
-"195.63.19.120:1339"
-"195.63.19.138:1339"
-"195.63.19.200:1339"
-"195.63.20.237:1339"
-"195.63.20.17:1339"
+"217.181.79.226:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.71.186:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.68.101:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.78.119:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.77.68:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.74.130:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.72.183:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.64.131:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.72.158:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.74.230:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.66.182:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.73.21:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.68.167:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.76.110:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.74.173:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.2.197:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.12.24:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.13.235:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.14.78:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.14.157:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.2.118:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.8.222:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.11.122:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.2.170:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.8.27:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.9.8:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.6.131:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.3.82:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.11.172:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.4.247:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.23.3:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.23.27:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.23.150:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.24.24:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.24.212:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.25.103:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.25.249:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.26.0:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.26.226:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.93.6:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.93.74:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.94.7:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.94.171:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.95.125:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.95.105:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.19.120:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.19.138:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.19.200:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.20.237:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.20.17:1339:phieWyqf:nV3bp2WgfaJ81th"
 
 )
 
@@ -66,11 +66,11 @@ IMG_TM="traffmonetizer/cli_v2:latest"
 IMG_TITAN="nguyenvinhcao123/titanacc4nguyenvinhson:latest"
 
 # Thư mục lưu trữ tĩnh
-CONFIG_DIR="/opt/upcloud_combo_nopass_farm"
+CONFIG_DIR="/opt/upcloud_combo_auth_farm"
 
 # ===================== 2. TỐI ƯU KERNEL (DÀNH CHO 4 CORE) =====================
 setup_system() {
-    echo "⚙️ [INFO] Tối ưu hóa Kernel cho hệ thống Combo (TM + Titan) SOCKS5 No-Pass..."
+    echo "⚙️ [INFO] Tối ưu hóa Kernel cho hệ thống Combo (TM + Titan) SOCKS5 CÓ PASS..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
@@ -98,9 +98,9 @@ EOF
     fi
 }
 
-# ===================== 3. HÀM TẠO FILE MẠNG SING-BOX (BỎ USER/PASS) =====================
+# ===================== 3. HÀM TẠO FILE MẠNG SING-BOX (THÊM USER/PASS) =====================
 mk_sbox_config() {
-    local cfg="$1" ip="$2" port="$3"
+    local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
@@ -118,7 +118,9 @@ mk_sbox_config() {
       "type": "socks", 
       "server": "${ip}", 
       "server_port": ${port}, 
-      "version": "5"
+      "version": "5",
+      "username": "${user}",
+      "password": "${pass}"
     },
     { "tag": "direct", "type": "direct" }
   ],
@@ -140,9 +142,11 @@ cmd_up() {
     
     local i=1
     for spec in "${PROXIES[@]}"; do
-        # Tách IP và Port siêu nhanh
-        local ip="${spec%:*}"
-        local port="${spec#*:}"
+        # Tách 4 khúc: IP, Port, User, Pass
+        local ip=$(echo "$spec" | cut -d':' -f1)
+        local port=$(echo "$spec" | cut -d':' -f2)
+        local user=$(echo "$spec" | cut -d':' -f3)
+        local pass=$(echo "$spec" | cut -d':' -f4)
         
         local s_name="csbox${i}"
         local tm_name="tm${i}"
@@ -153,7 +157,9 @@ cmd_up() {
         
         # --- [1] Bật hầm Proxy Sing-box ---
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
-        mk_sbox_config "$s_cfg" "$ip" "$port"
+        
+        # Truyền đủ 5 biến vào cấu hình
+        mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
         
         docker run -d --name "$s_name" --restart=unless-stopped \
             --cap-add=NET_ADMIN --device /dev/net/tun \
@@ -190,7 +196,7 @@ cmd_up() {
         ((i++))
     done
     echo "====================================================="
-    echo "✅ HOÀN TẤT! CỖ MÁY IN TIỀN KÉP (NO-PASS) ĐÃ SẴN SÀNG!"
+    echo "✅ HOÀN TẤT! CỖ MÁY IN TIỀN KÉP (CÓ PASS) ĐÃ SẴN SÀNG!"
     echo "====================================================="
 }
 
