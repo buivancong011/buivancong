@@ -169,7 +169,7 @@ cmd_up() {
             --cap-add=SYS_ADMIN \
             --restart=always \
             --memory="200m" \
-            --cpus="5" \
+            --cpus="0.3" \
             --log-opt max-size=1m \
             --log-opt max-file=2 \
             "$IMG_TITAN" >/dev/null
