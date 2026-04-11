@@ -58,7 +58,7 @@ PROXIES=(
 )
 
 # Token của 2 nền tảng
-TM_TOKEN="0l+0r9mje+tN4NUPfmXkTcnnVAf/7q6iHXV9JSqotkQ="
+TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 
 # Tên Image Docker
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
