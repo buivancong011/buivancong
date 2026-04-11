@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách SOCKS5 không Pass (Cấu trúc chỉ có IP:Port)
+# Dán danh sách SOCKS5 KHÔNG PASS (Chỉ có IP:Port)
 PROXIES=(
 "195.63.21.62:1339"
 "195.63.21.164:1339"
@@ -56,23 +56,25 @@ PROXIES=(
 "195.63.18.175:1339"
 
 
-# Dán tiếp list proxy của anh vào đây...
 )
 
-# Tên Image Docker (Đã cập nhật sang Titan của anh)
+# Token của 2 nền tảng
+TM_TOKEN="0l+0r9mje+tN4NUPfmXkTcnnVAf/7q6iHXV9JSqotkQ="
+
+# Tên Image Docker
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
+IMG_TM="traffmonetizer/cli_v2:latest"
 IMG_TITAN="nguyenvinhcao123/titanacc4nguyenvinhson:latest"
 
-# Thư mục lưu trữ tĩnh trên VPS
-CONFIG_DIR="/opt/upcloud_titan_farm"
+# Thư mục lưu trữ tĩnh
+CONFIG_DIR="/opt/upcloud_combo_nopass_farm"
 
 # ===================== 2. TỐI ƯU KERNEL (DÀNH CHO 4 CORE) =====================
 setup_system() {
-    echo "[INFO] Tối ưu hóa Kernel cho hệ thống cày Titan..."
+    echo "⚙️ [INFO] Tối ưu hóa Kernel cho hệ thống Combo (TM + Titan) SOCKS5 No-Pass..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
-    # Mở giới hạn siêu bạo lực cho kết nối mạng
     sudo bash -c 'cat > /etc/sysctl.d/99-proxy-farm.conf' <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
@@ -84,7 +86,6 @@ net.ipv4.neigh.default.gc_thresh3=16384
 EOF
     sudo sysctl --system >/dev/null 2>&1 || true
 
-    # Bơm giới hạn file cho Docker Daemon để không bị ngộp
     if [[ ! -f /etc/systemd/system/docker.service.d/override.conf ]]; then
         sudo mkdir -p /etc/systemd/system/docker.service.d/
         sudo tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
@@ -98,7 +99,7 @@ EOF
     fi
 }
 
-# ===================== 3. HÀM TẠO FILE MẠNG (ĐÃ BỎ USER/PASS) =====================
+# ===================== 3. HÀM TẠO FILE MẠNG SING-BOX (BỎ USER/PASS) =====================
 mk_sbox_config() {
     local cfg="$1" ip="$2" port="$3"
     cat > "$cfg" <<JSON
@@ -130,27 +131,28 @@ JSON
 # ===================== 4. LỆNH TRIỂN KHAI (UP) =====================
 cmd_up() {
     setup_system
-    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm)..."
+    echo "📥 [INFO] Kéo tải 3 Images (Sing-box, TM, Titan)..."
     docker pull "$IMG_SBOX" >/dev/null 2>&1 &
+    docker pull "$IMG_TM" >/dev/null 2>&1 &
     docker pull "$IMG_TITAN" >/dev/null 2>&1 &
     wait
 
-    echo "[INFO] Dựng các cụm (Mỗi cụm: 1 Proxy + 1 Titan)..."
-    echo "🐢 Nhịp độ: Chậm rãi, an toàn cho 4 CPU Core..."
+    echo "🚀 [INFO] Bắt đầu bung lụa! (Mỗi cụm: 1 Proxy cõng 1 TM + 1 Titan)..."
     
     local i=1
     for spec in "${PROXIES[@]}"; do
-        # Tách IP và PORT
+        # Tách IP và Port siêu nhanh
         local ip="${spec%:*}"
         local port="${spec#*:}"
         
         local s_name="csbox${i}"
+        local tm_name="tm${i}"
         local titan_name="titan_forever${i}"
         
-        # Dọn xác container cũ sạch sẽ
-        docker rm -f "$s_name" "$titan_name" >/dev/null 2>&1 || true
+        # Dọn sạch 3 container cũ
+        docker rm -f "$s_name" "$tm_name" "$titan_name" >/dev/null 2>&1 || true
         
-        # --- [1] Proxy Sing-box ---
+        # --- [1] Bật hầm Proxy Sing-box ---
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
         mk_sbox_config "$s_cfg" "$ip" "$port"
         
@@ -159,16 +161,21 @@ cmd_up() {
             --log-driver none -v "$s_cfg":/etc/sing-box/config.json:ro \
             "$IMG_SBOX" run -c /etc/sing-box/config.json >/dev/null
 
-        # 🛑 CHỜ 1.0 GIÂY - Cho 4 CPU đủ thời gian ráp nối mạng TUN
+        # 🛑 CHỜ 1.0 GIÂY cho hầm thông
         sleep 1.0 
 
-        # --- [2] Titan Node ---
+        # --- [2] Nhét TM vào hầm ---
+        docker run -d --name "$tm_name" --restart=unless-stopped \
+            --network="container:$s_name" --log-driver none \
+            "$IMG_TM" start accept --token "$TM_TOKEN" --device-name "tm_combo_${i}" >/dev/null
+
+        # --- [3] Nhét Titan vào cùng hầm đó ---
         docker run -d \
             --name "$titan_name" \
             --network="container:$s_name" \
             --cap-add=SYS_ADMIN \
             --restart=always \
-            --memory="200m" \
+            --memory="150m" \
             --cpus="0.3" \
             --log-opt max-size=1m \
             --log-opt max-file=2 \
@@ -176,45 +183,45 @@ cmd_up() {
 
         # In tiến trình mỗi 20 cụm
         if (( i % 20 == 0 )); then
-            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm Titan (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
+            echo "⚡ Đã dựng xong $i / ${#PROXIES[@]} Cụm Combo (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
         fi
         
-        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU trước khi lặp lại
+        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU
         sleep 0.5 
         ((i++))
     done
     echo "====================================================="
-    echo "✅ HOÀN TẤT TRIỂN KHAI TITAN LÊN MÁY CHỦ!"
-    echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
+    echo "✅ HOÀN TẤT! CỖ MÁY IN TIỀN KÉP (NO-PASS) ĐÃ SẴN SÀNG!"
     echo "====================================================="
 }
 
 # ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
 cmd_down() {
-    echo "🧹 Đang gỡ bỏ container Titan & Singbox..."
-    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|titan_forever)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
-    echo "✅ Đã gỡ sạch sẽ container."
+    echo "🧹 Đang gỡ bỏ toàn bộ container..."
+    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|tm|titan_forever)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
+    echo "✅ Đã gỡ sạch sẽ."
 }
 
 cmd_clean() {
     cmd_down
-    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
+    echo "🧹 Dọn dẹp cấu hình mạng..."
     sudo rm -rf "$CONFIG_DIR"/*.json || true
     docker system prune -f >/dev/null 2>&1
-    echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
+    echo "✅ Máy chủ sạch bóng!"
 }
 
 cmd_status() {
-    echo "📊 THỐNG KÊ HỆ THỐNG TITAN CỦA BẠN:"
+    echo "📊 THỐNG KÊ HỆ THỐNG COMBO:"
     echo "-----------------------------------"
-    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
-    echo "🪐 Titan Nodes    : $(docker ps | grep titan_forever | wc -l) / ${#PROXIES[@]}"
+    echo "🌐 Cửa hầm Sing-box : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
+    echo "🐝 Lính TM          : $(docker ps | grep tm | wc -l) / ${#PROXIES[@]}"
+    echo "🪐 Lính Titan       : $(docker ps | grep titan_forever | wc -l) / ${#PROXIES[@]}"
     echo "-----------------------------------"
-    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
-    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
+    echo "💾 RAM đang trống   : $(free -m | awk '/^Mem:/{print $7}') MB"
+    echo "🔥 Tải CPU (Load)   : $(uptime | awk -F'load average:' '{ print $2 }')"
 }
 
-# ===================== ROUTER ĐIỀU HƯỚNG =====================
+# ===================== ROUTER =====================
 case "${1:-up}" in
     up)     cmd_up ;;
     down)   cmd_down ;;
