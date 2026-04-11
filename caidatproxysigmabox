@@ -176,3 +176,53 @@ cmd_up() {
             --cpus="0.3" \
             --log-opt max-size=1m \
             --log-opt max-file=2 \
+            "$IMG_TITAN" >/dev/null
+
+        # In tiến trình mỗi 20 cụm
+        if (( i % 20 == 0 )); then
+            echo "⚡ Đã dựng xong $i / ${#PROXIES[@]} Cụm Titan (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
+        fi
+        
+        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU trước khi lặp lại
+        sleep 0.5 
+        ((i++))
+    done
+    echo "====================================================="
+    echo "✅ HOÀN TẤT TRIỂN KHAI TITAN SOCKS5 (CÓ PASS)!"
+    echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
+    echo "====================================================="
+}
+
+# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
+cmd_down() {
+    echo "🧹 Đang gỡ bỏ container Titan & Singbox..."
+    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|titan_forever)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
+    echo "✅ Đã gỡ sạch sẽ container."
+}
+
+cmd_clean() {
+    cmd_down
+    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
+    sudo rm -rf "$CONFIG_DIR"/*.json || true
+    docker system prune -f >/dev/null 2>&1
+    echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
+}
+
+cmd_status() {
+    echo "📊 THỐNG KÊ HỆ THỐNG TITAN CỦA BẠN:"
+    echo "-----------------------------------"
+    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
+    echo "🪐 Titan Nodes    : $(docker ps | grep titan_forever | wc -l) / ${#PROXIES[@]}"
+    echo "-----------------------------------"
+    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
+    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
+}
+
+# ===================== ROUTER ĐIỀU HƯỚNG =====================
+case "${1:-up}" in
+    up)     cmd_up ;;
+    down)   cmd_down ;;
+    clean)  cmd_clean ;;
+    status) cmd_status ;;
+    *) echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"; exit 1 ;;
+esac
