@@ -2,72 +2,71 @@
 set -Eeuo pipefail
 
 # ===================== 1. CẤU HÌNH CỦA BẠN =====================
-# Dán danh sách SOCKS5 không Pass (Cấu trúc chỉ có IP:Port)
+# Dán danh sách SOCKS5 CÓ PASS (Cấu trúc: IP:Port:User:Pass)
 PROXIES=(
-"217.181.79.226:1339"
-"217.181.71.186:1339"
-"217.181.68.101:1339"
-"217.181.78.119:1339"
-"217.181.77.68:1339"
-"217.181.74.130:1339"
-"217.181.72.183:1339"
-"217.181.64.131:1339"
-"217.181.72.158:1339"
-"217.181.74.230:1339"
-"217.181.66.182:1339"
-"217.181.73.21:1339"
-"217.181.68.167:1339"
-"217.181.76.110:1339"
-"217.181.74.173:1339"
-"195.63.2.197:1339"
-"195.63.12.24:1339"
-"195.63.13.235:1339"
-"195.63.14.78:1339"
-"195.63.14.157:1339"
-"195.63.2.118:1339"
-"195.63.8.222:1339"
-"195.63.11.122:1339"
-"195.63.2.170:1339"
-"195.63.8.27:1339"
-"195.63.9.8:1339"
-"195.63.6.131:1339"
-"195.63.3.82:1339"
-"195.63.11.172:1339"
-"195.63.4.247:1339"
-"195.63.23.3:1339"
-"195.63.23.27:1339"
-"195.63.23.150:1339"
-"195.63.24.24:1339"
-"195.63.24.212:1339"
-"195.63.25.103:1339"
-"195.63.25.249:1339"
-"195.63.26.0:1339"
-"195.63.26.226:1339"
-"217.181.93.6:1339"
-"217.181.93.74:1339"
-"217.181.94.7:1339"
-"217.181.94.171:1339"
-"217.181.95.125:1339"
-"217.181.95.105:1339"
-"195.63.19.120:1339"
-"195.63.19.138:1339"
-"195.63.19.200:1339"
-"195.63.20.237:1339"
-"195.63.20.17:1339"
+"217.181.79.226:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.71.186:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.68.101:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.78.119:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.77.68:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.74.130:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.72.183:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.64.131:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.72.158:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.74.230:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.66.182:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.73.21:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.68.167:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.76.110:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.74.173:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.2.197:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.12.24:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.13.235:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.14.78:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.14.157:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.2.118:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.8.222:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.11.122:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.2.170:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.8.27:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.9.8:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.6.131:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.3.82:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.11.172:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.4.247:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.23.3:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.23.27:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.23.150:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.24.24:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.24.212:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.25.103:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.25.249:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.26.0:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.26.226:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.93.6:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.93.74:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.94.7:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.94.171:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.95.125:1339:phieWyqf:nV3bp2WgfaJ81th"
+"217.181.95.105:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.19.120:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.19.138:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.19.200:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.20.237:1339:phieWyqf:nV3bp2WgfaJ81th"
+"195.63.20.17:1339:phieWyqf:nV3bp2WgfaJ81th"
 
-# Dán tiếp list proxy của anh vào đây...
 )
 
-# Tên Image Docker (Đã cập nhật sang Titan của anh)
+# Tên Image Docker Titan
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TITAN="nguyenvinhcao123/titanacc4nguyenvinhson:latest"
 
 # Thư mục lưu trữ tĩnh trên VPS
-CONFIG_DIR="/opt/upcloud_titan_farm"
+CONFIG_DIR="/opt/upcloud_titan_auth_farm"
 
 # ===================== 2. TỐI ƯU KERNEL (DÀNH CHO 4 CORE) =====================
 setup_system() {
-    echo "[INFO] Tối ưu hóa Kernel cho hệ thống cày Titan..."
+    echo "⚙️ [INFO] Tối ưu hóa Kernel cho hệ thống cày Titan..."
     sudo mkdir -p "$CONFIG_DIR"
     sudo modprobe tun || true
 
@@ -97,9 +96,9 @@ EOF
     fi
 }
 
-# ===================== 3. HÀM TẠO FILE MẠNG (ĐÃ BỎ USER/PASS) =====================
+# ===================== 3. HÀM TẠO FILE MẠNG (ĐÃ THÊM USER/PASS) =====================
 mk_sbox_config() {
-    local cfg="$1" ip="$2" port="$3"
+    local cfg="$1" ip="$2" port="$3" user="$4" pass="$5"
     cat > "$cfg" <<JSON
 {
   "log": { "disabled": true },
@@ -117,7 +116,9 @@ mk_sbox_config() {
       "type": "socks", 
       "server": "${ip}", 
       "server_port": ${port}, 
-      "version": "5"
+      "version": "5",
+      "username": "${user}",
+      "password": "${pass}"
     },
     { "tag": "direct", "type": "direct" }
   ],
@@ -129,19 +130,21 @@ JSON
 # ===================== 4. LỆNH TRIỂN KHAI (UP) =====================
 cmd_up() {
     setup_system
-    echo "[INFO] Kéo tải Images mới nhất (Chạy ngầm)..."
+    echo "📥 [INFO] Kéo tải Images mới nhất (Chạy ngầm)..."
     docker pull "$IMG_SBOX" >/dev/null 2>&1 &
     docker pull "$IMG_TITAN" >/dev/null 2>&1 &
     wait
 
-    echo "[INFO] Dựng các cụm (Mỗi cụm: 1 Proxy + 1 Titan)..."
+    echo "🚀 [INFO] Dựng các cụm (Mỗi cụm: 1 Proxy + 1 Titan)..."
     echo "🐢 Nhịp độ: Chậm rãi, an toàn cho 4 CPU Core..."
     
     local i=1
     for spec in "${PROXIES[@]}"; do
-        # Tách IP và PORT
-        local ip="${spec%:*}"
-        local port="${spec#*:}"
+        # Chẻ chuỗi ra 4 phần: IP, Port, User, Pass
+        local ip=$(echo "$spec" | cut -d':' -f1)
+        local port=$(echo "$spec" | cut -d':' -f2)
+        local user=$(echo "$spec" | cut -d':' -f3)
+        local pass=$(echo "$spec" | cut -d':' -f4)
         
         local s_name="csbox${i}"
         local titan_name="titan_forever${i}"
@@ -151,7 +154,9 @@ cmd_up() {
         
         # --- [1] Proxy Sing-box ---
         local s_cfg="$CONFIG_DIR/sbox_${i}.json"
-        mk_sbox_config "$s_cfg" "$ip" "$port"
+        
+        # Bơm 5 biến vào hàm tạo file JSON
+        mk_sbox_config "$s_cfg" "$ip" "$port" "$user" "$pass"
         
         docker run -d --name "$s_name" --restart=unless-stopped \
             --cap-add=NET_ADMIN --device /dev/net/tun \
@@ -167,57 +172,7 @@ cmd_up() {
             --network="container:$s_name" \
             --cap-add=SYS_ADMIN \
             --restart=always \
-            --memory="200m" \
+            --memory="150m" \
             --cpus="0.3" \
             --log-opt max-size=1m \
             --log-opt max-file=2 \
-            "$IMG_TITAN" >/dev/null
-
-        # In tiến trình mỗi 20 cụm
-        if (( i % 20 == 0 )); then
-            echo "🚀 Đã dựng xong $i / ${#PROXIES[@]} Cụm Titan (Tải CPU: $(uptime | awk -F'load average:' '{ print $2 }') )"
-        fi
-        
-        # 🛑 CHỜ 0.5 GIÂY - Xả tải CPU trước khi lặp lại
-        sleep 0.5 
-        ((i++))
-    done
-    echo "====================================================="
-    echo "✅ HOÀN TẤT TRIỂN KHAI TITAN LÊN MÁY CHỦ!"
-    echo "👉 Gõ lệnh: ./tên-script status để kiểm tra"
-    echo "====================================================="
-}
-
-# ===================== 5. DỌN DẸP & TRẠNG THÁI =====================
-cmd_down() {
-    echo "🧹 Đang gỡ bỏ container Titan & Singbox..."
-    docker ps -a --format '{{.Names}}' | grep -E '^(csbox|titan_forever)' | xargs -r -n 1 -P 8 docker rm -f >/dev/null 2>&1 || true
-    echo "✅ Đã gỡ sạch sẽ container."
-}
-
-cmd_clean() {
-    cmd_down
-    echo "🧹 Dọn dẹp cấu hình mạng và rác Docker..."
-    sudo rm -rf "$CONFIG_DIR"/*.json || true
-    docker system prune -f >/dev/null 2>&1
-    echo "✅ Máy chủ đã sạch bóng, sẵn sàng cho chu kỳ mới!"
-}
-
-cmd_status() {
-    echo "📊 THỐNG KÊ HỆ THỐNG TITAN CỦA BẠN:"
-    echo "-----------------------------------"
-    echo "🌐 Sing-box Proxy : $(docker ps | grep csbox | wc -l) / ${#PROXIES[@]}"
-    echo "🪐 Titan Nodes    : $(docker ps | grep titan_forever | wc -l) / ${#PROXIES[@]}"
-    echo "-----------------------------------"
-    echo "💾 RAM đang trống : $(free -m | awk '/^Mem:/{print $7}') MB"
-    echo "🔥 Tải CPU (Load) : $(uptime | awk -F'load average:' '{ print $2 }')"
-}
-
-# ===================== ROUTER ĐIỀU HƯỚNG =====================
-case "${1:-up}" in
-    up)     cmd_up ;;
-    down)   cmd_down ;;
-    clean)  cmd_clean ;;
-    status) cmd_status ;;
-    *) echo "Lệnh không hợp lệ. Hỗ trợ: up | down | clean | status"; exit 1 ;;
-esac
