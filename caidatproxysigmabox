@@ -63,7 +63,7 @@ TM_TOKEN="JoaF9KjqyUjmIUCOMxx6W/6rKD0Q0XTHQ5zlqCEJlXM="
 # Tên Image Docker
 IMG_SBOX="ghcr.io/sagernet/sing-box:v1.8.11"
 IMG_TM="traffmonetizer/cli_v2:latest"
-IMG_TITAN="nguyenvinhcao123/titanacc4nguyenvinhson:latest"
+IMG_TITAN="nguyenvinhcao123/titannguyenvinhcao01234567:latest"
 
 # Thư mục lưu trữ tĩnh
 CONFIG_DIR="/opt/upcloud_combo_auth_farm"
