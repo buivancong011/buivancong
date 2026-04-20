@@ -18,7 +18,7 @@ PASS_BITPING="nguyenvinhcao123@gmail.com"
 # ==== CẤU HÌNH TỐI ƯU DOCKER (LOG + LIMIT) ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
 # Giới hạn log 30MB + Mở khóa 1 triệu kết nối đồng thời cho mỗi container
-DOCKER_OPTS="--log-opt max-size=5m --log-opt max-file=2 --ulimit nofile=1048576:1048576"
+DOCKER_OPTS="--log-opt max-size=1m --log-opt max-file=1 --ulimit nofile=1048576:1048576"
 
 # Hàm log
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
