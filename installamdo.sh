@@ -18,7 +18,7 @@ PASS_BITPING="nguyenvinhcao123@gmail.com"
 # ==== CẤU HÌNH TỐI ƯU DOCKER ====
 DNS_OPTS="--dns 1.1.1.1 --dns 1.0.0.1"
 # Giới hạn log 10MB (2 file x 5MB) + Mở khóa 1 triệu kết nối đồng thời cho mỗi app
-DOCKER_OPTS="--log-opt max-size=5m --log-opt max-file=2 --ulimit nofile=1048576:1048576"
+DOCKER_OPTS="--log-opt max-size=1m --log-opt max-file=1 --ulimit nofile=1048576:1048576"
 
 log() { echo -e "\e[32m[INFO] $1\e[0m"; }
 warn() { echo -e "\e[33m[WARN] $1\e[0m"; }
